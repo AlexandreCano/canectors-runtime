@@ -25,7 +25,9 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # Use v1.64.8+ for compatibility (supports config without 'version' field)
+          # For v2.x config format, update to version: v2.0.0 or later
+          version: v1.64.8
 
   test:
     name: Test
