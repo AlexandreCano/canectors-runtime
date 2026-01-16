@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -126,7 +127,7 @@ func TestValidationError_Path(t *testing.T) {
 
 func TestGetSchema_ReturnsSchema(t *testing.T) {
 	schema := GetEmbeddedSchema()
-	if schema == nil || len(schema) == 0 {
+	if len(schema) == 0 {
 		t.Error("expected embedded schema to be non-empty")
 	}
 }

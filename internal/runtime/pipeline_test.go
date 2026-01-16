@@ -18,10 +18,10 @@ import (
 
 // MockInputModule is a test mock for input.Module interface
 type MockInputModule struct {
-	data      []map[string]interface{}
-	err       error
+	data        []map[string]interface{}
+	err         error
 	fetchCalled bool
-	closed    bool
+	closed      bool
 }
 
 func NewMockInputModule(data []map[string]interface{}, err error) *MockInputModule {
@@ -46,9 +46,9 @@ var _ input.Module = (*MockInputModule)(nil)
 
 // MockFilterModule is a test mock for filter.Module interface
 type MockFilterModule struct {
-	transformer func([]map[string]interface{}) ([]map[string]interface{}, error)
-	err         error
-	processCalled bool
+	transformer     func([]map[string]interface{}) ([]map[string]interface{}, error)
+	err             error
+	processCalled   bool
 	recordsReceived []map[string]interface{}
 }
 
@@ -686,5 +686,178 @@ func TestExecutor_Execute_NilPipeline(t *testing.T) {
 
 	if result.Status != "error" {
 		t.Errorf("Expected status 'error', got '%s'", result.Status)
+	}
+}
+
+// =============================================================================
+// Resource Cleanup Tests (Close() method calls)
+// =============================================================================
+
+func TestExecutor_Execute_ClosesModulesOnSuccess(t *testing.T) {
+	// Arrange
+	inputData := []map[string]interface{}{
+		{"id": "1", "name": "Test"},
+	}
+	mockInput := NewMockInputModule(inputData, nil)
+	mockOutput := NewMockOutputModule(nil)
+
+	pipeline := &connector.Pipeline{
+		ID:      "close-test-success",
+		Name:    "Close Test Success",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, false)
+
+	// Act
+	_, err := executor.Execute(pipeline)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+
+	if !mockInput.closed {
+		t.Error("Input module Close() was NOT called after successful execution")
+	}
+
+	if !mockOutput.closed {
+		t.Error("Output module Close() was NOT called after successful execution")
+	}
+}
+
+func TestExecutor_Execute_ClosesModulesOnInputError(t *testing.T) {
+	// Arrange
+	inputErr := errors.New("input fetch failed")
+	mockInput := NewMockInputModule(nil, inputErr)
+	mockOutput := NewMockOutputModule(nil)
+
+	pipeline := &connector.Pipeline{
+		ID:      "close-test-input-error",
+		Name:    "Close Test Input Error",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, false)
+
+	// Act
+	_, err := executor.Execute(pipeline)
+
+	// Assert
+	if err == nil {
+		t.Fatal("Execute() should return error when input fails")
+	}
+
+	if !mockInput.closed {
+		t.Error("Input module Close() was NOT called after input error")
+	}
+
+	if !mockOutput.closed {
+		t.Error("Output module Close() was NOT called after input error")
+	}
+}
+
+func TestExecutor_Execute_ClosesModulesOnFilterError(t *testing.T) {
+	// Arrange
+	inputData := []map[string]interface{}{
+		{"id": "1", "name": "Test"},
+	}
+	filterErr := errors.New("filter processing failed")
+
+	mockInput := NewMockInputModule(inputData, nil)
+	mockFilter := NewMockFilterModuleWithError(filterErr)
+	mockOutput := NewMockOutputModule(nil)
+
+	pipeline := &connector.Pipeline{
+		ID:      "close-test-filter-error",
+		Name:    "Close Test Filter Error",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	executor := NewExecutorWithModules(mockInput, []filter.Module{mockFilter}, mockOutput, false)
+
+	// Act
+	_, err := executor.Execute(pipeline)
+
+	// Assert
+	if err == nil {
+		t.Fatal("Execute() should return error when filter fails")
+	}
+
+	if !mockInput.closed {
+		t.Error("Input module Close() was NOT called after filter error")
+	}
+
+	if !mockOutput.closed {
+		t.Error("Output module Close() was NOT called after filter error")
+	}
+}
+
+func TestExecutor_Execute_ClosesModulesOnOutputError(t *testing.T) {
+	// Arrange
+	inputData := []map[string]interface{}{
+		{"id": "1", "name": "Test"},
+	}
+	outputErr := errors.New("output send failed")
+
+	mockInput := NewMockInputModule(inputData, nil)
+	mockOutput := NewMockOutputModule(outputErr)
+
+	pipeline := &connector.Pipeline{
+		ID:      "close-test-output-error",
+		Name:    "Close Test Output Error",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, false)
+
+	// Act
+	_, err := executor.Execute(pipeline)
+
+	// Assert
+	if err == nil {
+		t.Fatal("Execute() should return error when output fails")
+	}
+
+	if !mockInput.closed {
+		t.Error("Input module Close() was NOT called after output error")
+	}
+
+	if !mockOutput.closed {
+		t.Error("Output module Close() was NOT called after output error")
+	}
+}
+
+func TestExecutor_Execute_ClosesInputInDryRunMode(t *testing.T) {
+	// Arrange - dry-run mode with nil output module
+	inputData := []map[string]interface{}{
+		{"id": "1", "name": "Test"},
+	}
+	mockInput := NewMockInputModule(inputData, nil)
+
+	pipeline := &connector.Pipeline{
+		ID:      "close-test-dryrun",
+		Name:    "Close Test Dry Run",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	// dry-run mode allows nil output module
+	executor := NewExecutorWithModules(mockInput, nil, nil, true)
+
+	// Act
+	_, err := executor.Execute(pipeline)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error in dry-run mode: %v", err)
+	}
+
+	if !mockInput.closed {
+		t.Error("Input module Close() was NOT called in dry-run mode")
 	}
 }

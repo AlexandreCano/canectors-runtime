@@ -774,12 +774,12 @@ func TestParseYAMLString_YAML12OctalNumbers(t *testing.T) {
 }
 
 // ============================================================================
-// ConfigResult.AllErrors() Tests
+// Result.AllErrors() Tests
 // ============================================================================
 
-func TestConfigResult_AllErrors(t *testing.T) {
+func TestResult_AllErrors(t *testing.T) {
 	// Test with both parse and validation errors
-	result := &ConfigResult{
+	result := &Result{
 		ParseErrors: []ParseError{
 			{Message: "parse error 1", Type: ErrorTypeSyntax},
 			{Message: "parse error 2", Type: ErrorTypeIO},
@@ -805,8 +805,8 @@ func TestConfigResult_AllErrors(t *testing.T) {
 	}
 }
 
-func TestConfigResult_AllErrors_Empty(t *testing.T) {
-	result := &ConfigResult{}
+func TestResult_AllErrors_Empty(t *testing.T) {
+	result := &Result{}
 
 	allErrors := result.AllErrors()
 
@@ -815,8 +815,8 @@ func TestConfigResult_AllErrors_Empty(t *testing.T) {
 	}
 }
 
-func TestConfigResult_AllErrors_OnlyParseErrors(t *testing.T) {
-	result := &ConfigResult{
+func TestResult_AllErrors_OnlyParseErrors(t *testing.T) {
+	result := &Result{
 		ParseErrors: []ParseError{
 			{Message: "parse error 1"},
 		},
@@ -829,8 +829,8 @@ func TestConfigResult_AllErrors_OnlyParseErrors(t *testing.T) {
 	}
 }
 
-func TestConfigResult_AllErrors_OnlyValidationErrors(t *testing.T) {
-	result := &ConfigResult{
+func TestResult_AllErrors_OnlyValidationErrors(t *testing.T) {
+	result := &Result{
 		ValidationErrors: []ValidationError{
 			{Path: "/test", Message: "validation error 1"},
 		},

@@ -88,8 +88,8 @@ func (e ValidationError) Error() string {
 	return e.Message
 }
 
-// ConfigResult contains the combined result of parsing and validation.
-type ConfigResult struct {
+// Result contains the combined result of parsing and validation.
+type Result struct {
 	// Data contains the parsed and validated configuration
 	Data map[string]interface{}
 	// ParseErrors contains parsing errors
@@ -103,12 +103,12 @@ type ConfigResult struct {
 }
 
 // IsValid returns true if no errors occurred.
-func (r *ConfigResult) IsValid() bool {
+func (r *Result) IsValid() bool {
 	return len(r.ParseErrors) == 0 && len(r.ValidationErrors) == 0
 }
 
 // AllErrors returns all errors (parsing and validation) as a single slice.
-func (r *ConfigResult) AllErrors() []error {
+func (r *Result) AllErrors() []error {
 	errors := make([]error, 0, len(r.ParseErrors)+len(r.ValidationErrors))
 	for _, e := range r.ParseErrors {
 		errors = append(errors, e)

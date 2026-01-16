@@ -144,7 +144,8 @@ func (e *Executor) Execute(pipeline *connector.Pipeline) (*connector.ExecutionRe
 		return result, ErrNilInputModule
 	}
 
-	if e.outputModule == nil {
+	// Output module is required unless in dry-run mode
+	if e.outputModule == nil && !e.dryRun {
 		logger.Error("pipeline execution failed: output module is nil",
 			slog.String("pipeline_id", pipeline.ID),
 		)
@@ -155,6 +156,27 @@ func (e *Executor) Execute(pipeline *connector.Pipeline) (*connector.ExecutionRe
 			Module:  "output",
 		}
 		return result, ErrNilOutputModule
+	}
+
+	// Ensure modules are properly closed after execution (resource cleanup)
+	defer func() {
+		if err := e.inputModule.Close(); err != nil {
+			logger.Warn("failed to close input module",
+				slog.String("pipeline_id", pipeline.ID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}()
+
+	if e.outputModule != nil {
+		defer func() {
+			if err := e.outputModule.Close(); err != nil {
+				logger.Warn("failed to close output module",
+					slog.String("pipeline_id", pipeline.ID),
+					slog.String("error", err.Error()),
+				)
+			}
+		}()
 	}
 
 	// Step 1: Execute Input module

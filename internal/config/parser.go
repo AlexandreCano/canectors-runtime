@@ -141,9 +141,9 @@ func offsetToLineColumn(content string, offset int64) (line, column int) {
 
 // ParseConfig parses and validates a configuration file.
 // It auto-detects the format (JSON/YAML) based on file extension or content.
-// Returns a ConfigResult with parsed data, validation results, and any errors.
-func ParseConfig(filepath string) *ConfigResult {
-	result := &ConfigResult{
+// Returns a Result with parsed data, validation results, and any errors.
+func ParseConfig(filepath string) *Result {
+	result := &Result{
 		FilePath: filepath,
 	}
 
@@ -205,9 +205,9 @@ func ParseConfig(filepath string) *ConfigResult {
 
 // ParseConfigString parses and validates configuration content from a string.
 // If format is empty, it auto-detects from content.
-// Returns a ConfigResult with parsed data, validation results, and any errors.
-func ParseConfigString(content string, format string) *ConfigResult {
-	result := &ConfigResult{
+// Returns a Result with parsed data, validation results, and any errors.
+func ParseConfigString(content string, format string) *Result {
+	result := &Result{
 		Format: format,
 	}
 
