@@ -443,10 +443,22 @@ func (w *Webhook) Start(ctx context.Context, handler WebhookHandler) error {
 		w.mu.Lock()
 		w.running = false
 		w.mu.Unlock()
+
+		// Ensure proper cleanup of workers, rate limiter, and server resources.
+		shutdownErr := w.shutdown()
+
 		if err != nil {
+			if shutdownErr != nil {
+				logger.Error("error during webhook shutdown after server error",
+					"endpoint", w.endpoint,
+					"serverError", err.Error(),
+					"shutdownError", shutdownErr.Error(),
+				)
+			}
 			return fmt.Errorf("webhook server error: %w", err)
 		}
-		return nil
+		// If the server stopped without an explicit error, propagate any shutdown error.
+		return shutdownErr
 	}
 }
 
