@@ -452,8 +452,12 @@ func (h *HTTPPolling) obtainOAuth2Token(ctx context.Context) (string, time.Time,
 		return "", time.Time{}, fmt.Errorf("%w: parsing token response: %v", ErrOAuth2TokenFailed, err)
 	}
 
-	// Calculate expiry (with 60s buffer)
-	expiry := time.Now().Add(time.Duration(tokenResp.ExpiresIn-60) * time.Second)
+	// Calculate expiry (with 60s buffer), ensuring we don't use a negative duration
+	effectiveExpiresIn := tokenResp.ExpiresIn - 60
+	if effectiveExpiresIn < 0 {
+		effectiveExpiresIn = 0
+	}
+	expiry := time.Now().Add(time.Duration(effectiveExpiresIn) * time.Second)
 
 	logger.Debug("oauth2 token obtained",
 		"expires_in", tokenResp.ExpiresIn,
