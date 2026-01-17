@@ -47,6 +47,8 @@ var (
 	ErrMissingSignatureType   = errors.New("signature type is required")
 	ErrRateLimited            = errors.New("rate limit exceeded")
 	ErrQueueFull              = errors.New("webhook queue is full")
+	ErrInvalidQueueSize       = errors.New("queueSize must be >= 0")
+	ErrInvalidMaxConcurrent   = errors.New("maxConcurrent must be >= 0")
 )
 
 // SignatureConfig holds webhook signature validation configuration
@@ -100,7 +102,8 @@ type Webhook struct {
 	limiter    *rateLimiter
 
 	// Safe shutdown (prevents double close panic)
-	workersOnce sync.Once
+	shutdownOnce sync.Once
+	workersOnce  sync.Once
 }
 
 // NewWebhookFromConfig creates a new Webhook input module from configuration.
@@ -160,7 +163,7 @@ func NewWebhookFromConfig(config *connector.ModuleConfig) (*Webhook, error) {
 	if queueVal, ok := config.Config["queueSize"].(float64); ok {
 		queueSize = int(queueVal)
 		if queueSize < 0 {
-			return nil, fmt.Errorf("queueSize must be >= 0")
+			return nil, ErrInvalidQueueSize
 		}
 	}
 
@@ -168,7 +171,7 @@ func NewWebhookFromConfig(config *connector.ModuleConfig) (*Webhook, error) {
 	if maxConcurrentVal, ok := config.Config["maxConcurrent"].(float64); ok {
 		maxConcurrent = int(maxConcurrentVal)
 		if maxConcurrent < 0 {
-			return nil, fmt.Errorf("maxConcurrent must be >= 0")
+			return nil, ErrInvalidMaxConcurrent
 		}
 	}
 	if queueSize > 0 && maxConcurrent == 0 {
@@ -255,6 +258,26 @@ func parseRateLimitConfig(config map[string]interface{}) *RateLimitConfig {
 	return rateLimit
 }
 
+// newRateLimiter creates a token bucket rate limiter with the specified rate and burst.
+//
+// The rate limiter uses a channel-based token bucket implementation:
+//   - tokens channel acts as the bucket with capacity = burst
+//   - A background goroutine refills tokens at the specified rate
+//   - Allow() consumes a token (non-blocking)
+//
+// Lifecycle:
+//   - The goroutine starts immediately when newRateLimiter is called
+//   - Stop() MUST be called to clean up the goroutine (e.g., in defer or shutdown)
+//   - If Stop() is not called, the goroutine will leak
+//
+// Edge cases:
+//   - Returns nil if requestsPerSecond <= 0 or burst <= 0
+//   - For very high requestsPerSecond values (> 1 billion), interval may be very small
+//     but is clamped to at least 1 nanosecond to prevent ticker issues
+//
+// Parameters:
+//   - requestsPerSecond: rate at which tokens are refilled (tokens/second)
+//   - burst: maximum number of tokens (bucket capacity)
 func newRateLimiter(requestsPerSecond int, burst int) *rateLimiter {
 	if requestsPerSecond <= 0 || burst <= 0 {
 		return nil
@@ -263,11 +286,14 @@ func newRateLimiter(requestsPerSecond int, burst int) *rateLimiter {
 		tokens: make(chan struct{}, burst),
 		stop:   make(chan struct{}),
 	}
+	// Pre-fill bucket to burst capacity
 	for i := 0; i < burst; i++ {
 		limiter.tokens <- struct{}{}
 	}
+	// Calculate refill interval
 	interval := time.Second / time.Duration(requestsPerSecond)
 	if interval <= 0 {
+		// Safety: ensure interval is at least 1ns for extreme requestsPerSecond values
 		interval = time.Nanosecond
 	}
 	ticker := time.NewTicker(interval)
@@ -276,9 +302,11 @@ func newRateLimiter(requestsPerSecond int, burst int) *rateLimiter {
 		for {
 			select {
 			case <-ticker.C:
+				// Try to add a token (non-blocking to avoid deadlock if bucket is full)
 				select {
 				case limiter.tokens <- struct{}{}:
 				default:
+					// Bucket full, discard token
 				}
 			case <-limiter.stop:
 				return
@@ -428,42 +456,49 @@ func (w *Webhook) Stop() error {
 	return w.shutdown()
 }
 
-// shutdown performs graceful shutdown of the webhook server
+// shutdown performs graceful shutdown of the webhook server.
+// Uses sync.Once to ensure shutdown only executes once, even if called
+// concurrently from multiple goroutines (e.g., Stop() and context cancellation).
 func (w *Webhook) shutdown() error {
-	w.mu.Lock()
-	if !w.running {
+	var shutdownErr error
+
+	w.shutdownOnce.Do(func() {
+		w.mu.Lock()
+		if !w.running {
+			w.mu.Unlock()
+			return
+		}
+		// Mark as not running immediately to prevent new operations
+		w.running = false
 		w.mu.Unlock()
-		return nil
-	}
-	w.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+		defer cancel()
 
-	logger.Info("shutting down webhook server",
-		"endpoint", w.endpoint,
-	)
-
-	err := w.server.Shutdown(ctx)
-
-	w.stopWorkers()
-
-	w.mu.Lock()
-	w.running = false
-	w.mu.Unlock()
-
-	if err != nil {
-		logger.Error("webhook server shutdown error",
-			"error", err.Error(),
+		logger.Info("shutting down webhook server",
+			"endpoint", w.endpoint,
 		)
-		return fmt.Errorf("shutting down webhook server: %w", err)
-	}
 
-	logger.Info("webhook server stopped",
-		"endpoint", w.endpoint,
-	)
+		// Shutdown HTTP server first (stops accepting new requests)
+		shutdownErr = w.server.Shutdown(ctx)
 
-	return nil
+		// Stop workers after server is shut down
+		w.stopWorkers()
+
+		if shutdownErr != nil {
+			logger.Error("webhook server shutdown error",
+				"error", shutdownErr.Error(),
+			)
+			shutdownErr = fmt.Errorf("shutting down webhook server: %w", shutdownErr)
+			return
+		}
+
+		logger.Info("webhook server stopped",
+			"endpoint", w.endpoint,
+		)
+	})
+
+	return shutdownErr
 }
 
 // Address returns the actual address the server is listening on.
@@ -757,6 +792,17 @@ func (w *Webhook) startWorkers(handler WebhookHandler) {
 	}
 }
 
+// stopWorkers stops all worker goroutines and cleans up resources.
+// Uses sync.Once to ensure this only executes once.
+//
+// Shutdown behavior:
+//   - Closes the queue channel first, signaling workers no more data will arrive
+//   - Closes workerStop channel to interrupt any workers blocked on select
+//   - Waits for all workers to finish via workerWG
+//
+// Note: Any pending items in the queue at shutdown time will be dropped.
+// This is intentional for fast graceful shutdown. If at-least-once delivery
+// is required, implement a persistent queue or acknowledgment mechanism.
 func (w *Webhook) stopWorkers() {
 	w.workersOnce.Do(func() {
 		// Stop rate limiter first (safe to call even if nil)
@@ -773,14 +819,16 @@ func (w *Webhook) stopWorkers() {
 		w.workerStop = nil
 		w.mu.Unlock()
 
+		// Close queue first - workers will exit when they see closed channel
 		if queue != nil {
 			close(queue)
 		}
+		// Close workerStop to interrupt workers blocked in select
 		if workerStop != nil {
 			close(workerStop)
 		}
 
-		// Wait for workers to finish
+		// Wait for workers to finish processing and exit
 		w.workerWG.Wait()
 	})
 }

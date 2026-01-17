@@ -11,6 +11,32 @@ import (
 	"github.com/canectors/runtime/pkg/connector"
 )
 
+// waitForWebhook waits for the webhook server to be ready (address available).
+// Returns true if server is ready, false if timeout.
+func waitForWebhook(w *input.Webhook, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if w.Address() != "" {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
+// waitForRecords waits for the output module to receive the expected number of records.
+// Returns true if expected records received, false if timeout.
+func waitForRecords(outputModule *MockOutputModule, expected int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if len(outputModule.sentRecords) >= expected {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
 func TestWebhook_ExecutorIntegration(t *testing.T) {
 	config := &connector.ModuleConfig{
 		Type: "webhook",
@@ -46,7 +72,10 @@ func TestWebhook_ExecutorIntegration(t *testing.T) {
 	go func() {
 		_ = webhook.Start(ctx, handler)
 	}()
-	time.Sleep(100 * time.Millisecond)
+
+	if !waitForWebhook(webhook, 2*time.Second) {
+		t.Fatal("Webhook server did not start within timeout")
+	}
 
 	addr := webhook.Address()
 	payload := `[{"id": 1}, {"id": 2}]`
@@ -64,8 +93,7 @@ func TestWebhook_ExecutorIntegration(t *testing.T) {
 		t.Fatalf("Response status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
-	time.Sleep(50 * time.Millisecond)
-	if len(outputModule.sentRecords) != 2 {
-		t.Errorf("Output received %d records, want 2", len(outputModule.sentRecords))
+	if !waitForRecords(outputModule, 2, 2*time.Second) {
+		t.Fatalf("Timed out waiting for 2 records, got %d", len(outputModule.sentRecords))
 	}
 }
