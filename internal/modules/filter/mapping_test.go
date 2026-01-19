@@ -1483,9 +1483,6 @@ func TestMappingModule_IntegrationScenarios(t *testing.T) {
 			t.Fatalf("Process() failed: %v", err)
 		}
 
-		// Verify type is correct
-		var _ []map[string]interface{} = result
-
 		// Verify we can iterate and access values
 		for _, rec := range result {
 			for k, v := range rec {
@@ -1685,19 +1682,6 @@ func TestMapping_Process_ErrorContext(t *testing.T) {
 			},
 			errContains: []string{"required_field", "record 0"},
 		},
-		{
-			name: "invalid regex pattern error includes context",
-			mappings: []FieldMapping{
-				{Source: "text", Target: "output", Transforms: []TransformOp{{
-					Op:      "replace",
-					Pattern: "[invalid", // Invalid regex
-				}}},
-			},
-			input: []map[string]interface{}{
-				{"text": "hello"},
-			},
-			errContains: []string{"transform", "text", "record 0"},
-		},
 	}
 
 	for _, tt := range tests {
@@ -1721,10 +1705,54 @@ func TestMapping_Process_ErrorContext(t *testing.T) {
 			}
 		})
 	}
+
+	// Invalid regex patterns are now caught at config parsing time (fail fast)
+	t.Run("invalid regex pattern detected at config time", func(t *testing.T) {
+		_, err := NewMappingFromConfig([]FieldMapping{
+			{Source: "text", Target: "output", Transforms: []TransformOp{{
+				Op:      "replace",
+				Pattern: "[invalid", // Invalid regex
+			}}},
+		}, "fail")
+		if err == nil {
+			t.Fatal("expected error for invalid regex pattern")
+		}
+		if !containsString(err.Error(), "invalid regex pattern") {
+			t.Errorf("error should mention invalid regex pattern, got: %v", err)
+		}
+	})
 }
 
 // TestMapping_Process_TransformErrors tests transform error handling.
 func TestMapping_Process_TransformErrors(t *testing.T) {
+	// Invalid regex patterns are now caught at config parsing time (fail fast)
+	t.Run("invalid regex detected at config time - fail mode", func(t *testing.T) {
+		_, err := NewMappingFromConfig([]FieldMapping{
+			{Source: "text", Target: "output", Transforms: []TransformOp{{
+				Op:      "replace",
+				Pattern: "[invalid",
+			}}},
+		}, "fail")
+		if err == nil {
+			t.Fatal("expected error for invalid regex pattern")
+		}
+		if !containsString(err.Error(), "invalid regex pattern") {
+			t.Errorf("error should mention invalid regex pattern, got: %v", err)
+		}
+	})
+
+	t.Run("invalid regex detected at config time - skip mode", func(t *testing.T) {
+		_, err := NewMappingFromConfig([]FieldMapping{
+			{Source: "text", Target: "output", Transforms: []TransformOp{{
+				Op:      "replace",
+				Pattern: "[invalid",
+			}}},
+		}, "skip")
+		if err == nil {
+			t.Fatal("expected error for invalid regex pattern even in skip mode")
+		}
+	})
+
 	tests := []struct {
 		name     string
 		mappings []FieldMapping
@@ -1733,37 +1761,6 @@ func TestMapping_Process_TransformErrors(t *testing.T) {
 		wantLen  int
 		wantErr  bool
 	}{
-		{
-			name: "invalid regex - fail mode stops processing",
-			mappings: []FieldMapping{
-				{Source: "text", Target: "output", Transforms: []TransformOp{{
-					Op:      "replace",
-					Pattern: "[invalid",
-				}}},
-			},
-			onError: "fail",
-			input: []map[string]interface{}{
-				{"text": "hello"},
-			},
-			wantLen: 0,
-			wantErr: true,
-		},
-		{
-			name: "invalid regex - skip mode skips record",
-			mappings: []FieldMapping{
-				{Source: "text", Target: "output", Transforms: []TransformOp{{
-					Op:      "replace",
-					Pattern: "[invalid",
-				}}},
-			},
-			onError: "skip",
-			input: []map[string]interface{}{
-				{"text": "hello"},
-				{"text": "world"},
-			},
-			wantLen: 0, // Both fail because same transform
-			wantErr: false,
-		},
 		{
 			name: "invalid int conversion - fail mode",
 			mappings: []FieldMapping{

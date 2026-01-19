@@ -40,6 +40,17 @@ const (
 	OnErrorLog  = "log"
 )
 
+// typeConversionOps is the set of transform operations that perform type conversion.
+// Used for error code classification.
+var typeConversionOps = map[string]bool{
+	"toString": true,
+	"toInt":    true,
+	"toFloat":  true,
+	"toBool":   true,
+	"toArray":  true,
+	"toObject": true,
+}
+
 // Common errors
 var (
 	// ErrInvalidMapping is returned when a mapping configuration is invalid
@@ -78,11 +89,12 @@ type MappingConfig struct {
 
 // TransformConfig represents a transform operation configuration.
 type TransformConfig struct {
-	Op          string
-	Format      string
-	Pattern     string
-	Replacement string
-	Separator   string
+	Op              string
+	Format          string
+	Pattern         string
+	Replacement     string
+	Separator       string
+	CompiledPattern *regexp.Regexp // Pre-compiled regex for replace operations
 }
 
 // MappingModule implements field mapping transformations.
@@ -188,17 +200,26 @@ func parseMappingConfig(m FieldMapping, index int) (MappingConfig, error) {
 		config.OnMissing = OnMissingSetNull
 	}
 
-	// Parse transforms array
+	// Parse transforms array and pre-compile regex patterns
 	if m.Transforms != nil {
 		config.Transforms = make([]TransformConfig, len(m.Transforms))
 		for i, t := range m.Transforms {
-			config.Transforms[i] = TransformConfig{
+			tc := TransformConfig{
 				Op:          t.Op,
 				Format:      t.Format,
 				Pattern:     t.Pattern,
 				Replacement: t.Replacement,
 				Separator:   t.Separator,
 			}
+			// Pre-compile regex pattern for replace operations
+			if t.Op == "replace" && t.Pattern != "" {
+				re, err := regexp.Compile(t.Pattern)
+				if err != nil {
+					return config, fmt.Errorf("%w at index %d: invalid regex pattern in transform %d: %v", ErrInvalidMapping, index, i, err)
+				}
+				tc.CompiledPattern = re
+			}
+			config.Transforms[i] = tc
 		}
 	}
 
@@ -467,7 +488,7 @@ func (m *MappingModule) processRecord(record map[string]interface{}, recordIdx i
 				message := fmt.Sprintf("transform failed for field %q -> %q at record %d, mapping %d: %v",
 					mapping.Source, mapping.Target, recordIdx, mappingIdx, err)
 				code := ErrCodeTransformFailed
-				if transformOp == "toString" || transformOp == "toInt" || transformOp == "toFloat" || transformOp == "toBool" || transformOp == "toArray" || transformOp == "toObject" {
+				if typeConversionOps[transformOp] {
 					code = ErrCodeTypeConversion
 				}
 				return target, newMappingError(code, message, mapping, recordIdx, mappingIdx, value, transformOp)
@@ -659,7 +680,7 @@ func (m *MappingModule) applyTransformOp(value interface{}, config TransformConf
 	case "dateFormat":
 		return applyDateFormat(value, config.Format)
 	case "replace":
-		return applyReplace(value, config.Pattern, config.Replacement)
+		return applyReplace(value, config.CompiledPattern, config.Replacement)
 	case "split":
 		return applySplit(value, config.Separator)
 	case "join":
@@ -761,16 +782,12 @@ func convertDateFormat(format string) string {
 	return result
 }
 
-func applyReplace(value interface{}, pattern, replacement string) (interface{}, error) {
+func applyReplace(value interface{}, compiledPattern *regexp.Regexp, replacement string) (interface{}, error) {
 	if s, ok := value.(string); ok {
-		if pattern == "" {
+		if compiledPattern == nil {
 			return s, nil
 		}
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return value, fmt.Errorf("invalid replace pattern: %w", err)
-		}
-		return re.ReplaceAllString(s, replacement), nil
+		return compiledPattern.ReplaceAllString(s, replacement), nil
 	}
 	return value, nil
 }
