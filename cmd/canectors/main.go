@@ -285,7 +285,7 @@ func createInputModule(cfg *connector.ModuleConfig) input.Module {
 }
 
 // createFilterModules creates filter module instances from configuration.
-// Supports mapping and condition filter types.
+// Supports mapping and condition filter types. Other filter types use stub implementations.
 func createFilterModules(cfgs []connector.ModuleConfig) ([]filter.Module, error) {
 	if len(cfgs) == 0 {
 		return nil, nil
