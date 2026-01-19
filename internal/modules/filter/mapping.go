@@ -698,7 +698,7 @@ func applyUppercase(value interface{}) (interface{}, error) {
 
 func applyDateFormat(value interface{}, format string) (interface{}, error) {
 	if format == "" {
-		format = "2006-01-02T15:04:05" // Default: YYYY-MM-DD HH:MM:SS
+		format = "2006-01-02T15:04:05" // Default: YYYY-MM-DDTHH:mm:ss
 	}
 
 	// Convert common format strings to Go layout
