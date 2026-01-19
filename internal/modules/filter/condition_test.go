@@ -1454,12 +1454,12 @@ func TestConditionSyntaxErrorDetection(t *testing.T) {
 		{
 			name:       "empty expression",
 			expression: "",
-			wantErr:    false,
+			wantErr:    true,
 		},
 		{
 			name:       "whitespace only expression",
 			expression: "   ",
-			wantErr:    false,
+			wantErr:    true,
 		},
 		{
 			name:       "unclosed string",
@@ -1609,49 +1609,75 @@ func TestConditionInvalidOnErrorDefaultsToFail(t *testing.T) {
 
 // TestConditionErrorContext tests that errors contain proper context
 func TestConditionEmptyExpressionDefaultsToOnTrue(t *testing.T) {
-	cond, err := NewConditionFromConfig(ConditionConfig{
+	_, err := NewConditionFromConfig(ConditionConfig{
 		Expression: "",
 		OnTrue:     "continue",
 	})
-	if err != nil {
-		t.Fatalf("NewConditionFromConfig() error = %v", err)
+	if err == nil {
+		t.Fatal("NewConditionFromConfig() expected error for empty expression, got nil")
 	}
-
-	records := []map[string]interface{}{
-		{"id": 1, "status": "active"},
-		{"id": 2, "status": "inactive"},
-	}
-
-	result, err := cond.Process(records)
-	if err != nil {
-		t.Fatalf("Process() error = %v", err)
-	}
-
-	if len(result) != len(records) {
-		t.Errorf("expected %d records to pass with empty expression, got %d", len(records), len(result))
+	if !errors.Is(err, ErrEmptyExpression) {
+		t.Errorf("NewConditionFromConfig() expected ErrEmptyExpression, got %v", err)
 	}
 }
 
 func TestConditionEmptyExpressionOnTrueSkipFiltersAll(t *testing.T) {
-	cond, err := NewConditionFromConfig(ConditionConfig{
+	_, err := NewConditionFromConfig(ConditionConfig{
 		Expression: " ",
 		OnTrue:     "skip",
+	})
+	if err == nil {
+		t.Fatal("NewConditionFromConfig() expected error for whitespace-only expression, got nil")
+	}
+	if !errors.Is(err, ErrEmptyExpression) {
+		t.Errorf("NewConditionFromConfig() expected ErrEmptyExpression, got %v", err)
+	}
+}
+
+// TestConditionErrorDetails tests that ConditionError Details field is properly populated
+func TestConditionErrorDetails(t *testing.T) {
+	cond, err := NewConditionFromConfig(ConditionConfig{
+		Expression: "invalid_field_that_does_not_exist > 100",
+		OnError:    "fail",
 	})
 	if err != nil {
 		t.Fatalf("NewConditionFromConfig() error = %v", err)
 	}
 
+	// Create a record that will cause an evaluation error
 	records := []map[string]interface{}{
-		{"id": 1, "status": "active"},
+		{"id": 1},
 	}
 
-	result, err := cond.Process(records)
-	if err != nil {
-		t.Fatalf("Process() error = %v", err)
+	_, err = cond.Process(records)
+	if err == nil {
+		t.Fatal("Process() expected error, got nil")
 	}
 
-	if len(result) != 0 {
-		t.Errorf("expected 0 records with empty expression and onTrue=skip, got %d", len(result))
+	// Check if it's a ConditionError
+	condErr, ok := err.(*ConditionError)
+	if !ok {
+		t.Fatalf("expected ConditionError, got %T", err)
+	}
+
+	// Verify Details field is populated
+	if condErr.Details == nil {
+		t.Error("expected Details to be populated, got nil")
+	}
+
+	// Verify underlying_error is in Details
+	if _, ok := condErr.Details["underlying_error"]; !ok {
+		t.Error("expected 'underlying_error' in Details, not found")
+	}
+
+	// Verify error_type is in Details
+	if _, ok := condErr.Details["error_type"]; !ok {
+		t.Error("expected 'error_type' in Details, not found")
+	}
+
+	// Verify record_index is in Details
+	if idx, ok := condErr.Details["record_index"].(int); !ok || idx != 0 {
+		t.Errorf("expected 'record_index' in Details to be 0, got %v", condErr.Details["record_index"])
 	}
 }
 

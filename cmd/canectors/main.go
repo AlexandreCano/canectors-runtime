@@ -367,15 +367,46 @@ func parseConditionConfig(cfg map[string]interface{}) (filter.ConditionConfig, e
 	return condConfig, nil
 }
 
+// getNestedString retrieves a string value from either the direct config field or nested config field.
+// This helper function reduces code duplication in parseNestedModuleConfig.
+func getNestedString(cfg map[string]interface{}, nestedConfig map[string]interface{}, key string) (string, bool) {
+	if val, ok := cfg[key].(string); ok {
+		return val, true
+	}
+	if nestedConfig != nil {
+		if val, ok := nestedConfig[key].(string); ok {
+			return val, true
+		}
+	}
+	return "", false
+}
+
+// getNestedMap retrieves a map value from either the direct config field or nested config field.
+func getNestedMap(cfg map[string]interface{}, nestedConfig map[string]interface{}, key string) (map[string]interface{}, bool) {
+	if val, ok := cfg[key].(map[string]interface{}); ok {
+		return val, true
+	}
+	if nestedConfig != nil {
+		if val, ok := nestedConfig[key].(map[string]interface{}); ok {
+			return val, true
+		}
+	}
+	return nil, false
+}
+
 // parseNestedModuleConfig parses a nested module configuration.
+// It handles both direct field access and nested config field access to support
+// different configuration formats.
 func parseNestedModuleConfig(cfg map[string]interface{}) (*filter.NestedModuleConfig, error) {
 	nestedConfig := &filter.NestedModuleConfig{}
 
 	if typ, ok := cfg["type"].(string); ok {
 		nestedConfig.Type = typ
 	}
+	var nestedConfigMap map[string]interface{}
 	if config, ok := cfg["config"].(map[string]interface{}); ok {
 		nestedConfig.Config = config
+		nestedConfigMap = config
 	}
 	if onError, ok := cfg["onError"].(string); ok {
 		nestedConfig.OnError = onError
@@ -383,16 +414,12 @@ func parseNestedModuleConfig(cfg map[string]interface{}) (*filter.NestedModuleCo
 
 	// For mapping type, parse mappings
 	if nestedConfig.Type == "mapping" {
-		mappingsRaw, ok := cfg["mappings"]
-		if !ok && nestedConfig.Config != nil {
-			if configMappings, okConfig := nestedConfig.Config["mappings"]; okConfig {
-				mappingsRaw = configMappings
-				ok = true
-			}
-			if nestedConfig.OnError == "" {
-				if configOnError, okConfig := nestedConfig.Config["onError"].(string); okConfig {
-					nestedConfig.OnError = configOnError
-				}
+		// Try to get mappings from direct field or nested config
+		var mappingsRaw interface{}
+		var ok bool
+		if mappingsRaw, ok = cfg["mappings"]; !ok {
+			if nestedConfigMap != nil {
+				mappingsRaw, ok = nestedConfigMap["mappings"]
 			}
 		}
 		if ok {
@@ -402,74 +429,48 @@ func parseNestedModuleConfig(cfg map[string]interface{}) (*filter.NestedModuleCo
 			}
 			nestedConfig.Mappings = mappings
 		}
+		// Get onError from nested config if not already set
+		if nestedConfig.OnError == "" && nestedConfigMap != nil {
+			if configOnError, ok := nestedConfigMap["onError"].(string); ok {
+				nestedConfig.OnError = configOnError
+			}
+		}
 	}
 
 	// For condition type, parse condition fields
 	if nestedConfig.Type == "condition" {
-		if expr, ok := cfg["expression"].(string); ok {
+		if expr, ok := getNestedString(cfg, nestedConfigMap, "expression"); ok {
 			nestedConfig.Expression = expr
-		} else if nestedConfig.Config != nil {
-			if configExpr, okConfig := nestedConfig.Config["expression"].(string); okConfig {
-				nestedConfig.Expression = configExpr
-			}
 		}
-		if lang, ok := cfg["lang"].(string); ok {
+		if lang, ok := getNestedString(cfg, nestedConfigMap, "lang"); ok {
 			nestedConfig.Lang = lang
-		} else if nestedConfig.Config != nil {
-			if configLang, okConfig := nestedConfig.Config["lang"].(string); okConfig {
-				nestedConfig.Lang = configLang
-			}
 		}
-		if onTrue, ok := cfg["onTrue"].(string); ok {
+		if onTrue, ok := getNestedString(cfg, nestedConfigMap, "onTrue"); ok {
 			nestedConfig.OnTrue = onTrue
-		} else if nestedConfig.Config != nil {
-			if configOnTrue, okConfig := nestedConfig.Config["onTrue"].(string); okConfig {
-				nestedConfig.OnTrue = configOnTrue
-			}
 		}
-		if onFalse, ok := cfg["onFalse"].(string); ok {
+		if onFalse, ok := getNestedString(cfg, nestedConfigMap, "onFalse"); ok {
 			nestedConfig.OnFalse = onFalse
-		} else if nestedConfig.Config != nil {
-			if configOnFalse, okConfig := nestedConfig.Config["onFalse"].(string); okConfig {
-				nestedConfig.OnFalse = configOnFalse
-			}
 		}
-		if nestedConfig.OnError == "" && nestedConfig.Config != nil {
-			if configOnError, okConfig := nestedConfig.Config["onError"].(string); okConfig {
-				nestedConfig.OnError = configOnError
+		if nestedConfig.OnError == "" {
+			if onError, ok := getNestedString(cfg, nestedConfigMap, "onError"); ok {
+				nestedConfig.OnError = onError
 			}
 		}
 
 		// Recursive nested modules
-		if thenCfg, ok := cfg["then"].(map[string]interface{}); ok {
+		if thenCfg, ok := getNestedMap(cfg, nestedConfigMap, "then"); ok {
 			then, err := parseNestedModuleConfig(thenCfg)
 			if err != nil {
 				return nil, err
 			}
 			nestedConfig.Then = then
-		} else if nestedConfig.Config != nil {
-			if thenCfg, okConfig := nestedConfig.Config["then"].(map[string]interface{}); okConfig {
-				then, err := parseNestedModuleConfig(thenCfg)
-				if err != nil {
-					return nil, err
-				}
-				nestedConfig.Then = then
-			}
 		}
-		if elseCfg, ok := cfg["else"].(map[string]interface{}); ok {
+		if elseCfg, ok := getNestedMap(cfg, nestedConfigMap, "else"); ok {
 			elseModule, err := parseNestedModuleConfig(elseCfg)
 			if err != nil {
 				return nil, err
 			}
 			nestedConfig.Else = elseModule
-		} else if nestedConfig.Config != nil {
-			if elseCfg, okConfig := nestedConfig.Config["else"].(map[string]interface{}); okConfig {
-				elseModule, err := parseNestedModuleConfig(elseCfg)
-				if err != nil {
-					return nil, err
-				}
-				nestedConfig.Else = elseModule
-			}
 		}
 	}
 

@@ -105,22 +105,49 @@ func (e *ConditionError) Error() string {
 	return e.Message
 }
 
-func newConditionError(code, message, expression string, recordIdx int, fieldPath string) *ConditionError {
+// newConditionError creates a ConditionError with optional debugging details.
+// If underlyingErr is provided, it will be included in the Details field.
+func newConditionError(code, message, expression string, recordIdx int, fieldPath string, underlyingErr error) *ConditionError {
+	details := make(map[string]interface{})
+	if underlyingErr != nil {
+		details["underlying_error"] = underlyingErr.Error()
+		details["error_type"] = fmt.Sprintf("%T", underlyingErr)
+	}
+	if recordIdx >= 0 {
+		details["record_index"] = recordIdx
+	}
+	if fieldPath != "" {
+		details["field_path"] = fieldPath
+	}
+
 	return &ConditionError{
 		Code:        code,
 		Message:     message,
 		Expression:  expression,
 		RecordIndex: recordIdx,
 		FieldPath:   fieldPath,
+		Details:     details,
 	}
 }
 
 // NewConditionFromConfig creates a new condition filter module from configuration.
 // It validates the configuration and returns an error if invalid.
+//
+// Security considerations:
+//   - Expressions are compiled once during module creation using expr.Compile with
+//     AllowUndefinedVariables(). This is efficient for pipelines processing many records.
+//   - However, expressions from untrusted sources could potentially cause denial-of-service
+//     through expensive operations. Consider adding limits on expression complexity
+//     (e.g., maximum expression length, maximum nesting depth) if processing user-provided
+//     expressions in production environments.
+//   - The expr library does not execute arbitrary code, but complex expressions may still
+//     consume significant CPU time during evaluation.
 func NewConditionFromConfig(config ConditionConfig) (*ConditionModule, error) {
-	// Validate expression is provided
+	// Validate expression is provided and not empty/whitespace-only
 	expression := config.Expression
-	hasExpression := len(expression) > 0 && !isWhitespaceOnly(expression)
+	if len(expression) == 0 || isWhitespaceOnly(expression) {
+		return nil, fmt.Errorf("%w", ErrEmptyExpression)
+	}
 
 	// Set defaults
 	lang := config.Lang
@@ -161,16 +188,11 @@ func NewConditionFromConfig(config ConditionConfig) (*ConditionModule, error) {
 	}
 
 	// Compile the expression using expr library
-	// AllowUndefinedVariables() handles missing fields gracefully
-	var (
-		program *vm.Program
-		err     error
-	)
-	if hasExpression {
-		program, err = expr.Compile(expression, expr.AllowUndefinedVariables())
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
-		}
+	// AllowUndefinedVariables() handles missing fields gracefully by treating
+	// undefined variables as nil rather than causing evaluation errors.
+	program, err := expr.Compile(expression, expr.AllowUndefinedVariables())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
 	}
 
 	// Create nested modules if configured
@@ -199,7 +221,7 @@ func NewConditionFromConfig(config ConditionConfig) (*ConditionModule, error) {
 	)
 
 	return &ConditionModule{
-		expression: config.Expression,
+		expression: expression,
 		lang:       lang,
 		onTrue:     onTrue,
 		onFalse:    onFalse,
@@ -254,6 +276,54 @@ func createNestedModule(config *NestedModuleConfig) (Module, error) {
 	}
 }
 
+// handleError processes an error according to the module's onError setting.
+// Returns an error if the error should stop processing, nil if it should be skipped/logged.
+func (c *ConditionModule) handleError(err error, recordIdx int, errorType string) error {
+	switch c.onError {
+	case OnErrorFail:
+		return err
+	case OnErrorSkip:
+		logger.Warn(fmt.Sprintf("skipping record due to %s error", errorType),
+			slog.Int("record_index", recordIdx),
+			slog.String("expression", c.expression),
+			slog.String("error", err.Error()),
+		)
+		return nil
+	case OnErrorLog:
+		logger.Error(fmt.Sprintf("%s error (continuing)", errorType),
+			slog.Int("record_index", recordIdx),
+			slog.String("expression", c.expression),
+			slog.String("error", err.Error()),
+		)
+		return nil
+	default:
+		return err
+	}
+}
+
+// handleNestedModuleError processes an error from a nested module according to the module's onError setting.
+// Returns an error if the error should stop processing, nil if it should be skipped/logged.
+func (c *ConditionModule) handleNestedModuleError(err error, recordIdx int) error {
+	switch c.onError {
+	case OnErrorFail:
+		return err
+	case OnErrorSkip:
+		logger.Warn("skipping record due to nested module error",
+			slog.Int("record_index", recordIdx),
+			slog.String("error", err.Error()),
+		)
+		return nil
+	case OnErrorLog:
+		logger.Error("nested module error (continuing)",
+			slog.Int("record_index", recordIdx),
+			slog.String("error", err.Error()),
+		)
+		return nil
+	default:
+		return err
+	}
+}
+
 // Process filters records based on the condition expression.
 // For each record:
 //  1. Evaluates the condition expression using expr library
@@ -271,34 +341,6 @@ func (c *ConditionModule) Process(records []map[string]interface{}) ([]map[strin
 	result := make([]map[string]interface{}, 0, len(records))
 
 	for recordIdx, record := range records {
-		if c.program == nil {
-			// Empty condition defaults to "true" to preserve records unless onTrue says otherwise.
-			processedRecords, err := c.processConditionResult(true, record)
-			if err != nil {
-				switch c.onError {
-				case OnErrorFail:
-					return nil, err
-				case OnErrorSkip:
-					logger.Warn("skipping record due to nested module error",
-						slog.Int("record_index", recordIdx),
-						slog.String("error", err.Error()),
-					)
-					continue
-				case OnErrorLog:
-					logger.Error("nested module error (continuing)",
-						slog.Int("record_index", recordIdx),
-						slog.String("error", err.Error()),
-					)
-					continue
-				default:
-					return nil, err
-				}
-			}
-
-			result = append(result, processedRecords...)
-			continue
-		}
-
 		// Evaluate the condition using expr library
 		output, err := expr.Run(c.program, record)
 		if err != nil {
@@ -309,29 +351,13 @@ func (c *ConditionModule) Process(records []map[string]interface{}) ([]map[strin
 				c.expression,
 				recordIdx,
 				"",
+				err,
 			)
 
-			switch c.onError {
-			case OnErrorFail:
-				return nil, condErr
-			case OnErrorSkip:
-				logger.Warn("skipping record due to condition evaluation error",
-					slog.Int("record_index", recordIdx),
-					slog.String("expression", c.expression),
-					slog.String("error", err.Error()),
-				)
-				continue
-			case OnErrorLog:
-				logger.Error("condition evaluation error (continuing)",
-					slog.Int("record_index", recordIdx),
-					slog.String("expression", c.expression),
-					slog.String("error", err.Error()),
-				)
-				// Continue with next record
-				continue
-			default:
-				return nil, condErr
+			if handleErr := c.handleError(condErr, recordIdx, "condition evaluation"); handleErr != nil {
+				return nil, handleErr
 			}
+			continue
 		}
 
 		// Convert result to boolean
@@ -344,24 +370,10 @@ func (c *ConditionModule) Process(records []map[string]interface{}) ([]map[strin
 		// Process based on condition result
 		processedRecords, err := c.processConditionResult(conditionResult, record)
 		if err != nil {
-			switch c.onError {
-			case OnErrorFail:
-				return nil, err
-			case OnErrorSkip:
-				logger.Warn("skipping record due to nested module error",
-					slog.Int("record_index", recordIdx),
-					slog.String("error", err.Error()),
-				)
-				continue
-			case OnErrorLog:
-				logger.Error("nested module error (continuing)",
-					slog.Int("record_index", recordIdx),
-					slog.String("error", err.Error()),
-				)
-				continue
-			default:
-				return nil, err
+			if handleErr := c.handleNestedModuleError(err, recordIdx); handleErr != nil {
+				return nil, handleErr
 			}
+			continue
 		}
 
 		result = append(result, processedRecords...)
