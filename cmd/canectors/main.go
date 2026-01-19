@@ -285,7 +285,7 @@ func createInputModule(cfg *connector.ModuleConfig) input.Module {
 }
 
 // createFilterModules creates filter module instances from configuration.
-// Note: Non-mapping filters are stubbed until Epic 3 implements real modules.
+// Supports mapping and condition filter types.
 func createFilterModules(cfgs []connector.ModuleConfig) ([]filter.Module, error) {
 	if len(cfgs) == 0 {
 		return nil, nil
@@ -304,6 +304,18 @@ func createFilterModules(cfgs []connector.ModuleConfig) ([]filter.Module, error)
 				return nil, fmt.Errorf("invalid mapping config at index %d: %w", i, err)
 			}
 			modules = append(modules, module)
+
+		case "condition":
+			condConfig, err := parseConditionConfig(cfg.Config)
+			if err != nil {
+				return nil, fmt.Errorf("invalid condition config at index %d: %w", i, err)
+			}
+			module, err := filter.NewConditionFromConfig(condConfig)
+			if err != nil {
+				return nil, fmt.Errorf("invalid condition config at index %d: %w", i, err)
+			}
+			modules = append(modules, module)
+
 		default:
 			modules = append(modules, &StubFilterModule{
 				moduleType: cfg.Type,
@@ -312,6 +324,156 @@ func createFilterModules(cfgs []connector.ModuleConfig) ([]filter.Module, error)
 		}
 	}
 	return modules, nil
+}
+
+// parseConditionConfig parses a condition filter configuration from raw config.
+func parseConditionConfig(cfg map[string]interface{}) (filter.ConditionConfig, error) {
+	condConfig := filter.ConditionConfig{}
+
+	if expr, ok := cfg["expression"].(string); ok {
+		condConfig.Expression = expr
+	}
+	if lang, ok := cfg["lang"].(string); ok {
+		condConfig.Lang = lang
+	}
+	if onTrue, ok := cfg["onTrue"].(string); ok {
+		condConfig.OnTrue = onTrue
+	}
+	if onFalse, ok := cfg["onFalse"].(string); ok {
+		condConfig.OnFalse = onFalse
+	}
+	if onError, ok := cfg["onError"].(string); ok {
+		condConfig.OnError = onError
+	}
+
+	// Parse nested 'then' module
+	if thenCfg, ok := cfg["then"].(map[string]interface{}); ok {
+		nestedModule, err := parseNestedModuleConfig(thenCfg)
+		if err != nil {
+			return condConfig, fmt.Errorf("invalid 'then' config: %w", err)
+		}
+		condConfig.Then = nestedModule
+	}
+
+	// Parse nested 'else' module
+	if elseCfg, ok := cfg["else"].(map[string]interface{}); ok {
+		nestedModule, err := parseNestedModuleConfig(elseCfg)
+		if err != nil {
+			return condConfig, fmt.Errorf("invalid 'else' config: %w", err)
+		}
+		condConfig.Else = nestedModule
+	}
+
+	return condConfig, nil
+}
+
+// parseNestedModuleConfig parses a nested module configuration.
+func parseNestedModuleConfig(cfg map[string]interface{}) (*filter.NestedModuleConfig, error) {
+	nestedConfig := &filter.NestedModuleConfig{}
+
+	if typ, ok := cfg["type"].(string); ok {
+		nestedConfig.Type = typ
+	}
+	if config, ok := cfg["config"].(map[string]interface{}); ok {
+		nestedConfig.Config = config
+	}
+	if onError, ok := cfg["onError"].(string); ok {
+		nestedConfig.OnError = onError
+	}
+
+	// For mapping type, parse mappings
+	if nestedConfig.Type == "mapping" {
+		mappingsRaw, ok := cfg["mappings"]
+		if !ok && nestedConfig.Config != nil {
+			if configMappings, okConfig := nestedConfig.Config["mappings"]; okConfig {
+				mappingsRaw = configMappings
+				ok = true
+			}
+			if nestedConfig.OnError == "" {
+				if configOnError, okConfig := nestedConfig.Config["onError"].(string); okConfig {
+					nestedConfig.OnError = configOnError
+				}
+			}
+		}
+		if ok {
+			mappings, err := filter.ParseFieldMappings(mappingsRaw)
+			if err != nil {
+				return nil, err
+			}
+			nestedConfig.Mappings = mappings
+		}
+	}
+
+	// For condition type, parse condition fields
+	if nestedConfig.Type == "condition" {
+		if expr, ok := cfg["expression"].(string); ok {
+			nestedConfig.Expression = expr
+		} else if nestedConfig.Config != nil {
+			if configExpr, okConfig := nestedConfig.Config["expression"].(string); okConfig {
+				nestedConfig.Expression = configExpr
+			}
+		}
+		if lang, ok := cfg["lang"].(string); ok {
+			nestedConfig.Lang = lang
+		} else if nestedConfig.Config != nil {
+			if configLang, okConfig := nestedConfig.Config["lang"].(string); okConfig {
+				nestedConfig.Lang = configLang
+			}
+		}
+		if onTrue, ok := cfg["onTrue"].(string); ok {
+			nestedConfig.OnTrue = onTrue
+		} else if nestedConfig.Config != nil {
+			if configOnTrue, okConfig := nestedConfig.Config["onTrue"].(string); okConfig {
+				nestedConfig.OnTrue = configOnTrue
+			}
+		}
+		if onFalse, ok := cfg["onFalse"].(string); ok {
+			nestedConfig.OnFalse = onFalse
+		} else if nestedConfig.Config != nil {
+			if configOnFalse, okConfig := nestedConfig.Config["onFalse"].(string); okConfig {
+				nestedConfig.OnFalse = configOnFalse
+			}
+		}
+		if nestedConfig.OnError == "" && nestedConfig.Config != nil {
+			if configOnError, okConfig := nestedConfig.Config["onError"].(string); okConfig {
+				nestedConfig.OnError = configOnError
+			}
+		}
+
+		// Recursive nested modules
+		if thenCfg, ok := cfg["then"].(map[string]interface{}); ok {
+			then, err := parseNestedModuleConfig(thenCfg)
+			if err != nil {
+				return nil, err
+			}
+			nestedConfig.Then = then
+		} else if nestedConfig.Config != nil {
+			if thenCfg, okConfig := nestedConfig.Config["then"].(map[string]interface{}); okConfig {
+				then, err := parseNestedModuleConfig(thenCfg)
+				if err != nil {
+					return nil, err
+				}
+				nestedConfig.Then = then
+			}
+		}
+		if elseCfg, ok := cfg["else"].(map[string]interface{}); ok {
+			elseModule, err := parseNestedModuleConfig(elseCfg)
+			if err != nil {
+				return nil, err
+			}
+			nestedConfig.Else = elseModule
+		} else if nestedConfig.Config != nil {
+			if elseCfg, okConfig := nestedConfig.Config["else"].(map[string]interface{}); okConfig {
+				elseModule, err := parseNestedModuleConfig(elseCfg)
+				if err != nil {
+					return nil, err
+				}
+				nestedConfig.Else = elseModule
+			}
+		}
+	}
+
+	return nestedConfig, nil
 }
 
 // createOutputModule creates an output module instance from configuration.
