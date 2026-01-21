@@ -265,10 +265,10 @@ func TestHTTPPolling_NewHTTPPollingFromConfig_NilConfig(t *testing.T) {
 
 // TestHTTPPolling_Fetch_APIKeyHeader tests API key authentication in header.
 func TestHTTPPolling_Fetch_APIKeyHeader(t *testing.T) {
-	var receivedAuth string
+	var receivedAPIKey string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedAuth = r.Header.Get("Authorization")
+		receivedAPIKey = r.Header.Get("X-API-Key")
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"status": "ok"}})
 	}))
@@ -298,9 +298,9 @@ func TestHTTPPolling_Fetch_APIKeyHeader(t *testing.T) {
 		t.Fatalf("Fetch() returned error: %v", err)
 	}
 
-	expectedAuth := "Bearer my-secret-key"
-	if receivedAuth != expectedAuth {
-		t.Errorf("expected Authorization header '%s', got '%s'", expectedAuth, receivedAuth)
+	expectedAPIKey := "my-secret-key"
+	if receivedAPIKey != expectedAPIKey {
+		t.Errorf("expected X-API-Key header '%s', got '%s'", expectedAPIKey, receivedAPIKey)
 	}
 }
 

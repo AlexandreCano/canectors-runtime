@@ -851,13 +851,8 @@ func TestHTTPRequest_Send_APIKeyAuth_MissingKey(t *testing.T) {
 		},
 	)
 
-	module, err := NewHTTPRequestFromConfig(config)
-	if err != nil {
-		t.Fatalf("failed to create module: %v", err)
-	}
-
-	records := []map[string]interface{}{{"test": "data"}}
-	_, err = module.Send(records)
+	// With shared auth package, validation happens at creation time
+	_, err := NewHTTPRequestFromConfig(config)
 	if err == nil {
 		t.Fatal("expected error for missing API key")
 	}
@@ -878,13 +873,8 @@ func TestHTTPRequest_Send_BearerAuth_MissingToken(t *testing.T) {
 		},
 	)
 
-	module, err := NewHTTPRequestFromConfig(config)
-	if err != nil {
-		t.Fatalf("failed to create module: %v", err)
-	}
-
-	records := []map[string]interface{}{{"test": "data"}}
-	_, err = module.Send(records)
+	// With shared auth package, validation happens at creation time
+	_, err := NewHTTPRequestFromConfig(config)
 	if err == nil {
 		t.Fatal("expected error for missing bearer token")
 	}
@@ -906,13 +896,8 @@ func TestHTTPRequest_Send_BasicAuth_MissingCredentials(t *testing.T) {
 		},
 	)
 
-	module, err := NewHTTPRequestFromConfig(config)
-	if err != nil {
-		t.Fatalf("failed to create module: %v", err)
-	}
-
-	records := []map[string]interface{}{{"test": "data"}}
-	_, err = module.Send(records)
+	// With shared auth package, validation happens at creation time
+	_, err := NewHTTPRequestFromConfig(config)
 	if err == nil {
 		t.Fatal("expected error for missing password")
 	}
@@ -935,13 +920,8 @@ func TestHTTPRequest_Send_OAuth2Auth_MissingCredentials(t *testing.T) {
 		},
 	)
 
-	module, err := NewHTTPRequestFromConfig(config)
-	if err != nil {
-		t.Fatalf("failed to create module: %v", err)
-	}
-
-	records := []map[string]interface{}{{"test": "data"}}
-	_, err = module.Send(records)
+	// With shared auth package, validation happens at creation time
+	_, err := NewHTTPRequestFromConfig(config)
 	if err == nil {
 		t.Fatal("expected error for missing OAuth2 clientSecret")
 	}
@@ -990,16 +970,10 @@ func TestHTTPRequest_Send_UnknownAuthType(t *testing.T) {
 		},
 	)
 
-	module, err := NewHTTPRequestFromConfig(config)
-	if err != nil {
-		t.Fatalf("failed to create module: %v", err)
-	}
-
-	// Unknown auth type should log warning but not fail
-	records := []map[string]interface{}{{"test": "data"}}
-	_, err = module.Send(records)
-	if err != nil {
-		t.Fatalf("expected no error for unknown auth type, got %v", err)
+	// With shared auth package, unknown auth types return error at creation time
+	_, err := NewHTTPRequestFromConfig(config)
+	if err == nil {
+		t.Fatal("expected error for unknown auth type")
 	}
 }
 
