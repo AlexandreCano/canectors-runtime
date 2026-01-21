@@ -553,18 +553,8 @@ func (h *HTTPRequestModule) executeHTTPRequest(ctx context.Context, endpoint str
 
 	// Check if status code is in success codes
 	if !h.isSuccessStatusCode(resp.StatusCode) {
-		// If we get 401 Unauthorized with OAuth2 auth, invalidate the token
-		// to force refresh on next request (token may have been revoked server-side)
-		if resp.StatusCode == http.StatusUnauthorized && h.authHandler != nil {
-			if invalidator, ok := h.authHandler.(interface{ InvalidateToken() }); ok {
-				logger.Debug("401 Unauthorized with OAuth2, invalidating cached token",
-					slog.String("endpoint", endpoint),
-					slog.String("method", h.method),
-				)
-				invalidator.InvalidateToken()
-			}
-		}
-
+		// Note: OAuth2 token invalidation for 401 responses is handled by
+		// handleOAuth2Unauthorized in doRequestWithHeaders to avoid duplicate invalidation
 		return &HTTPError{
 			StatusCode:   resp.StatusCode,
 			Status:       resp.Status,
