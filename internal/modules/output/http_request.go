@@ -418,7 +418,8 @@ func (h *HTTPRequestModule) sendSingleRecordMode(ctx context.Context, records []
 
 // handleOAuth2Unauthorized handles 401 Unauthorized for OAuth2 authentication
 // Returns true if token was invalidated and request should be retried
-func (h *HTTPRequestModule) handleOAuth2Unauthorized(err error) bool {
+// Returns false and logs a warning if token was already invalidated and 401 persists
+func (h *HTTPRequestModule) handleOAuth2Unauthorized(err error, alreadyRetried bool) bool {
 	var httpErr *HTTPError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusUnauthorized {
 		return false
@@ -430,6 +431,15 @@ func (h *HTTPRequestModule) handleOAuth2Unauthorized(err error) bool {
 
 	invalidator, ok := h.authHandler.(interface{ InvalidateToken() })
 	if !ok {
+		return false
+	}
+
+	if alreadyRetried {
+		// Token was already invalidated and refreshed, but 401 persists
+		logger.Warn("401 Unauthorized persists after OAuth2 token refresh, likely invalid credentials",
+			slog.String("endpoint", httpErr.Endpoint),
+			slog.String("method", h.method),
+		)
 		return false
 	}
 
@@ -468,17 +478,9 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 		lastErr = err
 
 		// Handle OAuth2 401: invalidate token and retry once
-		if !oauth2Retried && h.handleOAuth2Unauthorized(err) {
+		if h.handleOAuth2Unauthorized(err, oauth2Retried) {
 			oauth2Retried = true
 			continue // Retry immediately without counting as retry attempt
-		}
-
-		// OAuth2 retry already attempted but still failing
-		if oauth2Retried {
-			logger.Warn("401 Unauthorized persists after OAuth2 token refresh, likely invalid credentials",
-				slog.String("endpoint", endpoint),
-				slog.String("method", h.method),
-			)
 		}
 
 		// Non-transient errors don't retry

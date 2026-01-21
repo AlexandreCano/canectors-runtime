@@ -447,7 +447,8 @@ func (h *HTTPPolling) extractRecordsFromObject(obj map[string]interface{}) ([]ma
 	}
 
 	// Try common field names
-	for _, field := range []string{"data", "items", "results", "records"} {
+	commonFields := []string{"data", "items", "results", "records"}
+	for _, field := range commonFields {
 		if data, ok := obj[field]; ok {
 			if converted, err := h.convertToRecords(data); err == nil {
 				return converted, nil
@@ -456,7 +457,8 @@ func (h *HTTPPolling) extractRecordsFromObject(obj map[string]interface{}) ([]ma
 	}
 
 	// No field found - pagination requires dataField when response is object
-	return nil, fmt.Errorf("%w: pagination requires dataField when response is object", ErrInvalidDataField)
+	// Include attempted field names in error message for better debugging
+	return nil, fmt.Errorf("%w: pagination requires dataField when response is object (tried common fields: %v)", ErrInvalidDataField, commonFields)
 }
 
 // fetchPageWithMeta fetches a page and extracts metadata
