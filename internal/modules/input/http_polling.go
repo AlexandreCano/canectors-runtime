@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/canectors/runtime/internal/auth"
 	"github.com/canectors/runtime/internal/logger"
 	"github.com/canectors/runtime/pkg/connector"
 )
@@ -27,16 +27,11 @@ const (
 
 // Error types for HTTP polling module
 var (
-	ErrNilConfig          = errors.New("module configuration is nil")
-	ErrMissingEndpoint    = errors.New("endpoint is required in module configuration")
-	ErrHTTPRequest        = errors.New("http request failed")
-	ErrJSONParse          = errors.New("failed to parse JSON response")
-	ErrInvalidDataField   = errors.New("dataField does not contain an array")
-	ErrOAuth2TokenFailed  = errors.New("failed to obtain OAuth2 access token")
-	ErrMissingAPIKey      = errors.New("api key is required for api-key authentication")
-	ErrMissingBearerToken = errors.New("token is required for bearer authentication")
-	ErrMissingBasicAuth   = errors.New("username and password are required for basic authentication")
-	ErrMissingOAuth2Creds = errors.New("tokenUrl, clientId, and clientSecret are required for oauth2 authentication")
+	ErrNilConfig        = errors.New("module configuration is nil")
+	ErrMissingEndpoint  = errors.New("endpoint is required in module configuration")
+	ErrHTTPRequest      = errors.New("http request failed")
+	ErrJSONParse        = errors.New("failed to parse JSON response")
+	ErrInvalidDataField = errors.New("dataField does not contain an array")
 )
 
 // HTTPError represents an HTTP error with status code and context
@@ -67,15 +62,13 @@ type PaginationConfig struct {
 // HTTPPolling implements polling-based HTTP data fetching.
 // It supports HTTP GET requests with authentication and pagination.
 type HTTPPolling struct {
-	endpoint     string
-	headers      map[string]string
-	timeout      time.Duration
-	dataField    string
-	pagination   *PaginationConfig
-	auth         *connector.AuthConfig
-	client       *http.Client
-	oauth2Token  string
-	oauth2Expiry time.Time
+	endpoint    string
+	headers     map[string]string
+	timeout     time.Duration
+	dataField   string
+	pagination  *PaginationConfig
+	authHandler auth.Handler
+	client      *http.Client
 }
 
 // NewHTTPPollingFromConfig creates a new HTTP polling input module from configuration.
@@ -130,20 +123,26 @@ func NewHTTPPollingFromConfig(config *connector.ModuleConfig) (*HTTPPolling, err
 		Timeout: timeout,
 	}
 
+	// Create authentication handler if configured
+	authHandler, err := auth.NewHandler(config.Authentication, client)
+	if err != nil {
+		return nil, fmt.Errorf("creating auth handler: %w", err)
+	}
+
 	h := &HTTPPolling{
-		endpoint:   endpoint,
-		headers:    headers,
-		timeout:    timeout,
-		dataField:  dataField,
-		pagination: pagination,
-		auth:       config.Authentication,
-		client:     client,
+		endpoint:    endpoint,
+		headers:     headers,
+		timeout:     timeout,
+		dataField:   dataField,
+		pagination:  pagination,
+		authHandler: authHandler,
+		client:      client,
 	}
 
 	logger.Debug("http polling module created",
 		"endpoint", endpoint,
 		"timeout", timeout.String(),
-		"has_auth", config.Authentication != nil,
+		"has_auth", authHandler != nil,
 		"has_pagination", pagination != nil,
 	)
 
@@ -250,6 +249,17 @@ func (h *HTTPPolling) doRequest(ctx context.Context, endpoint string) ([]byte, e
 	}
 
 	if resp.StatusCode >= 400 {
+		// If we get 401 Unauthorized with OAuth2 auth, invalidate the token
+		// to force refresh on next request (token may have been revoked server-side)
+		if resp.StatusCode == http.StatusUnauthorized && h.authHandler != nil {
+			if invalidator, ok := h.authHandler.(interface{ InvalidateToken() }); ok {
+				logger.Debug("401 Unauthorized with OAuth2, invalidating cached token",
+					"endpoint", endpoint,
+				)
+				invalidator.InvalidateToken()
+			}
+		}
+
 		return nil, &HTTPError{
 			StatusCode: resp.StatusCode,
 			Status:     resp.Status,
@@ -330,159 +340,12 @@ func (h *HTTPPolling) convertToRecords(data interface{}) ([]map[string]interface
 	}
 }
 
-// applyAuthentication applies authentication to the HTTP request
+// applyAuthentication applies authentication to the HTTP request using the shared auth package
 func (h *HTTPPolling) applyAuthentication(ctx context.Context, req *http.Request) error {
-	if h.auth == nil {
+	if h.authHandler == nil {
 		return nil
 	}
-
-	switch h.auth.Type {
-	case "api-key":
-		return h.applyAPIKeyAuth(req)
-	case "bearer":
-		return h.applyBearerAuth(req)
-	case "basic":
-		return h.applyBasicAuth(req)
-	case "oauth2":
-		return h.applyOAuth2Auth(ctx, req)
-	default:
-		logger.Warn("unknown authentication type",
-			"type", h.auth.Type,
-		)
-	}
-
-	return nil
-}
-
-// applyAPIKeyAuth applies API key authentication
-func (h *HTTPPolling) applyAPIKeyAuth(req *http.Request) error {
-	key := h.auth.Credentials["key"]
-	if key == "" {
-		return ErrMissingAPIKey
-	}
-
-	location := h.auth.Credentials["location"]
-
-	switch location {
-	case "query":
-		paramName := h.auth.Credentials["paramName"]
-		if paramName == "" {
-			paramName = "api_key"
-		}
-		q := req.URL.Query()
-		q.Set(paramName, key)
-		req.URL.RawQuery = q.Encode()
-	case "header", "":
-		// Default to header if not specified
-		req.Header.Set("Authorization", "Bearer "+key)
-	}
-
-	return nil
-}
-
-// applyBearerAuth applies bearer token authentication
-func (h *HTTPPolling) applyBearerAuth(req *http.Request) error {
-	token := h.auth.Credentials["token"]
-	if token == "" {
-		return ErrMissingBearerToken
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	return nil
-}
-
-// applyBasicAuth applies HTTP basic authentication
-func (h *HTTPPolling) applyBasicAuth(req *http.Request) error {
-	username := h.auth.Credentials["username"]
-	password := h.auth.Credentials["password"]
-	if username == "" || password == "" {
-		return ErrMissingBasicAuth
-	}
-	req.SetBasicAuth(username, password)
-	return nil
-}
-
-// applyOAuth2Auth applies OAuth2 client credentials authentication
-func (h *HTTPPolling) applyOAuth2Auth(ctx context.Context, req *http.Request) error {
-	// Check if we have a valid token
-	if h.oauth2Token != "" && time.Now().Before(h.oauth2Expiry) {
-		req.Header.Set("Authorization", "Bearer "+h.oauth2Token)
-		return nil
-	}
-
-	// Obtain new token
-	token, expiry, err := h.obtainOAuth2Token(ctx)
-	if err != nil {
-		return err
-	}
-
-	h.oauth2Token = token
-	h.oauth2Expiry = expiry
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	return nil
-}
-
-// obtainOAuth2Token obtains an OAuth2 access token using client credentials flow
-func (h *HTTPPolling) obtainOAuth2Token(ctx context.Context) (string, time.Time, error) {
-	tokenURL := h.auth.Credentials["tokenUrl"]
-	clientID := h.auth.Credentials["clientId"]
-	clientSecret := h.auth.Credentials["clientSecret"]
-
-	// Validate required OAuth2 credentials
-	if tokenURL == "" || clientID == "" || clientSecret == "" {
-		return "", time.Time{}, ErrMissingOAuth2Creds
-	}
-
-	// Build form data
-	formData := url.Values{}
-	formData.Set("grant_type", "client_credentials")
-	formData.Set("client_id", clientID)
-	formData.Set("client_secret", clientSecret)
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(formData.Encode()))
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("%w: creating token request: %v", ErrOAuth2TokenFailed, err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	// Execute request
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("%w: executing token request: %v", ErrOAuth2TokenFailed, err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.Error("failed to close token response body", "error", closeErr.Error())
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", time.Time{}, fmt.Errorf("%w: token endpoint returned %d", ErrOAuth2TokenFailed, resp.StatusCode)
-	}
-
-	// Parse response
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return "", time.Time{}, fmt.Errorf("%w: parsing token response: %v", ErrOAuth2TokenFailed, err)
-	}
-
-	// Calculate expiry (with 60s buffer), ensuring we don't use a negative duration
-	effectiveExpiresIn := tokenResp.ExpiresIn - 60
-	if effectiveExpiresIn < 0 {
-		effectiveExpiresIn = 0
-	}
-	expiry := time.Now().Add(time.Duration(effectiveExpiresIn) * time.Second)
-
-	logger.Debug("oauth2 token obtained",
-		"expires_in", tokenResp.ExpiresIn,
-	)
-
-	return tokenResp.AccessToken, expiry, nil
+	return h.authHandler.ApplyAuth(ctx, req)
 }
 
 // fetchWithPagination handles paginated requests
@@ -577,6 +440,25 @@ func extractStringField(obj map[string]interface{}, field string) string {
 	return ""
 }
 
+// extractRecordsFromObject extracts records from a JSON object using dataField or common field names
+func (h *HTTPPolling) extractRecordsFromObject(obj map[string]interface{}) ([]map[string]interface{}, error) {
+	if h.dataField != "" {
+		return h.extractDataFromField(obj, h.dataField)
+	}
+
+	// Try common field names
+	for _, field := range []string{"data", "items", "results", "records"} {
+		if data, ok := obj[field]; ok {
+			if converted, err := h.convertToRecords(data); err == nil {
+				return converted, nil
+			}
+		}
+	}
+
+	// No field found - pagination requires dataField when response is object
+	return nil, fmt.Errorf("%w: pagination requires dataField when response is object", ErrInvalidDataField)
+}
+
 // fetchPageWithMeta fetches a page and extracts metadata
 func (h *HTTPPolling) fetchPageWithMeta(ctx context.Context, endpoint, totalPagesField string) ([]map[string]interface{}, int, error) {
 	obj, err := h.fetchAndParseObject(ctx, endpoint)
@@ -584,27 +466,9 @@ func (h *HTTPPolling) fetchPageWithMeta(ctx context.Context, endpoint, totalPage
 		return nil, 0, err
 	}
 
-	// Extract records: use dataField if specified, otherwise try common field names
-	var records []map[string]interface{}
-	if h.dataField != "" {
-		records, err = h.extractDataFromField(obj, h.dataField)
-		if err != nil {
-			return nil, 0, err
-		}
-	} else {
-		// Fall back to parseResponse logic for common field names
-		for _, field := range []string{"data", "items", "results", "records"} {
-			if data, ok := obj[field]; ok {
-				if converted, err := h.convertToRecords(data); err == nil {
-					records = converted
-					break
-				}
-			}
-		}
-		// If no common field found and dataField not set, return error for clarity
-		if len(records) == 0 {
-			return nil, 0, fmt.Errorf("%w: pagination requires dataField when response is object", ErrInvalidDataField)
-		}
+	records, err := h.extractRecordsFromObject(obj)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return records, extractIntField(obj, totalPagesField), nil
@@ -662,27 +526,9 @@ func (h *HTTPPolling) fetchOffsetWithMeta(ctx context.Context, endpoint, totalFi
 		return nil, 0, err
 	}
 
-	// Extract records: use dataField if specified, otherwise try common field names
-	var records []map[string]interface{}
-	if h.dataField != "" {
-		records, err = h.extractDataFromField(obj, h.dataField)
-		if err != nil {
-			return nil, 0, err
-		}
-	} else {
-		// Fall back to parseResponse logic for common field names
-		for _, field := range []string{"data", "items", "results", "records"} {
-			if data, ok := obj[field]; ok {
-				if converted, err := h.convertToRecords(data); err == nil {
-					records = converted
-					break
-				}
-			}
-		}
-		// If no common field found and dataField not set, return error for clarity
-		if len(records) == 0 {
-			return nil, 0, fmt.Errorf("%w: pagination requires dataField when response is object", ErrInvalidDataField)
-		}
+	records, err := h.extractRecordsFromObject(obj)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return records, extractIntField(obj, totalField), nil
@@ -739,27 +585,9 @@ func (h *HTTPPolling) fetchCursorWithMeta(ctx context.Context, endpoint, nextCur
 		return nil, "", err
 	}
 
-	// Extract records: use dataField if specified, otherwise try common field names
-	var records []map[string]interface{}
-	if h.dataField != "" {
-		records, err = h.extractDataFromField(obj, h.dataField)
-		if err != nil {
-			return nil, "", err
-		}
-	} else {
-		// Fall back to parseResponse logic for common field names
-		for _, field := range []string{"data", "items", "results", "records"} {
-			if data, ok := obj[field]; ok {
-				if converted, err := h.convertToRecords(data); err == nil {
-					records = converted
-					break
-				}
-			}
-		}
-		// If no common field found and dataField not set, return error for clarity
-		if len(records) == 0 {
-			return nil, "", fmt.Errorf("%w: pagination requires dataField when response is object", ErrInvalidDataField)
-		}
+	records, err := h.extractRecordsFromObject(obj)
+	if err != nil {
+		return nil, "", err
 	}
 
 	return records, extractStringField(obj, nextCursorField), nil

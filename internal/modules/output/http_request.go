@@ -13,9 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/canectors/runtime/internal/auth"
 	"github.com/canectors/runtime/internal/logger"
 	"github.com/canectors/runtime/pkg/connector"
 )
@@ -26,7 +26,6 @@ const (
 	defaultUserAgent   = "Canectors-Runtime/1.0"
 	defaultContentType = "application/json"
 	defaultBodyFrom    = "records" // batch mode by default
-	bearerAuthPrefix   = "Bearer " // Authorization header prefix for Bearer tokens
 )
 
 // Supported HTTP methods for output module
@@ -92,15 +91,10 @@ type HTTPRequestModule struct {
 	timeout      time.Duration
 	request      RequestConfig
 	retry        RetryConfig
-	auth         *connector.AuthConfig
+	authHandler  auth.Handler
 	client       *http.Client
 	onError      string // "fail", "skip", "log"
 	successCodes []int  // HTTP status codes considered success
-
-	// OAuth2 token caching (protected by mutex for concurrent access)
-	oauth2Mu     sync.RWMutex
-	oauth2Token  string
-	oauth2Expiry time.Time
 }
 
 // Default success status codes
@@ -135,6 +129,12 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 	retryConfig := extractRetryConfig(config.Config)
 	client := createHTTPClient(timeout)
 
+	// Create authentication handler if configured
+	authHandler, err := auth.NewHandler(config.Authentication, client)
+	if err != nil {
+		return nil, fmt.Errorf("creating auth handler: %w", err)
+	}
+
 	module := &HTTPRequestModule{
 		endpoint:     endpoint,
 		method:       method,
@@ -142,7 +142,7 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 		timeout:      timeout,
 		request:      reqConfig,
 		retry:        retryConfig,
-		auth:         config.Authentication,
+		authHandler:  authHandler,
 		client:       client,
 		onError:      onError,
 		successCodes: successCodes,
@@ -152,7 +152,7 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 		slog.String("endpoint", endpoint),
 		slog.String("method", method),
 		slog.String("timeout", timeout.String()),
-		slog.Bool("has_auth", config.Authentication != nil),
+		slog.Bool("has_auth", authHandler != nil),
 		slog.String("body_from", reqConfig.BodyFrom),
 	)
 
@@ -416,10 +416,37 @@ func (h *HTTPRequestModule) sendSingleRecordMode(ctx context.Context, records []
 	return sent, nil
 }
 
+// handleOAuth2Unauthorized handles 401 Unauthorized for OAuth2 authentication
+// Returns true if token was invalidated and request should be retried
+func (h *HTTPRequestModule) handleOAuth2Unauthorized(err error) bool {
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusUnauthorized {
+		return false
+	}
+
+	if h.authHandler == nil {
+		return false
+	}
+
+	invalidator, ok := h.authHandler.(interface{ InvalidateToken() })
+	if !ok {
+		return false
+	}
+
+	logger.Debug("401 Unauthorized with OAuth2, invalidating token and retrying once",
+		slog.String("endpoint", httpErr.Endpoint),
+		slog.String("method", h.method),
+	)
+	invalidator.InvalidateToken()
+	return true
+}
+
 // doRequestWithHeaders executes a single HTTP request with optional record-specific headers
 // Implements retry logic for transient errors (5xx, network errors)
+// Special handling for 401 with OAuth2: invalidates token and retries once with new token
 func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint string, body []byte, recordHeaders map[string]string) error {
 	var lastErr error
+	oauth2Retried := false // Track if we've already retried once for OAuth2 401
 
 	for attempt := 0; attempt <= h.retry.MaxRetries; attempt++ {
 		// Wait before retry (not on first attempt)
@@ -440,9 +467,22 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 
 		lastErr = err
 
-		// Check if error is transient (should retry)
+		// Handle OAuth2 401: invalidate token and retry once
+		if !oauth2Retried && h.handleOAuth2Unauthorized(err) {
+			oauth2Retried = true
+			continue // Retry immediately without counting as retry attempt
+		}
+
+		// OAuth2 retry already attempted but still failing
+		if oauth2Retried {
+			logger.Warn("401 Unauthorized persists after OAuth2 token refresh, likely invalid credentials",
+				slog.String("endpoint", endpoint),
+				slog.String("method", h.method),
+			)
+		}
+
+		// Non-transient errors don't retry
 		if !h.isTransientError(err) {
-			// Non-transient error - don't retry (e.g., 4xx client errors)
 			return err
 		}
 
@@ -453,7 +493,6 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 		)
 	}
 
-	// All retries exhausted
 	return lastErr
 }
 
@@ -514,6 +553,18 @@ func (h *HTTPRequestModule) executeHTTPRequest(ctx context.Context, endpoint str
 
 	// Check if status code is in success codes
 	if !h.isSuccessStatusCode(resp.StatusCode) {
+		// If we get 401 Unauthorized with OAuth2 auth, invalidate the token
+		// to force refresh on next request (token may have been revoked server-side)
+		if resp.StatusCode == http.StatusUnauthorized && h.authHandler != nil {
+			if invalidator, ok := h.authHandler.(interface{ InvalidateToken() }); ok {
+				logger.Debug("401 Unauthorized with OAuth2, invalidating cached token",
+					slog.String("endpoint", endpoint),
+					slog.String("method", h.method),
+				)
+				invalidator.InvalidateToken()
+			}
+		}
+
 		return &HTTPError{
 			StatusCode:   resp.StatusCode,
 			Status:       resp.Status,
@@ -709,182 +760,12 @@ func getFieldValue(record map[string]interface{}, path string) string {
 	}
 }
 
-// applyAuthentication applies authentication to the HTTP request
-// Supports: api-key, bearer, basic, oauth2
+// applyAuthentication applies authentication to the HTTP request using the shared auth package
 func (h *HTTPRequestModule) applyAuthentication(ctx context.Context, req *http.Request) error {
-	if h.auth == nil {
+	if h.authHandler == nil {
 		return nil
 	}
-
-	switch h.auth.Type {
-	case "api-key":
-		return h.applyAPIKeyAuth(req)
-	case "bearer":
-		return h.applyBearerAuth(req)
-	case "basic":
-		return h.applyBasicAuth(req)
-	case "oauth2":
-		return h.applyOAuth2Auth(ctx, req)
-	default:
-		logger.Warn("unknown authentication type",
-			slog.String("type", h.auth.Type),
-		)
-	}
-
-	return nil
-}
-
-// applyAPIKeyAuth applies API key authentication
-func (h *HTTPRequestModule) applyAPIKeyAuth(req *http.Request) error {
-	key := h.auth.Credentials["key"]
-	if key == "" {
-		return errors.New("api key is required for api-key authentication")
-	}
-
-	location := h.auth.Credentials["location"]
-	paramName := h.auth.Credentials["paramName"]
-	if paramName == "" {
-		paramName = "api_key"
-	}
-
-	switch location {
-	case "query":
-		q := req.URL.Query()
-		q.Set(paramName, key)
-		req.URL.RawQuery = q.Encode()
-		// Note: url.Values.Set() and Encode() already handle proper URL encoding
-	case "header", "":
-		headerName := h.auth.Credentials["headerName"]
-		if headerName == "" {
-			headerName = "X-API-Key"
-		}
-		req.Header.Set(headerName, key)
-	}
-
-	return nil
-}
-
-// applyBearerAuth applies bearer token authentication
-func (h *HTTPRequestModule) applyBearerAuth(req *http.Request) error {
-	token := h.auth.Credentials["token"]
-	if token == "" {
-		return errors.New("token is required for bearer authentication")
-	}
-	req.Header.Set("Authorization", bearerAuthPrefix+token)
-	return nil
-}
-
-// applyBasicAuth applies HTTP basic authentication
-func (h *HTTPRequestModule) applyBasicAuth(req *http.Request) error {
-	username := h.auth.Credentials["username"]
-	password := h.auth.Credentials["password"]
-	if username == "" || password == "" {
-		return errors.New("username and password are required for basic authentication")
-	}
-	req.SetBasicAuth(username, password)
-	return nil
-}
-
-// applyOAuth2Auth applies OAuth2 client credentials authentication
-func (h *HTTPRequestModule) applyOAuth2Auth(ctx context.Context, req *http.Request) error {
-	// Check if we have a valid cached token (read lock)
-	h.oauth2Mu.RLock()
-	if h.oauth2Token != "" && time.Now().Before(h.oauth2Expiry) {
-		token := h.oauth2Token
-		h.oauth2Mu.RUnlock()
-		req.Header.Set("Authorization", bearerAuthPrefix+token)
-		return nil
-	}
-	h.oauth2Mu.RUnlock()
-
-	// Obtain new token
-	token, expiry, err := h.obtainOAuth2Token(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Update cached token (write lock)
-	h.oauth2Mu.Lock()
-	h.oauth2Token = token
-	h.oauth2Expiry = expiry
-	h.oauth2Mu.Unlock()
-
-	req.Header.Set("Authorization", bearerAuthPrefix+token)
-	return nil
-}
-
-// obtainOAuth2Token obtains an OAuth2 access token using client credentials flow
-func (h *HTTPRequestModule) obtainOAuth2Token(ctx context.Context) (string, time.Time, error) {
-	tokenURL := h.auth.Credentials["tokenUrl"]
-	clientID := h.auth.Credentials["clientId"]
-	clientSecret := h.auth.Credentials["clientSecret"]
-
-	if tokenURL == "" || clientID == "" || clientSecret == "" {
-		return "", time.Time{}, errors.New("tokenUrl, clientId, and clientSecret are required for oauth2 authentication")
-	}
-
-	// Build form data using url.Values for proper encoding
-	formData := url.Values{}
-	formData.Set("grant_type", "client_credentials")
-	formData.Set("client_id", clientID)
-	formData.Set("client_secret", clientSecret)
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(formData.Encode()))
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("creating token request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	// Execute request
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("executing token request: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.Error("failed to close OAuth2 token response body", slog.String("error", closeErr.Error()))
-		}
-	}()
-
-	// Read response body (with size limit to prevent memory exhaustion)
-	const maxTokenResponseSize = 64 * 1024 // 64KB limit for token responses
-	limitedReader := io.LimitReader(resp.Body, maxTokenResponseSize)
-	respBody, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("reading token response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", time.Time{}, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	// Parse response
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
-	}
-	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return "", time.Time{}, fmt.Errorf("parsing token response: %w (body: %s)", err, string(respBody))
-	}
-	// Validate access token
-	if strings.TrimSpace(tokenResp.AccessToken) == "" {
-		return "", time.Time{}, fmt.Errorf("token endpoint returned empty access_token (body: %s)", string(respBody))
-	}
-
-	// Calculate expiry with buffer
-	expiresIn := tokenResp.ExpiresIn - 60
-	if expiresIn < 0 {
-		expiresIn = 0
-	}
-	expiry := time.Now().Add(time.Duration(expiresIn) * time.Second)
-
-	logger.Debug("oauth2 token obtained",
-		slog.Int("expires_in", tokenResp.ExpiresIn),
-	)
-
-	return tokenResp.AccessToken, expiry, nil
+	return h.authHandler.ApplyAuth(ctx, req)
 }
 
 // isSuccessStatusCode checks if a status code is considered success

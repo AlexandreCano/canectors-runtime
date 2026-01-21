@@ -1,0 +1,183 @@
+// Package auth provides shared authentication handling for Canectors modules.
+// It supports API key, Bearer token, Basic auth, and OAuth2 client credentials.
+package auth
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/canectors/runtime/internal/logger"
+	"github.com/canectors/runtime/pkg/connector"
+)
+
+// Error types for authentication
+var (
+	ErrNilConfig          = errors.New("authentication configuration is nil")
+	ErrUnknownType        = errors.New("unknown authentication type")
+	ErrMissingAPIKey      = errors.New("api key is required for api-key authentication")
+	ErrMissingBearerToken = errors.New("token is required for bearer authentication")
+	ErrMissingBasicAuth   = errors.New("username and password are required for basic authentication")
+	ErrMissingOAuth2Creds = errors.New("tokenUrl, clientId, and clientSecret are required for oauth2 authentication")
+)
+
+// Handler defines the interface for authentication handlers.
+// All authentication types implement this interface to apply
+// authentication to HTTP requests.
+type Handler interface {
+	// ApplyAuth applies authentication to the given HTTP request.
+	// Returns an error if authentication cannot be applied.
+	ApplyAuth(ctx context.Context, req *http.Request) error
+
+	// Type returns the authentication type identifier.
+	Type() string
+}
+
+// OAuth2Invalidator is an optional interface for handlers that support token invalidation.
+// This is primarily used by OAuth2 handlers to invalidate cached tokens when a 401
+// Unauthorized response is received, indicating the token has been rejected by the API.
+type OAuth2Invalidator interface {
+	// InvalidateToken clears the cached token, forcing a refresh on next request.
+	// Useful when a token is rejected by the API (e.g., 401 Unauthorized response).
+	InvalidateToken()
+}
+
+// NewHandler creates an appropriate authentication handler based on configuration.
+// Returns nil, nil if config is nil (no authentication required).
+// Returns an error if the authentication type is unknown or configuration is invalid.
+func NewHandler(config *connector.AuthConfig, httpClient *http.Client) (Handler, error) {
+	if config == nil {
+		return nil, nil
+	}
+
+	switch config.Type {
+	case "api-key":
+		return newAPIKeyHandler(config)
+	case "bearer":
+		return newBearerHandler(config)
+	case "basic":
+		return newBasicHandler(config)
+	case "oauth2":
+		return newOAuth2Handler(config, httpClient)
+	default:
+		logger.Warn("unknown authentication type", "type", config.Type)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownType, config.Type)
+	}
+}
+
+// apiKeyHandler implements API key authentication.
+// Supports both header and query parameter locations.
+type apiKeyHandler struct {
+	key        string
+	location   string // "header" or "query"
+	paramName  string // parameter/header name
+	headerName string // custom header name (for header location)
+}
+
+// newAPIKeyHandler creates a new API key authentication handler.
+func newAPIKeyHandler(config *connector.AuthConfig) (*apiKeyHandler, error) {
+	key := config.Credentials["key"]
+	if key == "" {
+		return nil, ErrMissingAPIKey
+	}
+
+	location := config.Credentials["location"]
+	if location == "" {
+		location = "header" // Default to header
+	}
+
+	paramName := config.Credentials["paramName"]
+	if paramName == "" {
+		paramName = "api_key" // Default query param name
+	}
+
+	headerName := config.Credentials["headerName"]
+	if headerName == "" {
+		headerName = "X-API-Key" // Default header name
+	}
+
+	return &apiKeyHandler{
+		key:        key,
+		location:   location,
+		paramName:  paramName,
+		headerName: headerName,
+	}, nil
+}
+
+// ApplyAuth applies API key authentication to the request.
+func (h *apiKeyHandler) ApplyAuth(_ context.Context, req *http.Request) error {
+	switch h.location {
+	case "query":
+		q := req.URL.Query()
+		q.Set(h.paramName, h.key)
+		req.URL.RawQuery = q.Encode()
+	case "header", "":
+		req.Header.Set(h.headerName, h.key)
+	}
+	return nil
+}
+
+// Type returns the authentication type identifier.
+func (h *apiKeyHandler) Type() string {
+	return "api-key"
+}
+
+// bearerHandler implements Bearer token authentication.
+type bearerHandler struct {
+	token string
+}
+
+// newBearerHandler creates a new Bearer token authentication handler.
+func newBearerHandler(config *connector.AuthConfig) (*bearerHandler, error) {
+	token := config.Credentials["token"]
+	if token == "" {
+		return nil, ErrMissingBearerToken
+	}
+
+	return &bearerHandler{
+		token: token,
+	}, nil
+}
+
+// ApplyAuth applies Bearer token authentication to the request.
+func (h *bearerHandler) ApplyAuth(_ context.Context, req *http.Request) error {
+	req.Header.Set("Authorization", "Bearer "+h.token)
+	return nil
+}
+
+// Type returns the authentication type identifier.
+func (h *bearerHandler) Type() string {
+	return "bearer"
+}
+
+// basicHandler implements HTTP Basic authentication.
+type basicHandler struct {
+	username string
+	password string
+}
+
+// newBasicHandler creates a new Basic authentication handler.
+func newBasicHandler(config *connector.AuthConfig) (*basicHandler, error) {
+	username := config.Credentials["username"]
+	password := config.Credentials["password"]
+	if username == "" || password == "" {
+		return nil, ErrMissingBasicAuth
+	}
+
+	return &basicHandler{
+		username: username,
+		password: password,
+	}, nil
+}
+
+// ApplyAuth applies HTTP Basic authentication to the request.
+func (h *basicHandler) ApplyAuth(_ context.Context, req *http.Request) error {
+	req.SetBasicAuth(h.username, h.password)
+	return nil
+}
+
+// Type returns the authentication type identifier.
+func (h *basicHandler) Type() string {
+	return "basic"
+}
