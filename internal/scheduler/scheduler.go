@@ -45,6 +45,9 @@ var (
 
 	// ErrPipelineNotFound is returned when the pipeline is not registered.
 	ErrPipelineNotFound = errors.New("pipeline not found")
+
+	// ErrPipelineRunning is returned when attempting to update a pipeline that is currently executing.
+	ErrPipelineRunning = errors.New("pipeline is currently executing")
 )
 
 // Executor defines the interface for pipeline execution.
@@ -171,6 +174,16 @@ func (s *Scheduler) Register(pipeline *connector.Pipeline) error {
 
 	// Check if already registered (update case)
 	if existing, ok := s.pipelines[pipeline.ID]; ok {
+		// Check if pipeline is currently executing - prevent update during execution
+		// to avoid race condition where executePipeline holds a reference to the old entry
+		existing.mu.Lock()
+		isRunning := existing.running
+		existing.mu.Unlock()
+
+		if isRunning {
+			return fmt.Errorf("%w: cannot update pipeline %s while it is executing", ErrPipelineRunning, pipeline.ID)
+		}
+
 		// Remove old CRON job
 		s.cron.Remove(existing.entryID)
 		delete(s.pipelines, pipeline.ID)
@@ -335,41 +348,28 @@ func (s *Scheduler) Stop(ctx context.Context) error {
 // executePipeline runs a single pipeline execution.
 // Handles overlap detection and logging.
 func (s *Scheduler) executePipeline(reg *registeredPipeline) {
-	// Add to WaitGroup FIRST to prevent race condition with Stop()
-	// This ensures Stop() will wait for this execution even if it's called
-	// between the started check and the Add(1)
+	// Atomically check if started and add to WaitGroup while holding the lock.
+	// This ensures Stop() cannot complete wg.Wait() before we've registered this execution.
+	// The invariant is: Add(1) is only called if started is true, and both operations
+	// happen under the same lock acquisition.
 	s.mu.RLock()
-	s.wg.Add(1)
-	started := s.started
-	s.mu.RUnlock()
-
-	// If scheduler is not started, immediately decrement and return
-	if !started {
-		s.wg.Done()
+	if !s.started {
+		s.mu.RUnlock()
 		return
 	}
+	s.wg.Add(1)
+	ctx := s.ctx // Capture context while holding lock
+	s.mu.RUnlock()
 
 	defer s.wg.Done()
 
-	// Check for overlap
-	reg.mu.Lock()
-	if reg.running {
-		reg.mu.Unlock()
-		logger.Warn("skipping overlapping execution",
-			slog.String("pipeline_id", reg.pipeline.ID),
-			slog.String("pipeline_name", reg.pipeline.Name),
-		)
+	// Check for overlap - acquire pipeline-specific lock
+	if !s.tryStartExecution(reg) {
 		return
 	}
-	reg.running = true
-	reg.mu.Unlock()
+	defer s.finishExecution(reg)
 
-	defer func() {
-		reg.mu.Lock()
-		reg.running = false
-		reg.mu.Unlock()
-	}()
-
+	// Copy pipeline reference while we still have a valid reg
 	pipeline := reg.pipeline
 	startTime := time.Now()
 
@@ -380,15 +380,11 @@ func (s *Scheduler) executePipeline(reg *registeredPipeline) {
 		slog.Time("scheduled_time", startTime),
 	)
 
-	// Check if context is cancelled before executing
-	s.mu.RLock()
-	ctx := s.ctx
-	s.mu.RUnlock()
-
+	// Check if context is canceled before executing
 	if ctx != nil {
 		select {
 		case <-ctx.Done():
-			logger.Info("scheduled pipeline execution cancelled",
+			logger.Info("scheduled pipeline execution canceled",
 				slog.String("pipeline_id", pipeline.ID),
 				slog.String("pipeline_name", pipeline.Name),
 			)
@@ -399,6 +395,35 @@ func (s *Scheduler) executePipeline(reg *registeredPipeline) {
 	}
 
 	// Execute pipeline
+	s.doExecutePipeline(pipeline, startTime)
+}
+
+// tryStartExecution attempts to mark the pipeline as running.
+// Returns false if the pipeline is already running (overlap).
+func (s *Scheduler) tryStartExecution(reg *registeredPipeline) bool {
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+
+	if reg.running {
+		logger.Warn("skipping overlapping execution",
+			slog.String("pipeline_id", reg.pipeline.ID),
+			slog.String("pipeline_name", reg.pipeline.Name),
+		)
+		return false
+	}
+	reg.running = true
+	return true
+}
+
+// finishExecution marks the pipeline as no longer running.
+func (s *Scheduler) finishExecution(reg *registeredPipeline) {
+	reg.mu.Lock()
+	reg.running = false
+	reg.mu.Unlock()
+}
+
+// doExecutePipeline performs the actual pipeline execution.
+func (s *Scheduler) doExecutePipeline(pipeline *connector.Pipeline, startTime time.Time) {
 	if s.executor == nil {
 		// Stub mode - just log
 		logger.Info("scheduler stub: pipeline would be executed",
