@@ -48,6 +48,12 @@ var (
 
 	// ErrPipelineRunning is returned when attempting to update a pipeline that is currently executing.
 	ErrPipelineRunning = errors.New("pipeline is currently executing")
+
+	// ErrSchedulerNotStarted is returned when an operation requires the scheduler to be running.
+	ErrSchedulerNotStarted = errors.New("scheduler is not started")
+
+	// ErrNextRunNotReady is returned when the next run time has not yet been calculated.
+	ErrNextRunNotReady = errors.New("next run time not yet calculated")
 )
 
 // Executor defines the interface for pipeline execution.
@@ -175,7 +181,12 @@ func (s *Scheduler) Register(pipeline *connector.Pipeline) error {
 	// Check if already registered (update case)
 	if existing, ok := s.pipelines[pipeline.ID]; ok {
 		// Check if pipeline is currently executing - prevent update during execution
-		// to avoid race condition where executePipeline holds a reference to the old entry
+		// to avoid race condition where executePipeline holds a reference to the old entry.
+		//
+		// Thread-safety note: We release existing.mu before removing the pipeline, but this is safe
+		// because s.mu (the scheduler lock) is held throughout this entire block. Any concurrent
+		// operation (Unregister, executePipeline) must acquire s.mu first, so the pipeline state
+		// cannot change between checking isRunning and performing the removal.
 		existing.mu.Lock()
 		isRunning := existing.running
 		existing.mu.Unlock()
@@ -184,7 +195,7 @@ func (s *Scheduler) Register(pipeline *connector.Pipeline) error {
 			return fmt.Errorf("%w: cannot update pipeline %s while it is executing", ErrPipelineRunning, pipeline.ID)
 		}
 
-		// Remove old CRON job
+		// Safe to remove: s.mu is held, preventing concurrent modifications
 		s.cron.Remove(existing.entryID)
 		delete(s.pipelines, pipeline.ID)
 
@@ -519,7 +530,7 @@ func (s *Scheduler) GetNextRun(pipelineID string) (time.Time, error) {
 	}
 
 	if !started {
-		return time.Time{}, fmt.Errorf("scheduler is not started")
+		return time.Time{}, ErrSchedulerNotStarted
 	}
 
 	// Get entry from cron - Entry() should not block, but we need to ensure
@@ -528,7 +539,7 @@ func (s *Scheduler) GetNextRun(pipelineID string) (time.Time, error) {
 
 	// If Next is zero, the entry might not be ready yet
 	if entry.Next.IsZero() {
-		return time.Time{}, fmt.Errorf("next run time not yet calculated for pipeline %s", pipelineID)
+		return time.Time{}, fmt.Errorf("%w: pipeline %s", ErrNextRunNotReady, pipelineID)
 	}
 
 	return entry.Next, nil
