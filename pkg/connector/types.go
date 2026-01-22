@@ -127,7 +127,9 @@ type RequestPreview struct {
 	// Method is the HTTP method (POST, PUT, PATCH)
 	Method string `json:"method"`
 
-	// Headers contains all request headers (auth headers are masked for security)
+	// Headers contains all request headers. Authentication-related headers may be
+	// masked or unmasked depending on DryRunOptions/PreviewOptions (for example,
+	// when ShowCredentials is enabled).
 	Headers map[string]string `json:"headers"`
 
 	// BodyPreview is the formatted JSON body that would be sent
