@@ -243,17 +243,11 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.started = true
 
-	// Close old stopChan if it exists (shouldn't happen, but be safe)
+	// Ensure stopChan is initialized (it should normally be set in the constructor)
 	s.stopMu.Lock()
-	if s.stopChan != nil {
-		select {
-		case <-s.stopChan:
-			// Already closed, create new one
-		default:
-			close(s.stopChan)
-		}
+	if s.stopChan == nil {
+		s.stopChan = make(chan struct{})
 	}
-	s.stopChan = make(chan struct{})
 	s.stopMu.Unlock()
 
 	// Start the CRON scheduler
