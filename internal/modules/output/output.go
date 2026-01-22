@@ -27,10 +27,10 @@ type RequestPreview struct {
 	Headers map[string]string `json:"headers"`
 
 	// BodyPreview is the formatted JSON body that would be sent
-	BodyPreview string `json:"body_preview"`
+	BodyPreview string `json:"bodyPreview"`
 
 	// RecordCount is the number of records included in this request
-	RecordCount int `json:"record_count"`
+	RecordCount int `json:"recordCount"`
 }
 
 // PreviewOptions configures preview generation behavior.
