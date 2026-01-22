@@ -154,7 +154,11 @@ canectors run --dry-run --verbose ./configs/example-connector.json
 
   Endpoint: POST https://api.destination.com/import
   Records: 15
-  Headers: 4 (use --verbose to see details)
+  Headers:
+    Authorization: Bearer [MASKED-TOKEN]
+    Content-Type: application/json
+    User-Agent: Canectors-Runtime/1.0
+    X-Custom-Header: custom-value
   Body:
     [
       {
@@ -168,8 +172,7 @@ canectors run --dry-run --verbose ./configs/example-connector.json
 ```
 
 **Verbose mode** (`--verbose`) shows additional details:
-- All request headers (with authentication masked for security)
-- Full request body (without truncation)
+- Full request body (without truncation for large payloads)
 - Execution duration
 
 **Show credentials for debugging** (`dryRunOptions.showCredentials`):

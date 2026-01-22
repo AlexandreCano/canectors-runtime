@@ -28,6 +28,17 @@ const (
 	defaultBodyFrom    = "records" // batch mode by default
 )
 
+// HTTP header names
+const (
+	headerUserAgent   = "User-Agent"
+	headerContentType = "Content-Type"
+)
+
+// Authentication type constants
+const (
+	authTypeAPIKey = "api-key"
+)
+
 // Supported HTTP methods for output module
 var supportedMethods = map[string]bool{
 	"POST":  true,
@@ -85,16 +96,17 @@ var defaultRetryConfig = RetryConfig{
 // HTTPRequestModule implements HTTP-based data sending.
 // It sends transformed records to a target REST API via HTTP requests.
 type HTTPRequestModule struct {
-	endpoint     string
-	method       string
-	headers      map[string]string
-	timeout      time.Duration
-	request      RequestConfig
-	retry        RetryConfig
-	authHandler  auth.Handler
-	client       *http.Client
-	onError      string // "fail", "skip", "log"
-	successCodes []int  // HTTP status codes considered success
+	endpoint           string
+	method             string
+	headers            map[string]string
+	timeout            time.Duration
+	request            RequestConfig
+	retry              RetryConfig
+	authHandler        auth.Handler
+	client             *http.Client
+	onError            string // "fail", "skip", "log"
+	successCodes       []int  // HTTP status codes considered success
+	cachedAPIKeyHeader string // Cached API key header name (computed once)
 }
 
 // Default success status codes
@@ -146,6 +158,11 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 		client:       client,
 		onError:      onError,
 		successCodes: successCodes,
+	}
+
+	// Pre-compute API key header name to avoid repeated detection per-record
+	if authHandler != nil && authHandler.Type() == authTypeAPIKey {
+		module.cachedAPIKeyHeader = module.detectAPIKeyHeaderName()
 	}
 
 	logger.Debug("http request output module created",
@@ -506,8 +523,8 @@ func (h *HTTPRequestModule) executeHTTPRequest(ctx context.Context, endpoint str
 	}
 
 	// Set default headers
-	req.Header.Set("User-Agent", defaultUserAgent)
-	req.Header.Set("Content-Type", defaultContentType)
+	req.Header.Set(headerUserAgent, defaultUserAgent)
+	req.Header.Set(headerContentType, defaultContentType)
 
 	// Set custom headers from config (may override defaults)
 	for key, value := range h.headers {
@@ -870,8 +887,8 @@ func (h *HTTPRequestModule) buildPreviewHeaders(recordHeaders map[string]string,
 	headers := make(map[string]string)
 
 	// Set default headers
-	headers["User-Agent"] = defaultUserAgent
-	headers["Content-Type"] = defaultContentType
+	headers[headerUserAgent] = defaultUserAgent
+	headers[headerContentType] = defaultContentType
 
 	// Set custom headers from config (may override defaults)
 	for key, value := range h.headers {
@@ -902,9 +919,13 @@ func (h *HTTPRequestModule) addMaskedAuthHeaders(headers map[string]string) {
 
 	authType := h.authHandler.Type()
 	switch authType {
-	case "api-key":
-		headerName := h.detectAPIKeyHeaderName()
-		headers[headerName] = maskValue("api-key")
+	case authTypeAPIKey:
+		// Use cached header name (computed once at module creation)
+		headerName := h.cachedAPIKeyHeader
+		if headerName == "" {
+			headerName = "X-API-Key" // Fallback (should not happen)
+		}
+		headers[headerName] = maskValue(authTypeAPIKey)
 	case "bearer":
 		headers["Authorization"] = "Bearer " + maskValue("token")
 	case "basic":
@@ -940,9 +961,9 @@ func (h *HTTPRequestModule) detectAPIKeyHeaderName() string {
 	// Find the header added by auth handler (excluding standard headers)
 	// Header names are normalized by Go's http package (e.g., "X-API-Key" -> "X-Api-Key")
 	standardHeaders := map[string]bool{
-		"User-Agent":    true,
-		"Content-Type":  true,
-		"Authorization": true, // API key doesn't use Authorization
+		headerUserAgent:   true,
+		headerContentType: true,
+		"Authorization":   true, // API key doesn't use Authorization
 	}
 
 	for headerName, values := range mockReq.Header {

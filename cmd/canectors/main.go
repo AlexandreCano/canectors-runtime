@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -278,7 +279,11 @@ func runPipelineOnce(pipeline *connector.Pipeline) {
 		fmt.Fprintf(os.Stderr, "✗ Failed to create filter modules: %v\n", err)
 		os.Exit(ExitRuntimeError)
 	}
-	outputModule := createOutputModule(pipeline.Output)
+	outputModule, err := createOutputModule(pipeline.Output)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ Failed to create output module: %v\n", err)
+		os.Exit(ExitRuntimeError)
+	}
 
 	// Create executor and run pipeline
 	executor := runtime.NewExecutorWithModules(inputModule, filterModules, outputModule, dryRun)
@@ -441,7 +446,19 @@ func (a *PipelineExecutorAdapter) Execute(pipeline *connector.Pipeline) (*connec
 			},
 		}, err
 	}
-	outputModule := createOutputModule(pipeline.Output)
+	outputModule, err := createOutputModule(pipeline.Output)
+	if err != nil {
+		return &connector.ExecutionResult{
+			PipelineID:  pipeline.ID,
+			Status:      "error",
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+			Error: &connector.ExecutionError{
+				Code:    "OUTPUT_CREATION_FAILED",
+				Message: err.Error(),
+			},
+		}, err
+	}
 
 	// Create executor and run pipeline
 	executor := runtime.NewExecutorWithModules(inputModule, filterModules, outputModule, a.dryRun)
@@ -750,30 +767,23 @@ func parseNestedThenElse(cfg map[string]interface{}, nestedConfig *filter.Nested
 
 // createOutputModule creates an output module instance from configuration.
 // Uses real HTTPRequestModule for httpRequest type, stub for others.
-func createOutputModule(cfg *connector.ModuleConfig) output.Module {
+// Returns an error if the module cannot be created (fail-fast to avoid silent no-op).
+func createOutputModule(cfg *connector.ModuleConfig) (output.Module, error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 	switch cfg.Type {
 	case "httpRequest":
 		// Use real HTTPRequestModule which implements PreviewableModule
 		module, err := output.NewHTTPRequestFromConfig(cfg)
 		if err != nil {
-			logger.Warn("failed to create HTTP request module, using stub",
-				slog.String("error", err.Error()))
-			endpoint, _ := cfg.Config["endpoint"].(string)
-			method, _ := cfg.Config["method"].(string)
-			return &StubOutputModule{
-				moduleType: cfg.Type,
-				endpoint:   endpoint,
-				method:     method,
-			}
+			return nil, fmt.Errorf("creating httpRequest module: %w", err)
 		}
-		return module
+		return module, nil
 	default:
 		return &StubOutputModule{
 			moduleType: cfg.Type,
-		}
+		}, nil
 	}
 }
 
@@ -826,11 +836,16 @@ func printDryRunPreview(previews []connector.RequestPreview) {
 		fmt.Printf("  Endpoint: %s %s\n", preview.Method, preview.Endpoint)
 		fmt.Printf("  Records: %d\n", preview.RecordCount)
 
-		// Headers (always show all headers in dry-run mode)
+		// Headers (always show all headers in dry-run mode, sorted for stable output)
 		if len(preview.Headers) > 0 {
 			fmt.Println("  Headers:")
-			for name, value := range preview.Headers {
-				fmt.Printf("    %s: %s\n", name, value)
+			headerNames := make([]string, 0, len(preview.Headers))
+			for name := range preview.Headers {
+				headerNames = append(headerNames, name)
+			}
+			sort.Strings(headerNames)
+			for _, name := range headerNames {
+				fmt.Printf("    %s: %s\n", name, preview.Headers[name])
 			}
 		}
 
