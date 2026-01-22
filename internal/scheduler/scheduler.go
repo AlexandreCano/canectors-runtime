@@ -267,7 +267,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	s.cron.Start()
 
 	logger.Info("scheduler started",
-		slog.Int("pipeline_count", s.PipelineCount()),
+		slog.Int("pipeline_count", len(s.pipelines)),
 	)
 
 	return nil
