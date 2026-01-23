@@ -620,15 +620,21 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 		)
 	}
 
+	// Guard against nil lastErr in case the retry loop never executed
+	safeErr := lastErr
+	if safeErr == nil {
+		safeErr = fmt.Errorf("all retry attempts exhausted but no error captured (max_retries=%d)", h.retry.MaxRetries)
+	}
+
 	logger.Error("all retry attempts exhausted",
 		slog.String("module_type", "httpRequest"),
 		slog.String("endpoint", endpoint),
 		slog.Int("attempts", h.retry.MaxRetries+1),
 		slog.Duration("total_duration", time.Since(startTime)),
-		slog.String("error", lastErr.Error()),
+		slog.String("error", safeErr.Error()),
 	)
 
-	return lastErr
+	return safeErr
 }
 
 // executeHTTPRequest executes a single HTTP request without retry logic
