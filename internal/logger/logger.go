@@ -176,7 +176,7 @@ func WithExecution(ctx ExecutionContext) *slog.Logger {
 	if ctx.DryRun {
 		attrs = append(attrs, slog.Bool("dry_run", true))
 	}
-	if ctx.FilterIndex >= 0 {
+	if ctx.FilterIndex > 0 {
 		attrs = append(attrs, slog.Int("filter_index", ctx.FilterIndex))
 	}
 
@@ -348,7 +348,7 @@ func buildContextAttrs(ctx ExecutionContext) []any {
 	if ctx.DryRun {
 		attrs = append(attrs, slog.Bool("dry_run", true))
 	}
-	if ctx.FilterIndex >= 0 {
+	if ctx.FilterIndex > 0 {
 		attrs = append(attrs, slog.Int("filter_index", ctx.FilterIndex))
 	}
 
