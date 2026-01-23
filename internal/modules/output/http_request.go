@@ -625,14 +625,10 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 		safeErr = fmt.Errorf("all retry attempts exhausted but no error captured (max_attempts=%d)", h.retry.MaxAttempts)
 	}
 
-	if len(delaysMs) > 0 {
-		h.lastRetryInfo = &connector.RetryInfo{
-			TotalAttempts: h.retry.MaxAttempts + 1,
-			RetryCount:    h.retry.MaxAttempts,
-			RetryDelaysMs: delaysMs,
-		}
-	} else {
-		h.lastRetryInfo = nil
+	h.lastRetryInfo = &connector.RetryInfo{
+		TotalAttempts: len(delaysMs) + 1,
+		RetryCount:    len(delaysMs),
+		RetryDelaysMs: delaysMs,
 	}
 
 	logger.Error("all retry attempts exhausted",
