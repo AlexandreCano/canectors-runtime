@@ -403,6 +403,257 @@ func TestResolveRetryConfig(t *testing.T) {
 	}
 }
 
+// TestResolveErrorHandlingConfig tests precedence resolution for error handling config.
+func TestResolveErrorHandlingConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		moduleConfig   *ErrorHandlingConfig
+		defaultsConfig *ErrorHandlingConfig
+		expected       ErrorHandlingConfig
+	}{
+		{
+			name: "Module config takes precedence over defaults",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 60000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              500,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           10000,
+					RetryableStatusCodes: []int{500},
+				},
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          3,
+					DelayMs:              1000,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500},
+				},
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 60000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              500,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           10000,
+					RetryableStatusCodes: []int{500},
+				},
+			},
+		},
+		{
+			name:         "Defaults config used when module config is nil",
+			moduleConfig: nil,
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "log",
+				TimeoutMs: 45000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              2000,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           60000,
+					RetryableStatusCodes: []int{429},
+				},
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "log",
+				TimeoutMs: 45000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              2000,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           60000,
+					RetryableStatusCodes: []int{429},
+				},
+			},
+		},
+		{
+			name:           "Default config when both are nil",
+			moduleConfig:   nil,
+			defaultsConfig: nil,
+			expected:       DefaultErrorHandlingConfig(),
+		},
+		{
+			name: "Module partial config overrides defaults",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError: "skip",
+				// TimeoutMs not set, should use defaults
+				// Retry not set (MaxAttempts=0, DelayMs=0), should use defaults
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          3,
+					DelayMs:              1000,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500, 502, 503, 504},
+				},
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          3,
+					DelayMs:              1000,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500, 502, 503, 504},
+				},
+			},
+		},
+		{
+			name: "Module retry overrides when MaxAttempts or DelayMs set",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              0, // DelayMs=0 but MaxAttempts>0, so retry overrides
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500, 502, 503, 504},
+				},
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          3,
+					DelayMs:              1000,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500},
+				},
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              0,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500, 502, 503, 504},
+				},
+			},
+		},
+		{
+			name: "Module retry not set (MaxAttempts=0, DelayMs=0) uses defaults retry",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 60000,
+				Retry: RetryConfig{
+					MaxAttempts:          0,
+					DelayMs:              0,
+					BackoffMultiplier:    2.0,
+					MaxDelayMs:           30000,
+					RetryableStatusCodes: []int{429, 500, 502, 503, 504},
+				},
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 30000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              2000,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           60000,
+					RetryableStatusCodes: []int{429},
+				},
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 60000,
+				Retry: RetryConfig{
+					MaxAttempts:          5,
+					DelayMs:              2000,
+					BackoffMultiplier:    1.5,
+					MaxDelayMs:           60000,
+					RetryableStatusCodes: []int{429},
+				},
+			},
+		},
+		{
+			name: "Empty OnError in module uses defaults OnError",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError:   "",
+				TimeoutMs: 60000,
+				Retry:     DefaultRetryConfig(),
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "log",
+				TimeoutMs: 30000,
+				Retry:     DefaultRetryConfig(),
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "log",
+				TimeoutMs: 60000,
+				Retry:     DefaultRetryConfig(),
+			},
+		},
+		{
+			name: "TimeoutMs=0 in module uses defaults TimeoutMs",
+			moduleConfig: &ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 0,
+				Retry:     DefaultRetryConfig(),
+			},
+			defaultsConfig: &ErrorHandlingConfig{
+				OnError:   "fail",
+				TimeoutMs: 45000,
+				Retry:     DefaultRetryConfig(),
+			},
+			expected: ErrorHandlingConfig{
+				OnError:   "skip",
+				TimeoutMs: 45000,
+				Retry:     DefaultRetryConfig(),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ResolveErrorHandlingConfig(tt.moduleConfig, tt.defaultsConfig)
+
+			if result.OnError != tt.expected.OnError {
+				t.Errorf("OnError = %s, want %s", result.OnError, tt.expected.OnError)
+			}
+			if result.TimeoutMs != tt.expected.TimeoutMs {
+				t.Errorf("TimeoutMs = %d, want %d", result.TimeoutMs, tt.expected.TimeoutMs)
+			}
+			if result.Retry.MaxAttempts != tt.expected.Retry.MaxAttempts {
+				t.Errorf("Retry.MaxAttempts = %d, want %d", result.Retry.MaxAttempts, tt.expected.Retry.MaxAttempts)
+			}
+			if result.Retry.DelayMs != tt.expected.Retry.DelayMs {
+				t.Errorf("Retry.DelayMs = %d, want %d", result.Retry.DelayMs, tt.expected.Retry.DelayMs)
+			}
+			if result.Retry.BackoffMultiplier != tt.expected.Retry.BackoffMultiplier {
+				t.Errorf("Retry.BackoffMultiplier = %f, want %f", result.Retry.BackoffMultiplier, tt.expected.Retry.BackoffMultiplier)
+			}
+			if result.Retry.MaxDelayMs != tt.expected.Retry.MaxDelayMs {
+				t.Errorf("Retry.MaxDelayMs = %d, want %d", result.Retry.MaxDelayMs, tt.expected.Retry.MaxDelayMs)
+			}
+			if len(result.Retry.RetryableStatusCodes) != len(tt.expected.Retry.RetryableStatusCodes) {
+				t.Errorf("Retry.RetryableStatusCodes length = %d, want %d", len(result.Retry.RetryableStatusCodes), len(tt.expected.Retry.RetryableStatusCodes))
+			} else {
+				for i, code := range tt.expected.Retry.RetryableStatusCodes {
+					if result.Retry.RetryableStatusCodes[i] != code {
+						t.Errorf("Retry.RetryableStatusCodes[%d] = %d, want %d", i, result.Retry.RetryableStatusCodes[i], code)
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestErrorHandlingConfig tests error handling configuration.
 func TestErrorHandlingConfig(t *testing.T) {
 	tests := []struct {

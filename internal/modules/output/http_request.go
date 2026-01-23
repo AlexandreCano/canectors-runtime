@@ -549,77 +549,103 @@ func (h *HTTPRequestModule) handleOAuth2Unauthorized(err error, alreadyRetried b
 // Implements retry logic for transient errors (5xx, network errors)
 // Special handling for 401 with OAuth2: invalidates token and retries once with new token
 func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint string, body []byte, recordHeaders map[string]string) error {
-	var lastErr error
-	oauth2Retried := false // Track if we've already retried once for OAuth2 401
 	startTime := time.Now()
 	var delaysMs []int64
+	oauth2Retried := false
+
+	lastErr := h.retryLoop(ctx, endpoint, body, recordHeaders, startTime, &delaysMs, &oauth2Retried)
+
+	if lastErr != nil {
+		return h.handleRetryFailure(lastErr, delaysMs, startTime, endpoint)
+	}
+	return nil
+}
+
+// retryLoop executes the retry loop for HTTP requests.
+func (h *HTTPRequestModule) retryLoop(ctx context.Context, endpoint string, body []byte, recordHeaders map[string]string, startTime time.Time, delaysMs *[]int64, oauth2Retried *bool) error {
+	var lastErr error
 
 	for attempt := 0; attempt <= h.retry.MaxAttempts; attempt++ {
-		// Wait before retry (not on first attempt)
 		if attempt > 0 {
-			backoff := h.retry.CalculateDelay(attempt - 1) // CalculateDelay is 0-indexed
-			delaysMs = append(delaysMs, backoff.Milliseconds())
-			logger.Info("retrying request",
-				slog.String("module_type", "httpRequest"),
-				slog.String("endpoint", endpoint),
-				slog.String("method", h.method),
-				slog.Int("attempt", attempt),
-				slog.Int("max_attempts", h.retry.MaxAttempts),
-				slog.Duration("backoff", backoff),
-			)
-			time.Sleep(backoff)
+			backoff := h.waitForRetry(attempt, delaysMs, endpoint)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				// Continue to next attempt
+			}
 		}
 
 		err := h.executeHTTPRequest(ctx, endpoint, body, recordHeaders)
 		if err == nil {
-			if attempt > 0 {
-				logger.Info("retry succeeded",
-					slog.String("module_type", "httpRequest"),
-					slog.String("endpoint", endpoint),
-					slog.Int("attempts", attempt+1),
-					slog.Duration("total_duration", time.Since(startTime)),
-				)
-				h.lastRetryInfo = &connector.RetryInfo{
-					TotalAttempts: attempt + 1,
-					RetryCount:    attempt,
-					RetryDelaysMs: delaysMs,
-				}
-			} else {
-				h.lastRetryInfo = nil
-			}
-			return nil // Success
+			h.handleRetrySuccess(attempt, delaysMs, startTime, endpoint)
+			return nil
 		}
 
 		lastErr = err
 
-		// Handle OAuth2 401: invalidate token and retry once
-		if h.handleOAuth2Unauthorized(err, oauth2Retried) {
-			oauth2Retried = true
-			continue // Retry immediately without counting as retry attempt
+		if h.shouldRetryOAuth2(err, oauth2Retried) {
+			continue
 		}
 
-		// Non-transient errors don't retry - use errhandling classification
 		if !errhandling.IsRetryable(err) {
-			logger.Debug("non-transient error, not retrying",
-				slog.String("module_type", "httpRequest"),
-				slog.String("endpoint", endpoint),
-				slog.String("error", err.Error()),
-				slog.String("error_category", string(errhandling.GetErrorCategory(err))),
-			)
+			h.logNonRetryableError(err, endpoint)
 			return err
 		}
 
-		logger.Warn("transient error, will retry",
-			slog.String("module_type", "httpRequest"),
-			slog.String("endpoint", endpoint),
-			slog.Int("attempt", attempt+1),
-			slog.Int("max_attempts", h.retry.MaxAttempts),
-			slog.String("error", err.Error()),
-			slog.String("error_category", string(errhandling.GetErrorCategory(err))),
-		)
+		h.logTransientError(err, attempt, endpoint)
 	}
 
-	// Guard against nil lastErr in case the retry loop never executed
+	return lastErr // All attempts exhausted
+}
+
+// waitForRetry waits before retry and logs the retry attempt.
+func (h *HTTPRequestModule) waitForRetry(attempt int, delaysMs *[]int64, endpoint string) time.Duration {
+	backoff := h.retry.CalculateDelay(attempt - 1) // CalculateDelay is 0-indexed
+	*delaysMs = append(*delaysMs, backoff.Milliseconds())
+
+	logger.Info("retrying request",
+		slog.String("module_type", "httpRequest"),
+		slog.String("endpoint", endpoint),
+		slog.String("method", h.method),
+		slog.Int("attempt", attempt),
+		slog.Int("max_attempts", h.retry.MaxAttempts),
+		slog.Duration("backoff", backoff),
+	)
+
+	return backoff
+}
+
+// shouldRetryOAuth2 handles OAuth2 401 by invalidating token and retrying once.
+func (h *HTTPRequestModule) shouldRetryOAuth2(err error, oauth2Retried *bool) bool {
+	if h.handleOAuth2Unauthorized(err, *oauth2Retried) {
+		*oauth2Retried = true
+		return true
+	}
+	return false
+}
+
+// handleRetrySuccess handles successful retry and sets retry info.
+func (h *HTTPRequestModule) handleRetrySuccess(attempt int, delaysMs *[]int64, startTime time.Time, endpoint string) {
+	if attempt > 0 {
+		logger.Info("retry succeeded",
+			slog.String("module_type", "httpRequest"),
+			slog.String("endpoint", endpoint),
+			slog.Int("attempts", attempt+1),
+			slog.Duration("total_duration", time.Since(startTime)),
+		)
+		h.lastRetryInfo = &connector.RetryInfo{
+			TotalAttempts: attempt + 1,
+			RetryCount:    attempt,
+			RetryDelaysMs: *delaysMs,
+		}
+	} else {
+		h.lastRetryInfo = nil
+	}
+}
+
+// handleRetryFailure handles retry failure and sets retry info.
+func (h *HTTPRequestModule) handleRetryFailure(lastErr error, delaysMs []int64, startTime time.Time, endpoint string) error {
 	safeErr := lastErr
 	if safeErr == nil {
 		safeErr = fmt.Errorf("all retry attempts exhausted but no error captured (max_attempts=%d)", h.retry.MaxAttempts)
@@ -640,6 +666,28 @@ func (h *HTTPRequestModule) doRequestWithHeaders(ctx context.Context, endpoint s
 	)
 
 	return safeErr
+}
+
+// logNonRetryableError logs a non-retryable error.
+func (h *HTTPRequestModule) logNonRetryableError(err error, endpoint string) {
+	logger.Debug("non-transient error, not retrying",
+		slog.String("module_type", "httpRequest"),
+		slog.String("endpoint", endpoint),
+		slog.String("error", err.Error()),
+		slog.String("error_category", string(errhandling.GetErrorCategory(err))),
+	)
+}
+
+// logTransientError logs a transient error that will be retried.
+func (h *HTTPRequestModule) logTransientError(err error, attempt int, endpoint string) {
+	logger.Warn("transient error, will retry",
+		slog.String("module_type", "httpRequest"),
+		slog.String("endpoint", endpoint),
+		slog.Int("attempt", attempt+1),
+		slog.Int("max_attempts", h.retry.MaxAttempts),
+		slog.String("error", err.Error()),
+		slog.String("error_category", string(errhandling.GetErrorCategory(err))),
+	)
 }
 
 // GetRetryInfo returns retry information from the last Send request (RetryInfoProvider).
