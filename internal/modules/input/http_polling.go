@@ -452,9 +452,6 @@ func (h *HTTPPolling) GetRetryInfo() *connector.RetryInfo {
 }
 
 func retryInfoFromErrhandling(info errhandling.RetryInfo) *connector.RetryInfo {
-	if info.RetryCount == 0 {
-		return nil
-	}
 	out := &connector.RetryInfo{
 		TotalAttempts: info.TotalAttempts,
 		RetryCount:    info.RetryCount,
