@@ -168,6 +168,15 @@ func (c RetryConfig) IsStatusCodeRetryable(statusCode int) bool {
 	return false
 }
 
+// isZeroRetryConfig checks if a RetryConfig should be considered unset.
+// A RetryConfig is considered unset if MaxAttempts=0 AND DelayMs=0,
+// regardless of other fields (BackoffMultiplier, MaxDelayMs, RetryableStatusCodes).
+// This matches the test expectation that partial configs with MaxAttempts=0 and DelayMs=0
+// should fall back to defaults.
+func isZeroRetryConfig(c RetryConfig) bool {
+	return c.MaxAttempts == 0 && c.DelayMs == 0
+}
+
 // ParseRetryConfig parses retry configuration from a map.
 // Missing values are filled with defaults.
 func ParseRetryConfig(m map[string]interface{}) RetryConfig {
@@ -266,8 +275,7 @@ func ResolveErrorHandlingConfig(moduleConfig, defaultsConfig *ErrorHandlingConfi
 			result.TimeoutMs = moduleConfig.TimeoutMs
 		}
 		// Module retry completely overrides if set (non-zero RetryConfig)
-		zeroRetry := RetryConfig{}
-		if moduleConfig.Retry != zeroRetry {
+		if !isZeroRetryConfig(moduleConfig.Retry) {
 			result.Retry = moduleConfig.Retry
 		}
 	}
