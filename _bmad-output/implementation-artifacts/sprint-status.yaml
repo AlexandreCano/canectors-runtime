@@ -1,0 +1,181 @@
+# generated: 2026-01-24
+# project: canectors-bmad
+# project_key: canectors-bmad
+# tracking_system: file-system
+# story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-01-24
+project: canectors-bmad
+project_key: canectors-bmad
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Pipeline Configuration Format Definition
+  epic-1: done
+  1-1-define-pipeline-configuration-schema: done
+  1-2-create-configuration-validator: done
+  1-3-support-yaml-alternative-format: done
+  epic-1-retrospective: done
+
+  # Epic 2: CLI Runtime Foundation
+  epic-2: done
+  2-1-initialize-go-cli-project-structure: done
+  2-2-implement-configuration-parser: done
+  2-3-implement-pipeline-orchestration: done
+  epic-2-retrospective: done
+
+  # Epic 3: Module Execution
+  epic-3: done
+  3-1-implement-input-module-execution-http-polling: done
+  3-2-implement-input-module-execution-webhook: done
+  3-3-implement-filter-module-execution-mapping: done
+  3-4-implement-filter-module-execution-conditions: done
+  3-5-implement-output-module-execution-http-request: done
+  3-6-implement-authentication-handling: done
+  epic-3-retrospective: done
+
+  # Epic 4: Advanced Runtime Features
+  epic-4: done
+  4-1-implement-cron-scheduler-for-polling: done
+  4-2-implement-dry-run-mode: done
+  4-3-implement-execution-logging: done
+  4-4-implement-error-handling-and-retry-logic: done
+  epic-4-retrospective: optional
+
+  # Epic 12: CLI Runtime Refinements (Minor Corrections)
+  epic-12: in progress
+  12-1-remove-schemaversion-field: done
+  12-2-close-input-module-after-input-execution: backlog
+  12-3-queue-execution-when-previous-still-running: backlog
+  12-4-treat-unknown-errors-as-retryable: backlog
+  12-5-move-schedule-configuration-to-input-level: backlog
+  epic-12-retrospective: optional
+
+  # Epic 13: Module Architecture Improvements (Major Corrections)
+  epic-13: backlog
+  13-1-simplify-module-extensibility-open-source-friendly: backlog
+  13-2-clarify-module-boundaries-without-heavy-encapsulation: backlog
+  13-3-configurable-output-retry-based-on-response: backlog
+  epic-13-retrospective: optional
+
+  # Epic 14: Advanced Runtime Capabilities (New Features)
+  epic-14: backlog
+  14-1-connection-pooling-configuration-for-inputs-and-outputs: backlog
+  14-2-scripting-support-in-pipelines: backlog
+  14-3-dynamic-enrichment-inside-filters-input-inside-filter-cache: backlog
+  14-4-last-timestamp-persistence-for-polling-inputs: backlog
+  14-5-distributed-scheduler-support: backlog
+  epic-14-retrospective: optional
+
+  # Epic 4: Advanced Runtime Features (remaining stories - after Epic 14)
+  4-5-create-cli-commands-interface: backlog
+  4-6-support-cross-platform-cli-windows-mac-linux: backlog
+
+  # Epic 5: User Authentication & Organization Setup
+  epic-5: backlog
+  5-1-initialize-t3-stack-project: backlog
+  5-2-configure-clerk-authentication: backlog
+  5-3-implement-user-registration: backlog
+  5-4-implement-user-login: backlog
+  5-5-setup-multi-tenant-database-schema: backlog
+  5-6-implement-organization-creation: backlog
+  5-7-implement-organization-member-management: backlog
+  5-8-implement-role-based-access-control-rbac: backlog
+  5-9-implement-organization-switching: backlog
+  5-10-implement-multi-tenant-data-isolation-middleware: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: OpenAPI Ingestion & Processing
+  epic-6: backlog
+  6-1-implement-openapi-file-import: backlog
+  6-2-implement-openapi-url-import: backlog
+  6-3-implement-openapi-parser: backlog
+  6-4-extract-endpoints-and-operations: backlog
+  6-5-extract-data-schemas-and-field-definitions: backlog
+  6-6-extract-authentication-requirements: backlog
+  6-7-identify-required-and-optional-fields: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Automatic Connector Generation
+  epic-7: backlog
+  7-1-implement-connector-pipeline-generator-service: backlog
+  7-2-generate-input-module-from-source-openapi: backlog
+  7-3-generate-output-module-from-target-openapi: backlog
+  7-4-generate-filter-module-with-basic-mappings: backlog
+  7-5-generate-authentication-configurations: backlog
+  7-6-generate-pagination-handling: backlog
+  7-7-generate-error-handling-and-retry-logic: backlog
+  7-8-generate-cron-scheduling-for-polling: backlog
+  7-9-generate-complete-connector-declaration: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: AI-Assisted Mapping
+  epic-8: backlog
+  8-1-implement-ai-mapping-service: backlog
+  8-2-suggest-field-mappings-by-name-similarity: backlog
+  8-3-suggest-mappings-for-common-data-types: backlog
+  8-4-display-confidence-levels-for-mappings: backlog
+  8-5-accept-or-reject-ai-suggested-mappings: backlog
+  8-6-manually-override-ai-suggested-mappings: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Connector Management & Templates
+  epic-9: backlog
+  9-1-implement-connector-list-view: backlog
+  9-2-implement-connector-detail-view: backlog
+  9-3-implement-connector-creation: backlog
+  9-4-implement-connector-editing: backlog
+  9-5-implement-connector-deletion: backlog
+  9-6-implement-connector-duplication-as-template: backlog
+  9-7-implement-template-based-connector-creation: backlog
+  9-8-implement-connector-organization-by-project-category: backlog
+  epic-9-retrospective: optional
+
+  # Epic 10: Documentation Generation
+  epic-10: backlog
+  10-1-implement-documentation-generator-service: backlog
+  10-2-generate-pipeline-module-documentation: backlog
+  10-3-generate-field-mapping-documentation: backlog
+  10-4-generate-transformation-documentation: backlog
+  10-5-export-documentation-in-standard-formats: backlog
+  epic-10-retrospective: optional
+
+  # Epic 11: Subscription & Billing
+  epic-11: backlog
+  11-1-implement-subscription-tiers-free-and-paid: backlog
+  11-2-implement-usage-tracking: backlog
+  11-3-implement-free-tier-usage-limits: backlog
+  11-4-implement-paid-tier-features: backlog
+  11-5-implement-subscription-upgrade: backlog
+  11-6-implement-subscription-downgrade: backlog
+  epic-11-retrospective: optional
