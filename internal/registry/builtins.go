@@ -1,0 +1,101 @@
+// Package registry provides module registries for the Canectors runtime.
+// This file registers all built-in modules during initialization.
+package registry
+
+import (
+	"fmt"
+
+	"github.com/canectors/runtime/internal/modules/filter"
+	"github.com/canectors/runtime/internal/modules/input"
+	"github.com/canectors/runtime/internal/modules/output"
+	"github.com/canectors/runtime/pkg/connector"
+)
+
+func init() {
+	registerBuiltinInputModules()
+	registerBuiltinFilterModules()
+	registerBuiltinOutputModules()
+}
+
+// registerBuiltinInputModules registers all built-in input module types.
+func registerBuiltinInputModules() {
+	// httpPolling - HTTP polling input module
+	RegisterInput("httpPolling", func(cfg *connector.ModuleConfig) (input.Module, error) {
+		if cfg == nil {
+			return nil, nil
+		}
+		return input.NewHTTPPollingFromConfig(cfg)
+	})
+
+	// webhook - Webhook input module
+	RegisterInput("webhook", func(cfg *connector.ModuleConfig) (input.Module, error) {
+		if cfg == nil {
+			return nil, nil
+		}
+		return input.NewWebhookFromConfig(cfg)
+	})
+}
+
+// registerBuiltinFilterModules registers all built-in filter module types.
+func registerBuiltinFilterModules() {
+	// mapping - Field mapping filter module
+	RegisterFilter("mapping", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
+		mappings, err := filter.ParseFieldMappings(cfg.Config["mappings"])
+		if err != nil {
+			return nil, fmt.Errorf("invalid mapping config at index %d: %w", index, err)
+		}
+		onError, _ := cfg.Config["onError"].(string)
+		module, err := filter.NewMappingFromConfig(mappings, onError)
+		if err != nil {
+			return nil, fmt.Errorf("invalid mapping config at index %d: %w", index, err)
+		}
+		return module, nil
+	})
+
+	// condition - Conditional routing filter module
+	// IMPORTANT: This registry entry provides basic condition support without nested modules.
+	// For full support including nested then/else blocks, use factory.CreateFilterModules()
+	// which calls factory.createConditionFilterModule() with complete parsing via
+	// factory.ParseConditionConfig(). The factory path is the preferred and recommended
+	// approach for condition modules.
+	//
+	// This registry entry exists for API completeness and simple condition cases.
+	// It does NOT parse nested then/else modules - those will be ignored.
+	RegisterFilter("condition", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
+		// Basic parsing without nested module support
+		condConfig := filter.ConditionConfig{}
+		expr, ok := cfg.Config["expression"].(string)
+		if !ok || expr == "" {
+			return nil, fmt.Errorf("required field 'expression' is missing or empty in condition config at index %d", index)
+		}
+		condConfig.Expression = expr
+
+		if lang, ok := cfg.Config["lang"].(string); ok {
+			condConfig.Lang = lang
+		}
+		if onTrue, ok := cfg.Config["onTrue"].(string); ok {
+			condConfig.OnTrue = onTrue
+		}
+		if onFalse, ok := cfg.Config["onFalse"].(string); ok {
+			condConfig.OnFalse = onFalse
+		}
+		if onError, ok := cfg.Config["onError"].(string); ok {
+			condConfig.OnError = onError
+		}
+
+		// Note: Nested then/else modules are NOT parsed here.
+		// Use factory.CreateFilterModules() for full condition support with nested modules.
+		return filter.NewConditionFromConfig(condConfig)
+	})
+}
+
+// registerBuiltinOutputModules registers all built-in output module types.
+func registerBuiltinOutputModules() {
+	// httpRequest - HTTP request output module
+	RegisterOutput("httpRequest", func(cfg *connector.ModuleConfig) (output.Module, error) {
+		if cfg == nil {
+			return nil, nil
+		}
+		return output.NewHTTPRequestFromConfig(cfg)
+	})
+}

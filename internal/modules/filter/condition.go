@@ -48,6 +48,24 @@ var (
 	ErrNestingTooDeep = errors.New("nested module depth exceeds maximum")
 )
 
+// NestedModuleCreator is a function type that creates a filter module from a NestedModuleConfig.
+//
+// This package-level variable is initialized by the factory package in its init() function
+// to enable registry-based module creation in nested condition blocks (then/else).
+//
+// IMPORTANT: This creates an implicit dependency on the factory package. If factory is not
+// imported, NestedModuleCreator will be nil and nested modules will fall back to hardcoded
+// behavior for built-in types only (mapping, condition). Custom filter types registered
+// in the registry will NOT work in nested contexts if factory is not imported.
+//
+// This design avoids a circular dependency (factory -> filter -> registry, but filter needs
+// factory for nested modules). The dependency is explicit through this variable assignment.
+//
+// For testing or alternative usage patterns where factory is not imported, nested modules
+// will only support built-in types. To enable full registry support for nested modules,
+// ensure the factory package is imported (which happens automatically in normal usage).
+var NestedModuleCreator func(config *NestedModuleConfig, index int) (Module, error)
+
 // Supported expression languages
 const (
 	LangSimple   = "simple"
@@ -319,6 +337,7 @@ func isWhitespaceOnly(s string) bool {
 }
 
 // createNestedModuleWithDepth creates a filter module with depth tracking.
+// Uses the registry to support custom filter types in nested configurations.
 func createNestedModuleWithDepth(config *NestedModuleConfig, depth int) (Module, error) {
 	if config == nil {
 		return nil, nil
@@ -329,23 +348,8 @@ func createNestedModuleWithDepth(config *NestedModuleConfig, depth int) (Module,
 		return nil, fmt.Errorf("%w: depth %d exceeds maximum %d", ErrNestingTooDeep, depth, MaxNestingDepth)
 	}
 
-	switch config.Type {
-	case "mapping":
-		mappings, err := ParseFieldMappings(config.Mappings)
-		if err != nil {
-			return nil, fmt.Errorf("parsing field mappings: %w", err)
-		}
-		onError := config.OnError
-		if onError == "" {
-			onError = OnErrorFail
-		}
-		module, err := NewMappingFromConfig(mappings, onError)
-		if err != nil {
-			return nil, fmt.Errorf("creating mapping module: %w", err)
-		}
-		return module, nil
-
-	case "condition":
+	// Special handling for condition modules due to nested config structure
+	if config.Type == "condition" {
 		// Validate expression length for nested conditions too
 		if config.Expression != "" {
 			if len(config.Expression) > MaxExpressionLength {
@@ -362,9 +366,34 @@ func createNestedModuleWithDepth(config *NestedModuleConfig, depth int) (Module,
 			Then:       config.Then,
 			Else:       config.Else,
 		}, depth+1)
+	}
 
+	// Use the factory's NestedModuleCreator if available (enables registry support)
+	// Note: For nested modules, we use 0 as the index since nested modules don't have
+	// a pipeline position. The index is primarily used for error logging context.
+	if NestedModuleCreator != nil {
+		return NestedModuleCreator(config, 0)
+	}
+
+	// Fallback to hardcoded behavior for built-in types (backward compatibility)
+	switch config.Type {
+	case "mapping":
+		mappings, err := ParseFieldMappings(config.Mappings)
+		if err != nil {
+			return nil, fmt.Errorf("parsing field mappings: %w", err)
+		}
+		onError := config.OnError
+		if onError == "" {
+			onError = OnErrorFail
+		}
+		module, err := NewMappingFromConfig(mappings, onError)
+		if err != nil {
+			return nil, fmt.Errorf("creating mapping module: %w", err)
+		}
+		return module, nil
 	default:
-		return nil, fmt.Errorf("unsupported nested module type: %s", config.Type)
+		// Unknown type - return stub
+		return NewStub(config.Type, depth), nil
 	}
 }
 
