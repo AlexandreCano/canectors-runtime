@@ -4,6 +4,7 @@ package filter
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -654,15 +655,19 @@ func TestScriptModuleProcess_ContextCancellation(t *testing.T) {
 }
 
 // TestScriptModuleProcess_ContextCancellationDuringExecution tests that long-running JavaScript can be interrupted.
+// Uses context.WithTimeout to make the test deterministic and avoid timing dependencies.
 func TestScriptModuleProcess_ContextCancellationDuringExecution(t *testing.T) {
 	config := ScriptConfig{
 		Script: `function transform(record) {
-			// Simulate long-running computation
-			var sum = 0;
-			for (var i = 0; i < 10000000; i++) {
-				sum += i;
+			// Intentional infinite loop to test interruption
+			// This will run until interrupted by context cancellation
+			while (true) {
+				// Busy loop that will be interrupted
+				var sum = 0;
+				for (var i = 0; i < 100000; i++) {
+					sum += i;
+				}
 			}
-			return record;
 		}`,
 	}
 
@@ -671,24 +676,29 @@ func TestScriptModuleProcess_ContextCancellationDuringExecution(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Use context.WithTimeout to make the test deterministic
+	// The timeout ensures the context is canceled, and the infinite loop
+	// guarantees the JavaScript is still running when interrupted
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
 
 	input := []map[string]interface{}{
 		{"id": 1},
 	}
 
-	// Cancel context after a short delay
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		cancel()
-	}()
-
+	// Process with timeout - should be interrupted
 	_, err = module.Process(ctx, input)
 	if err == nil {
 		t.Fatal("expected error from canceled context during execution")
 	}
-	if err != context.Canceled {
-		t.Errorf("expected context.Canceled error, got: %v", err)
+	// Check for either context.DeadlineExceeded (from timeout) or context.Canceled
+	// The error may be wrapped in a ScriptError, so check with errors.Is
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		// Also check if the error message contains the context error
+		errStr := err.Error()
+		if !strings.Contains(errStr, "context deadline exceeded") && !strings.Contains(errStr, "context canceled") {
+			t.Errorf("expected context.DeadlineExceeded or context.Canceled error, got: %v", err)
+		}
 	}
 }
 
@@ -1108,6 +1118,18 @@ func TestScriptModuleCreation_FromFile_PathTraversal(t *testing.T) {
 			name:        "filename starting with .. (not traversal)",
 			filePath:    "scripts/..transform.js",
 			expectError: false, // Should not be rejected - .. is part of filename
+		},
+		{
+			name:          "path traversal bypass attempt",
+			filePath:      "scripts/../etc/passwd",
+			expectError:   true,
+			errorContains: "path traversal",
+		},
+		{
+			name:          "path traversal with multiple ..",
+			filePath:      "scripts/../../etc/passwd",
+			expectError:   true,
+			errorContains: "path traversal",
 		},
 	}
 

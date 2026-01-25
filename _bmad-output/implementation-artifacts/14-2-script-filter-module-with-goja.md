@@ -321,13 +321,18 @@ Claude Opus 4.5
 - [HIGH] JavaScript interruption - Added `runtime.Interrupt()` support via goroutine monitoring context cancellation, allows interrupting long-running/infinite loops
 - [MEDIUM] Array detection - Explicitly detect and reject arrays in `exportToGoMap()` before fallback `ExportTo()`, prevents non-deterministic behavior
 
+**Third Round Fixes (Performance & Correctness):**
+- [HIGH] Goroutine overhead - Moved context cancellation watcher from `processRecord()` to `Process()` scope using `context.AfterFunc()`, eliminates goroutine per record overhead
+- [HIGH] Path traversal bypass - Fixed validation to check original path BEFORE cleaning to prevent bypasses like "scripts/../etc/passwd" being normalized to "etc/passwd"
+- [MEDIUM] Test determinism - Made `TestScriptModuleProcess_ContextCancellationDuringExecution` deterministic using `context.WithTimeout` with intentional infinite loop instead of timing-dependent sleep
+
 **New Tests Added:**
 - `TestScriptModuleCreation_FromFile_PathTraversal` - Tests path traversal protection (including false positive cases)
 - `TestScriptModuleCreation_FromFile_LargeFile` - Tests file size validation before reading
 - `TestScriptModule_ExportToGoMap_Array` - Tests explicit array rejection
 - `TestScriptModule_ExportToGoMap_Primitive` - Tests primitive return handling
 - `TestScriptModule_ExportToGoMap_ComplexNested` - Tests complex nested structures
-- `TestScriptModuleProcess_ContextCancellationDuringExecution` - Tests JavaScript interruption during long-running execution
+- `TestScriptModuleProcess_ContextCancellationDuringExecution` - Tests JavaScript interruption during long-running execution (deterministic with context.WithTimeout)
 
 ### Completion Notes List
 

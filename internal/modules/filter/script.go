@@ -229,6 +229,10 @@ func resolveScriptSource(config ScriptConfig) (string, error) {
 
 // validateScriptFilePath validates the script file path for security and format.
 // Prevents path traversal attacks and validates path format.
+//
+// Security: Checks the original path (after normalizing separators) for ".." segments
+// BEFORE cleaning, to prevent bypasses like "scripts/../etc/passwd" which would
+// be normalized to "etc/passwd" and bypass the check.
 func validateScriptFilePath(filePath string) error {
 	if filePath == "" {
 		return newScriptError(ErrCodeInvalidScriptFile, "scriptFile path cannot be empty", -1, "", nil)
@@ -239,15 +243,13 @@ func validateScriptFilePath(filePath string) error {
 		return newScriptError(ErrCodeInvalidScriptFile, "scriptFile path contains invalid characters", -1, "", nil)
 	}
 
-	// Clean the path to resolve any . or .. components
-	cleaned := filepath.Clean(filePath)
+	// Normalize separators to forward slashes for consistent checking across platforms
+	// Do this BEFORE cleaning to detect traversal attempts in the original path
+	normalized := filepath.ToSlash(filePath)
 
-	// Convert to forward slashes for consistent checking across platforms
-	normalized := filepath.ToSlash(cleaned)
-
-	// Check for path traversal by examining path segments
-	// A path with ".." as a segment indicates traversal attempt
-	// This avoids false positives like "scripts/..hidden/transform.js"
+	// Check for path traversal by examining path segments in the ORIGINAL path
+	// This prevents bypasses like "scripts/../etc/passwd" which would be cleaned
+	// to "etc/passwd" and bypass the check if we only checked after cleaning
 	segments := strings.Split(normalized, "/")
 	for _, segment := range segments {
 		if segment == ".." {
@@ -259,6 +261,9 @@ func validateScriptFilePath(filePath string) error {
 	if strings.HasPrefix(normalized, "../") || normalized == ".." {
 		return newScriptError(ErrCodeInvalidScriptFile, fmt.Sprintf("scriptFile path contains path traversal: %q", filePath), -1, "", nil)
 	}
+
+	// Now clean the path for final validation
+	cleaned := filepath.Clean(filePath)
 
 	// Check for absolute paths (optional - can be allowed if needed)
 	// For now, we allow absolute paths but log a warning
@@ -368,6 +373,8 @@ func ParseScriptConfig(cfg map[string]interface{}) (ScriptConfig, error) {
 //  4. Handles errors according to onError configuration
 //
 // The context is checked before processing to respect cancellation.
+// A single goroutine monitors context cancellation for the entire Process() call
+// to avoid creating a goroutine per record.
 func (m *ScriptModule) Process(ctx context.Context, records []map[string]interface{}) ([]map[string]interface{}, error) {
 	// Check context cancellation before processing
 	select {
@@ -388,6 +395,26 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]interfa
 		slog.Int("input_records", inputCount),
 		slog.String("on_error", m.onError),
 	)
+
+	// Set up a single cancellation watcher for the entire Process() call
+	// This avoids creating a goroutine per record
+	interruptDone := make(chan struct{})
+	defer close(interruptDone)
+
+	// Use context.AfterFunc to interrupt JavaScript execution when context is canceled
+	// This is more efficient than a goroutine per record
+	stopInterrupt := context.AfterFunc(ctx, func() {
+		m.interruptMu.Lock()
+		m.runtime.Interrupt(ctx.Err().Error())
+		m.interruptMu.Unlock()
+	})
+	defer func() {
+		stopInterrupt()
+		// Clear any pending interrupt after processing completes
+		m.interruptMu.Lock()
+		m.runtime.ClearInterrupt()
+		m.interruptMu.Unlock()
+	}()
 
 	result := make([]map[string]interface{}, 0, len(records))
 	skippedCount := 0
@@ -452,46 +479,29 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]interfa
 }
 
 // processRecord transforms a single record using the JavaScript function.
-// The context is used to interrupt JavaScript execution if canceled.
+// Context cancellation is handled at the Process() level via context.AfterFunc.
+// The ctx parameter is used to check for context errors in the returned error.
 func (m *ScriptModule) processRecord(ctx context.Context, record map[string]interface{}, recordIdx int) (map[string]interface{}, error) {
-	// Set up interruption goroutine to monitor context cancellation
-	interruptDone := make(chan struct{})
-	defer close(interruptDone)
-
-	// Start goroutine to interrupt JavaScript execution if context is canceled
-	go func() {
-		select {
-		case <-ctx.Done():
-			// Context was canceled - interrupt JavaScript execution
-			m.interruptMu.Lock()
-			m.runtime.Interrupt(ctx.Err().Error())
-			m.interruptMu.Unlock()
-		case <-interruptDone:
-			// Function completed normally - clear any pending interrupt
-			m.interruptMu.Lock()
-			m.runtime.ClearInterrupt()
-			m.interruptMu.Unlock()
-		}
-	}()
-
 	// Convert Go map to JavaScript object
 	jsRecord := m.runtime.ToValue(record)
 
 	// Call the transform function
-	// If context is canceled, runtime.Interrupt() will cause this to return an error
+	// If context is canceled, runtime.Interrupt() (set up in Process()) will cause this to return an error
 	result, err := m.transformFn(goja.Undefined(), jsRecord)
 	if err != nil {
-		// Check if error is due to context cancellation
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		// Check if error is due to context cancellation/interruption
+		// Goja interruption may wrap the context error, so check the error message
+		errStr := err.Error()
+		if strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "context canceled") {
+			// Check if context has an error and return it
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			// Fallback: return a generic interruption error
+			return nil, fmt.Errorf("script execution interrupted: %v", err)
 		}
 		return nil, m.handleJSError(err, recordIdx)
 	}
-
-	// Clear interrupt after successful execution
-	m.interruptMu.Lock()
-	m.runtime.ClearInterrupt()
-	m.interruptMu.Unlock()
 
 	// Convert result back to Go map
 	goResult, err := m.exportToGoMap(result, recordIdx)
