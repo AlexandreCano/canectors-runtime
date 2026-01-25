@@ -60,6 +60,12 @@ var (
 
 // Executor is responsible for executing pipeline configurations.
 // It orchestrates the execution flow: Input → Filters → Output.
+//
+// The Executor only interacts with modules through their public interfaces,
+// enforcing module boundaries at compile time. This is guaranteed by Go's type system:
+// the fields are declared as interface types, so the runtime cannot access concrete
+// module types or their internals. This ensures modules can be developed independently
+// without depending on runtime internals.
 type Executor struct {
 	inputModule   input.Module
 	filterModules []filter.Module

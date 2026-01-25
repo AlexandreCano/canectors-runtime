@@ -866,6 +866,101 @@ Each pipeline execution returns an `ExecutionResult`:
 
 For detailed architecture documentation, see the Architecture Document in the `canectors` planning repository (`_bmad-output/planning-artifacts/architecture.md`).
 
+## Extending Canectors
+
+Canectors is designed to be extensible - you can add your own custom modules without modifying the core codebase.
+
+### Module Architecture
+
+The runtime uses a **module registry pattern** that enables clean extensibility:
+
+1. **Implement the interface** for your module type (`input.Module`, `filter.Module`, or `output.Module`)
+2. **Register your constructor** via `registry.RegisterInput()`, `RegisterFilter()`, or `RegisterOutput()`
+3. **Use your module type** in pipeline configurations - the runtime instantiates it automatically
+
+**No core modifications needed** - no edits to factory code, no changes to main.go, complete independence.
+
+### Module Boundaries
+
+Understanding module boundaries is critical for correct implementation:
+
+- **Input modules**: Fetch data from sources (APIs, databases, files, etc.)
+  - ✅ Do: Fetch data, manage resources, handle authentication
+  - ❌ Don't: Transform data, send data, perform business logic
+
+- **Filter modules**: Transform and process data
+  - ✅ Do: Map fields, validate, filter, aggregate
+  - ❌ Don't: Fetch from external sources, send to destinations, store state between executions
+
+- **Output modules**: Send data to destinations
+  - ✅ Do: Send data, format for destination, manage connections
+  - ❌ Don't: Fetch data, transform data, perform business logic
+
+### Documentation
+
+- **[Module Extensibility Guide](docs/MODULE_EXTENSIBILITY.md)** - Complete guide to adding custom modules
+  - Registry API reference
+  - Step-by-step implementation examples
+  - Built-in module reference
+  - Nested module support
+
+- **[Module Boundaries Documentation](docs/MODULE_BOUNDARIES.md)** - Detailed boundary documentation
+  - Module responsibilities and anti-patterns
+  - Runtime boundary enforcement
+  - Common pitfalls and solutions
+  - Interface stability guarantees
+
+### Interface Stability
+
+The core module interfaces are **designed to remain stable** across versions:
+
+- `input.Module`: `Fetch()`, `Close()` - stable, no new methods will be added
+- `filter.Module`: `Process()` - stable, no new methods will be added
+- `output.Module`: `Send()`, `Close()` - stable, no new methods will be added
+
+Optional capabilities (like `output.PreviewableModule`) use **interface composition** to extend functionality without breaking existing implementations.
+
+### Quick Example
+
+```go
+package kafka
+
+import (
+    "context"
+    "github.com/canectors/runtime/internal/modules/input"
+    "github.com/canectors/runtime/internal/registry"
+)
+
+// Register module at init time
+func init() {
+    registry.RegisterInput("kafka", NewKafkaModule)
+}
+
+// Implement the interface
+type KafkaModule struct {
+    brokers []string
+    topic   string
+}
+
+func NewKafkaModule(cfg *connector.ModuleConfig) (input.Module, error) {
+    return &KafkaModule{...}, nil
+}
+
+func (m *KafkaModule) Fetch(ctx context.Context) ([]map[string]interface{}, error) {
+    // Fetch from Kafka
+    return records, nil
+}
+
+func (m *KafkaModule) Close() error {
+    return nil
+}
+
+// Compile-time interface check
+var _ input.Module = (*KafkaModule)(nil)
+```
+
+See the [extensibility documentation](docs/MODULE_EXTENSIBILITY.md) for complete implementation guides.
+
 ## Module Status
 
 | Module Type | Status | Story |
