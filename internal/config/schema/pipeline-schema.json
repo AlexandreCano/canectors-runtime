@@ -313,8 +313,17 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Filter type. Canonical: mapping, condition.",
+          "description": "Filter type. Canonical: mapping, condition, script.",
           "minLength": 1
+        },
+        "script": {
+          "type": "string",
+          "description": "Inline JavaScript source code for script filter. Must define a transform(record) function. Use either 'script' or 'scriptFile', not both.",
+          "maxLength": 102400
+        },
+        "scriptFile": {
+          "type": "string",
+          "description": "Path to a JavaScript file for script filter. Must define a transform(record) function. Use either 'script' or 'scriptFile', not both."
         },
         "connectionRef": { "type": "string" },
         "sourceSchema": { "type": "string" },
@@ -359,6 +368,24 @@
         {
           "if": { "properties": { "type": { "const": "condition" } }, "required": ["type"] },
           "then": { "required": ["expression"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "script" } }, "required": ["type"] },
+          "then": {
+            "allOf": [
+              {
+                "anyOf": [
+                  { "required": ["script"] },
+                  { "required": ["scriptFile"] }
+                ]
+              },
+              {
+                "not": {
+                  "required": ["script", "scriptFile"]
+                }
+              }
+            ]
+          }
         }
       ]
     },

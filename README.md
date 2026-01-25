@@ -531,6 +531,49 @@ The configuration file uses a simple structure with Input, Filters (optional), a
 
 - **Mapping**: Field-to-field mapping with transformations (formatDate, toFloat, etc.)
 - **Condition**: Filter records based on expressions (`status == 'active' && price > 0`)
+- **Script**: JavaScript transformation using Goja for complex business logic
+
+##### Script Filter Module
+
+The script filter module allows you to write JavaScript code to transform records. It uses the [Goja](https://github.com/dop251/goja) JavaScript engine (ECMAScript 5.1+, pure Go, no cgo).
+
+**Configuration (inline script):**
+```yaml
+filters:
+  - type: script
+    script: |
+      function transform(record) {
+        // Calculate total with discount
+        var discount = record.quantity >= 10 ? 0.15 : 0.05;
+        record.subtotal = record.price * record.quantity;
+        record.discount = record.subtotal * discount;
+        record.total = record.subtotal - record.discount;
+        return record;
+      }
+    onError: skip  # optional: fail (default), skip, log
+```
+
+**Configuration (from file):**
+```yaml
+filters:
+  - type: script
+    scriptFile: ./scripts/transform.js  # Path to JavaScript file
+    onError: fail
+```
+
+**Requirements:**
+- Use either `script` (inline) or `scriptFile` (file path), not both
+- Script must define a `transform(record)` function
+- Function receives the record as a JavaScript object
+- Function must return the transformed record (or a new object)
+- Function can throw exceptions for error handling
+
+**Security:**
+- Maximum script length: 100KB (prevents DoS)
+- Path traversal protection for `scriptFile` paths (prevents `../` attacks)
+- Goja is sandboxed (no file system, network access)
+- Scripts are compiled once at initialization for performance
+- Script file paths are validated before reading
 
 #### Supported Output Modes
 
@@ -560,6 +603,7 @@ The `configs/examples/` directory contains comprehensive examples covering all u
 #### Filter Examples
 - **08-filters-mapping.json / 08-filters-mapping.yaml** - Field mapping filter with transformations
 - **09-filters-condition.json / 09-filters-condition.yaml** - Conditional filter to filter data
+- **16-filters-script.yaml** - Script filter with JavaScript transformations
 
 #### Advanced Examples
 - **10-complete.json / 10-complete.yaml** - Complete example with OAuth2 authentication, pagination, multiple filters, retry, and advanced configurations
