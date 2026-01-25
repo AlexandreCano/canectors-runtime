@@ -87,6 +87,19 @@ func registerBuiltinFilterModules() {
 		// Use factory.CreateFilterModules() for full condition support with nested modules.
 		return filter.NewConditionFromConfig(condConfig)
 	})
+
+	// script - JavaScript transformation filter module using Goja
+	RegisterFilter("script", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
+		scriptConfig, err := filter.ParseScriptConfig(cfg.Config)
+		if err != nil {
+			return nil, fmt.Errorf("invalid script config at index %d: %w", index, err)
+		}
+		module, err := filter.NewScriptFromConfig(scriptConfig)
+		if err != nil {
+			return nil, fmt.Errorf("invalid script config at index %d: %w", index, err)
+		}
+		return module, nil
+	})
 }
 
 // registerBuiltinOutputModules registers all built-in output module types.
