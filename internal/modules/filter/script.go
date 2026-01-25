@@ -5,10 +5,12 @@ package filter
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dop251/goja"
@@ -64,11 +66,16 @@ type ScriptConfig struct {
 //   - Goja runtime instances are NOT goroutine-safe
 //   - Each ScriptModule instance has its own runtime
 //   - Process() should not be called concurrently on the same instance
+//
+// Context Cancellation:
+//   - JavaScript execution can be interrupted via runtime.Interrupt() when context is canceled
+//   - A goroutine monitors context cancellation and interrupts JavaScript execution
 type ScriptModule struct {
 	scriptSource string
 	onError      string
 	runtime      *goja.Runtime // Not goroutine-safe - one runtime per module instance
 	transformFn  goja.Callable
+	interruptMu  sync.Mutex // Protects interrupt state
 }
 
 // ScriptError carries structured context for script execution failures.
@@ -175,10 +182,37 @@ func resolveScriptSource(config ScriptConfig) (string, error) {
 			return "", err
 		}
 
-		content, err := os.ReadFile(config.ScriptFile)
+		// Check file size before reading to prevent DoS via memory exhaustion
+		fileInfo, err := os.Stat(config.ScriptFile)
+		if err != nil {
+			return "", newScriptError(ErrCodeScriptFileReadFailed, fmt.Sprintf("failed to stat script file %q: %v", config.ScriptFile, err), -1, "", err)
+		}
+
+		// Reject files that exceed MaxScriptLength before reading
+		if fileInfo.Size() > MaxScriptLength {
+			return "", newScriptError(ErrCodeScriptTooLong, fmt.Sprintf("script file %q exceeds maximum length: %d bytes exceeds maximum %d bytes", config.ScriptFile, fileInfo.Size(), MaxScriptLength), -1, "", nil)
+		}
+
+		// Read file with size limit to prevent DoS even if file grows between Stat and Read
+		file, err := os.Open(config.ScriptFile)
+		if err != nil {
+			return "", newScriptError(ErrCodeScriptFileReadFailed, fmt.Sprintf("failed to open script file %q: %v", config.ScriptFile, err), -1, "", err)
+		}
+		defer file.Close()
+
+		// Use LimitReader to cap reading at MaxScriptLength+1 bytes
+		// If we read more than MaxScriptLength, the file is too large
+		limitedReader := io.LimitReader(file, MaxScriptLength+1)
+		content, err := io.ReadAll(limitedReader)
 		if err != nil {
 			return "", newScriptError(ErrCodeScriptFileReadFailed, fmt.Sprintf("failed to read script file %q: %v", config.ScriptFile, err), -1, "", err)
 		}
+
+		// Check if we hit the limit (file was larger than MaxScriptLength)
+		if len(content) > MaxScriptLength {
+			return "", newScriptError(ErrCodeScriptTooLong, fmt.Sprintf("script file %q exceeds maximum length: file is larger than %d bytes", config.ScriptFile, MaxScriptLength), -1, "", nil)
+		}
+
 		return string(content), nil
 	}
 
@@ -193,11 +227,29 @@ func validateScriptFilePath(filePath string) error {
 		return newScriptError(ErrCodeInvalidScriptFile, "scriptFile path cannot be empty", -1, "", nil)
 	}
 
+	// Validate path doesn't contain null bytes or other invalid characters
+	if strings.Contains(filePath, "\x00") {
+		return newScriptError(ErrCodeInvalidScriptFile, "scriptFile path contains invalid characters", -1, "", nil)
+	}
+
 	// Clean the path to resolve any . or .. components
 	cleaned := filepath.Clean(filePath)
 
-	// Check for path traversal attempts
-	if strings.Contains(cleaned, "..") {
+	// Convert to forward slashes for consistent checking across platforms
+	normalized := filepath.ToSlash(cleaned)
+
+	// Check for path traversal by examining path segments
+	// A path with ".." as a segment indicates traversal attempt
+	// This avoids false positives like "scripts/..hidden/transform.js"
+	segments := strings.Split(normalized, "/")
+	for _, segment := range segments {
+		if segment == ".." {
+			return newScriptError(ErrCodeInvalidScriptFile, fmt.Sprintf("scriptFile path contains path traversal: %q", filePath), -1, "", nil)
+		}
+	}
+
+	// Also check for leading ".." which is a common traversal pattern
+	if strings.HasPrefix(normalized, "../") || normalized == ".." {
 		return newScriptError(ErrCodeInvalidScriptFile, fmt.Sprintf("scriptFile path contains path traversal: %q", filePath), -1, "", nil)
 	}
 
@@ -207,11 +259,6 @@ func validateScriptFilePath(filePath string) error {
 		logger.Warn("scriptFile uses absolute path",
 			slog.String("path", cleaned),
 		)
-	}
-
-	// Validate path doesn't contain null bytes or other invalid characters
-	if strings.Contains(filePath, "\x00") {
-		return newScriptError(ErrCodeInvalidScriptFile, "scriptFile path contains invalid characters", -1, "", nil)
 	}
 
 	return nil
@@ -347,7 +394,7 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]interfa
 		default:
 		}
 
-		transformedRecord, err := m.processRecord(record, recordIdx)
+		transformedRecord, err := m.processRecord(ctx, record, recordIdx)
 		if err != nil {
 			errorCount++
 			switch m.onError {
@@ -398,15 +445,46 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]interfa
 }
 
 // processRecord transforms a single record using the JavaScript function.
-func (m *ScriptModule) processRecord(record map[string]interface{}, recordIdx int) (map[string]interface{}, error) {
+// The context is used to interrupt JavaScript execution if canceled.
+func (m *ScriptModule) processRecord(ctx context.Context, record map[string]interface{}, recordIdx int) (map[string]interface{}, error) {
+	// Set up interruption goroutine to monitor context cancellation
+	interruptDone := make(chan struct{})
+	defer close(interruptDone)
+
+	// Start goroutine to interrupt JavaScript execution if context is canceled
+	go func() {
+		select {
+		case <-ctx.Done():
+			// Context was canceled - interrupt JavaScript execution
+			m.interruptMu.Lock()
+			m.runtime.Interrupt(ctx.Err().Error())
+			m.interruptMu.Unlock()
+		case <-interruptDone:
+			// Function completed normally - clear any pending interrupt
+			m.interruptMu.Lock()
+			m.runtime.ClearInterrupt()
+			m.interruptMu.Unlock()
+		}
+	}()
+
 	// Convert Go map to JavaScript object
 	jsRecord := m.runtime.ToValue(record)
 
 	// Call the transform function
+	// If context is canceled, runtime.Interrupt() will cause this to return an error
 	result, err := m.transformFn(goja.Undefined(), jsRecord)
 	if err != nil {
+		// Check if error is due to context cancellation
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, m.handleJSError(err, recordIdx)
 	}
+
+	// Clear interrupt after successful execution
+	m.interruptMu.Lock()
+	m.runtime.ClearInterrupt()
+	m.interruptMu.Unlock()
 
 	// Convert result back to Go map
 	goResult, err := m.exportToGoMap(result, recordIdx)
@@ -449,13 +527,33 @@ func (m *ScriptModule) exportToGoMap(value goja.Value, recordIdx int) (map[strin
 
 	exported := value.Export()
 
+	// Explicitly detect and reject arrays before attempting ExportTo
+	// Arrays should not be accepted as valid return types
+	if arr, ok := exported.([]interface{}); ok {
+		return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("script at record %d returned an array (length %d) - transform function must return an object, not an array", recordIdx, len(arr)), recordIdx, "", nil)
+	}
+	// Also check for []any (Go 1.18+ type alias)
+	if arr, ok := exported.([]any); ok {
+		return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("script at record %d returned an array (length %d) - transform function must return an object, not an array", recordIdx, len(arr)), recordIdx, "", nil)
+	}
+
 	// If already a Go map, return it directly
 	if result, ok := exported.(map[string]interface{}); ok {
 		return result, nil
 	}
 
-	// If it's a Goja Object, try to export it to a Go map
-	if _, ok := exported.(*goja.Object); ok {
+	// If it's a Goja Object, check if it's actually an array by checking the class name
+	if obj, ok := exported.(*goja.Object); ok {
+		// Check if the object is actually an array
+		if obj.Get("length") != nil {
+			// Has a length property - likely an array
+			className := obj.ClassName()
+			if className == "Array" {
+				return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("script at record %d returned an array - transform function must return an object, not an array", recordIdx), recordIdx, "", nil)
+			}
+		}
+
+		// Try to export it to a Go map
 		var result map[string]interface{}
 		if err := m.runtime.ExportTo(value, &result); err != nil {
 			return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("failed to convert script result at record %d: %v", recordIdx, err), recordIdx, "", err)
@@ -463,11 +561,6 @@ func (m *ScriptModule) exportToGoMap(value goja.Value, recordIdx int) (map[strin
 		return result, nil
 	}
 
-	// For other types (primitives, arrays, etc.), try ExportTo as a last resort
-	// but provide a clear error message if it fails
-	var result map[string]interface{}
-	if err := m.runtime.ExportTo(value, &result); err != nil {
-		return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("script at record %d returned invalid type %T - transform function must return an object, got %T", recordIdx, exported, exported), recordIdx, "", err)
-	}
-	return result, nil
+	// For primitives and other types, reject explicitly
+	return nil, newScriptError(ErrCodeExecutionFailed, fmt.Sprintf("script at record %d returned invalid type %T - transform function must return an object, got %T", recordIdx, exported, exported), recordIdx, "", nil)
 }

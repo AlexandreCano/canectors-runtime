@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestScriptModuleCreation tests creating a script module with valid script.
@@ -652,6 +653,45 @@ func TestScriptModuleProcess_ContextCancellation(t *testing.T) {
 	}
 }
 
+// TestScriptModuleProcess_ContextCancellationDuringExecution tests that long-running JavaScript can be interrupted.
+func TestScriptModuleProcess_ContextCancellationDuringExecution(t *testing.T) {
+	config := ScriptConfig{
+		Script: `function transform(record) {
+			// Simulate long-running computation
+			var sum = 0;
+			for (var i = 0; i < 10000000; i++) {
+				sum += i;
+			}
+			return record;
+		}`,
+	}
+
+	module, err := NewScriptFromConfig(config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	input := []map[string]interface{}{
+		{"id": 1},
+	}
+
+	// Cancel context after a short delay
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err = module.Process(ctx, input)
+	if err == nil {
+		t.Fatal("expected error from canceled context during execution")
+	}
+	if err != context.Canceled {
+		t.Errorf("expected context.Canceled error, got: %v", err)
+	}
+}
+
 // TestScriptConfig_Parse tests parsing script config from map.
 func TestScriptConfig_Parse(t *testing.T) {
 	testCases := []struct {
@@ -825,8 +865,9 @@ func TestScriptModuleCreation_FromFile_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent file")
 	}
-	if !strings.Contains(err.Error(), "failed to read script file") {
-		t.Errorf("expected error about reading file, got: %v", err)
+	// Error can come from Stat() or ReadFile() - check for either
+	if !strings.Contains(err.Error(), "failed to stat script file") && !strings.Contains(err.Error(), "failed to read script file") && !strings.Contains(err.Error(), "no such file") {
+		t.Errorf("expected error about file not found, got: %v", err)
 	}
 }
 
@@ -987,6 +1028,35 @@ func TestScriptModule_InPipeline(t *testing.T) {
 	}
 }
 
+// TestScriptModuleCreation_FromFile_LargeFile tests that large files are rejected before reading.
+func TestScriptModuleCreation_FromFile_LargeFile(t *testing.T) {
+	// Create a temporary file larger than MaxScriptLength
+	tmpFile, err := os.CreateTemp("", "test-large-*.js")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
+	// Write content larger than MaxScriptLength (100KB)
+	largeContent := "function transform(record) { return record; }" + strings.Repeat("x", MaxScriptLength+1)
+	if _, writeErr := tmpFile.WriteString(largeContent); writeErr != nil {
+		t.Fatalf("failed to write script: %v", writeErr)
+	}
+	_ = tmpFile.Close()
+
+	config := ScriptConfig{
+		ScriptFile: tmpFile.Name(),
+	}
+
+	_, err = NewScriptFromConfig(config)
+	if err == nil {
+		t.Fatal("expected error for file exceeding size limit")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum length") {
+		t.Errorf("expected error about exceeding maximum length, got: %v", err)
+	}
+}
+
 // TestScriptModuleCreation_FromFile_PathTraversal tests that path traversal attacks are prevented.
 func TestScriptModuleCreation_FromFile_PathTraversal(t *testing.T) {
 	testCases := []struct {
@@ -1029,6 +1099,16 @@ func TestScriptModuleCreation_FromFile_PathTraversal(t *testing.T) {
 			filePath:    "/tmp/script.js",
 			expectError: false, // Absolute paths are allowed but logged
 		},
+		{
+			name:        "filename with .. in middle (not traversal)",
+			filePath:    "scripts/..hidden/transform.js",
+			expectError: false, // Should not be rejected - .. is part of filename, not traversal
+		},
+		{
+			name:        "filename starting with .. (not traversal)",
+			filePath:    "scripts/..transform.js",
+			expectError: false, // Should not be rejected - .. is part of filename
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1060,8 +1140,7 @@ func TestScriptModuleCreation_FromFile_PathTraversal(t *testing.T) {
 	}
 }
 
-// TestScriptModule_ExportToGoMap_Array tests that arrays returned from transform are handled correctly.
-// Note: Goja may convert arrays to maps with numeric keys, so we test that the result is not what we expect.
+// TestScriptModule_ExportToGoMap_Array tests that arrays returned from transform are explicitly rejected.
 func TestScriptModule_ExportToGoMap_Array(t *testing.T) {
 	config := ScriptConfig{
 		Script: `function transform(record) {
@@ -1078,30 +1157,13 @@ func TestScriptModule_ExportToGoMap_Array(t *testing.T) {
 		{"id": 1, "name": "test"},
 	}
 
-	// Arrays might be converted to maps by Goja, but they won't have the expected structure
-	result, err := module.Process(context.Background(), input)
-	if err != nil {
-		// If it errors, that's fine - arrays shouldn't be valid return types
-		if !strings.Contains(err.Error(), "must return an object") && !strings.Contains(err.Error(), "invalid type") {
-			t.Errorf("expected error about returning object or invalid type, got: %v", err)
-		}
-		return
+	// Arrays should be explicitly rejected
+	_, err = module.Process(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error when transform returns array")
 	}
-
-	// If it doesn't error, the result should not be a proper record structure
-	// Arrays converted to maps will have numeric string keys like "0", "1", etc.
-	if len(result) > 0 {
-		// Check if it looks like an array (has numeric keys)
-		hasNumericKeys := false
-		for key := range result[0] {
-			if key == "0" || key == "1" {
-				hasNumericKeys = true
-				break
-			}
-		}
-		if hasNumericKeys {
-			t.Log("Array was converted to map with numeric keys - this is acceptable but not ideal")
-		}
+	if !strings.Contains(err.Error(), "returned an array") {
+		t.Errorf("expected error about returning array, got: %v", err)
 	}
 }
 

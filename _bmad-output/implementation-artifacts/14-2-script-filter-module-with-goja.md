@@ -306,7 +306,7 @@ Claude Opus 4.5
 
 ### Code Review Fixes (2026-01-25)
 
-**Issues Fixed:**
+**First Round Fixes:**
 - [HIGH] Path traversal vulnerability - Added `validateScriptFilePath()` with path traversal protection
 - [HIGH] Redundant logic in `exportToGoMap()` - Simplified and improved error messages
 - [MEDIUM] Path format validation - Added validation for scriptFile paths
@@ -315,11 +315,19 @@ Claude Opus 4.5
 - [MEDIUM] Error code consistency - All errors now use ScriptError with error codes
 - [LOW] README security section - Added path traversal protection note
 
+**Second Round Fixes (Security & Robustness):**
+- [HIGH] DoS via memory - Check file size with `os.Stat()` before reading, use `io.LimitReader` to cap reading at MaxScriptLength+1
+- [HIGH] Path traversal false positives - Improved detection using path segments instead of string contains, avoids rejecting valid filenames like "..hidden"
+- [HIGH] JavaScript interruption - Added `runtime.Interrupt()` support via goroutine monitoring context cancellation, allows interrupting long-running/infinite loops
+- [MEDIUM] Array detection - Explicitly detect and reject arrays in `exportToGoMap()` before fallback `ExportTo()`, prevents non-deterministic behavior
+
 **New Tests Added:**
-- `TestScriptModuleCreation_FromFile_PathTraversal` - Tests path traversal protection
-- `TestScriptModule_ExportToGoMap_Array` - Tests array return handling
+- `TestScriptModuleCreation_FromFile_PathTraversal` - Tests path traversal protection (including false positive cases)
+- `TestScriptModuleCreation_FromFile_LargeFile` - Tests file size validation before reading
+- `TestScriptModule_ExportToGoMap_Array` - Tests explicit array rejection
 - `TestScriptModule_ExportToGoMap_Primitive` - Tests primitive return handling
 - `TestScriptModule_ExportToGoMap_ComplexNested` - Tests complex nested structures
+- `TestScriptModuleProcess_ContextCancellationDuringExecution` - Tests JavaScript interruption during long-running execution
 
 ### Completion Notes List
 
