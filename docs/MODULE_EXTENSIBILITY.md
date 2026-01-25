@@ -305,6 +305,42 @@ The following modules are registered by default:
 |------|-------------|
 | `httpRequest` | HTTP POST/PUT/PATCH to REST APIs |
 
+## Module Boundaries
+
+Understanding module boundaries is crucial for implementing correct modules. Each module type has clear responsibilities and should not perform tasks outside its scope.
+
+**For comprehensive boundary documentation, see [MODULE_BOUNDARIES.md](./MODULE_BOUNDARIES.md).**
+
+### Quick Reference
+
+The pipeline follows a clear data flow: **Input → Filter → Output**
+
+- **Input modules**: Fetch data from sources (don't transform or send)
+- **Filter modules**: Transform data (don't fetch or send)
+- **Output modules**: Send data to destinations (don't fetch or transform)
+
+### Interface Stability Guarantee
+
+The module interfaces (`input.Module`, `filter.Module`, `output.Module`) are designed to remain stable across versions:
+
+- New methods will NOT be added to these interfaces
+- Optional capabilities use separate interfaces (e.g., `output.PreviewableModule`)
+- Modules implemented today will work in future versions
+
+### Runtime Boundary Enforcement
+
+The runtime interacts with modules **only** through public interfaces:
+
+- Runtime does NOT access module internals
+- Modules do NOT import runtime packages (`internal/runtime`, `internal/factory`)
+- All interactions use interface methods (`Fetch()`, `Process()`, `Send()`, `Close()`)
+
+**See [MODULE_BOUNDARIES.md](./MODULE_BOUNDARIES.md) for:**
+- Detailed responsibilities and anti-patterns for each module type
+- Complete examples of correct and incorrect implementations
+- Common pitfalls and how to avoid them
+- Architectural principles and enforcement mechanisms
+
 ## Best Practices
 
 1. **Use init() for registration** - This ensures modules are available when the package is imported
@@ -313,3 +349,5 @@ The following modules are registered by default:
 4. **Implement interface compliance checks** - Use `var _ Interface = (*Type)(nil)`
 5. **Document your module** - Include godoc comments explaining configuration options
 6. **Write tests** - Test your constructor and module behavior
+7. **Respect module boundaries** - Don't perform tasks outside your module's responsibility
+8. **Keep modules stateless** - Avoid storing state between pipeline executions (or manage it internally)

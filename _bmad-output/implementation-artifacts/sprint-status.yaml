@@ -84,7 +84,7 @@ development_status:
   # Epic 13: Module Architecture Improvements (Major Corrections)
   epic-13: in-progress
   13-1-simplify-module-extensibility-open-source-friendly: done
-  13-2-clarify-module-boundaries-without-heavy-encapsulation: backlog
+  13-2-clarify-module-boundaries-without-heavy-encapsulation: done
   13-3-configurable-output-retry-based-on-response: backlog
   epic-13-retrospective: optional
 
