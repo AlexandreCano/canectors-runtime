@@ -618,6 +618,12 @@ filters:
 - Uses LRU (Least Recently Used) eviction when size limit is reached
 - Cache entries expire according to TTL configuration
 - Only successful responses are cached (errors are not cached)
+- **Cache Key**: Configurable via `cache.key` (optional):
+  - If not specified: uses `endpoint + "::" + keyValue` (default behavior)
+  - Static string: `"my-cache-key"` (all records share same cache entry)
+  - JSON path: `"$.customerId"` or `"customerId"` (extracts value from record)
+  - Dot notation: `"user.profile.id"` (extracts nested value from record)
+  - If path not found, falls back to default behavior
 
 **Merge Strategies:**
 - `merge` (default): Deep merge - adds/updates fields recursively, preserves nested structures

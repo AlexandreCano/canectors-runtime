@@ -183,7 +183,7 @@ func TestParseEnrichmentConfig(t *testing.T) {
 			},
 		}
 
-		config, err := ParseEnrichmentConfig(raw)
+		config, err := ParseEnrichmentConfig(raw, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -211,7 +211,7 @@ func TestParseEnrichmentConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("parses auth config", func(t *testing.T) {
+	t.Run("parses auth config from separate parameter", func(t *testing.T) {
 		raw := map[string]interface{}{
 			"endpoint": "https://api.example.com/customers",
 			"key": map[string]interface{}{
@@ -219,16 +219,17 @@ func TestParseEnrichmentConfig(t *testing.T) {
 				"paramType": "query",
 				"paramName": "id",
 			},
-			"auth": map[string]interface{}{
-				"type": "api-key",
-				"credentials": map[string]interface{}{
-					"key":        "secret",
-					"headerName": "X-API-Key",
-				},
+		}
+
+		authConfig := &connector.AuthConfig{
+			Type: "api-key",
+			Credentials: map[string]string{
+				"key":        "secret",
+				"headerName": "X-API-Key",
 			},
 		}
 
-		config, err := ParseEnrichmentConfig(raw)
+		config, err := ParseEnrichmentConfig(raw, authConfig)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -241,6 +242,46 @@ func TestParseEnrichmentConfig(t *testing.T) {
 		}
 		if config.Auth.Credentials["key"] != "secret" {
 			t.Errorf("unexpected auth key: %s", config.Auth.Credentials["key"])
+		}
+	})
+
+	t.Run("ignores auth in config map when separate auth parameter provided", func(t *testing.T) {
+		// This test verifies that when authentication is provided via cfg.Authentication
+		// (as done by the registry), any "auth" field in cfg.Config is ignored.
+		// This matches the behavior of input/output modules.
+		raw := map[string]interface{}{
+			"endpoint": "https://api.example.com/customers",
+			"key": map[string]interface{}{
+				"field":     "id",
+				"paramType": "query",
+				"paramName": "id",
+			},
+			"auth": map[string]interface{}{
+				"type": "ignored",
+			},
+		}
+
+		authConfig := &connector.AuthConfig{
+			Type: "bearer",
+			Credentials: map[string]string{
+				"token": "correct-token",
+			},
+		}
+
+		config, err := ParseEnrichmentConfig(raw, authConfig)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Should use the separate auth parameter, not the one in the map
+		if config.Auth == nil {
+			t.Fatal("expected auth config")
+		}
+		if config.Auth.Type != "bearer" {
+			t.Errorf("expected auth type 'bearer' from separate parameter, got '%s'", config.Auth.Type)
+		}
+		if config.Auth.Credentials["token"] != "correct-token" {
+			t.Errorf("expected token 'correct-token' from separate parameter, got '%s'", config.Auth.Credentials["token"])
 		}
 	})
 }
@@ -1517,6 +1558,350 @@ func TestEnrichmentModule_CacheSizeLimitAndLRU(t *testing.T) {
 
 		if atomic.LoadInt32(&requestCount) != 0 {
 			t.Errorf("expected 0 requests for cached key1, got %d", requestCount)
+		}
+	})
+}
+
+func TestEnrichmentModule_CacheKeyCollision(t *testing.T) {
+	t.Run("cache key delimiter prevents collisions", func(t *testing.T) {
+		// Test that cache keys with "::" delimiter prevent collisions
+		// when keyValue contains ":" or endpoint contains ":"
+		var requestCount int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&requestCount, 1)
+			key := r.URL.Query().Get("id")
+			response := map[string]interface{}{"enriched": key}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}))
+		defer server.Close()
+
+		// Create module with endpoint that contains ":"
+		config := EnrichmentConfig{
+			Endpoint: server.URL, // Contains "http://" which has ":"
+			Key: KeyConfig{
+				Field:     "id",
+				ParamType: "query",
+				ParamName: "id",
+			},
+			Cache: CacheConfig{
+				MaxSize:    10,
+				DefaultTTL: 300,
+			},
+		}
+
+		module1, err := NewEnrichmentFromConfig(config)
+		if err != nil {
+			t.Fatalf("failed to create module: %v", err)
+		}
+
+		// Test with keyValue that contains ":"
+		records1 := []map[string]interface{}{{"id": "foo:bar"}}
+		result1, err := module1.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if len(result1) != 1 {
+			t.Fatalf("expected 1 record, got %d", len(result1))
+		}
+
+		// Verify cache key is unique (should make request)
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request, got %d", requestCount)
+		}
+
+		// Second call with same key - should use cache
+		_, err = module1.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request (cache hit), got %d", requestCount)
+		}
+
+		// Test with different keyValue that would collide with old delimiter
+		records2 := []map[string]interface{}{{"id": "different"}}
+		_, err = module1.Process(context.Background(), records2)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		// Should make new request (different key)
+		if atomic.LoadInt32(&requestCount) != 2 {
+			t.Errorf("expected 2 requests (different key), got %d", requestCount)
+		}
+
+		// Verify first key still cached
+		atomic.StoreInt32(&requestCount, 0)
+		_, err = module1.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if atomic.LoadInt32(&requestCount) != 0 {
+			t.Errorf("expected 0 requests (cache hit for first key), got %d", requestCount)
+		}
+	})
+}
+
+func TestEnrichmentModule_ConfigurableCacheKey(t *testing.T) {
+	t.Run("static cache key", func(t *testing.T) {
+		var requestCount int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&requestCount, 1)
+			response := map[string]interface{}{"enriched": "data"}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}))
+		defer server.Close()
+
+		config := EnrichmentConfig{
+			Endpoint: server.URL,
+			Key: KeyConfig{
+				Field:     "id",
+				ParamType: "query",
+				ParamName: "id",
+			},
+			Cache: CacheConfig{
+				MaxSize:    10,
+				DefaultTTL: 300,
+				Key:        "static-cache-key",
+			},
+		}
+
+		module, err := NewEnrichmentFromConfig(config)
+		if err != nil {
+			t.Fatalf("failed to create module: %v", err)
+		}
+
+		// Process records with different IDs - should all use same cache key
+		records1 := []map[string]interface{}{{"id": "123"}}
+		records2 := []map[string]interface{}{{"id": "456"}}
+
+		_, err = module.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request, got %d", requestCount)
+		}
+
+		// Second record with different ID should use same cache (static key)
+		_, err = module.Process(context.Background(), records2)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request (cache hit with static key), got %d", requestCount)
+		}
+	})
+
+	t.Run("cache key from JSON path expression with $.", func(t *testing.T) {
+		var requestCount int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&requestCount, 1)
+			response := map[string]interface{}{"enriched": "data"}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}))
+		defer server.Close()
+
+		config := EnrichmentConfig{
+			Endpoint: server.URL,
+			Key: KeyConfig{
+				Field:     "id",
+				ParamType: "query",
+				ParamName: "id",
+			},
+			Cache: CacheConfig{
+				MaxSize:    10,
+				DefaultTTL: 300,
+				Key:        "$.customerId",
+			},
+		}
+
+		module, err := NewEnrichmentFromConfig(config)
+		if err != nil {
+			t.Fatalf("failed to create module: %v", err)
+		}
+
+		// Process records with same customerId - should use cache
+		records1 := []map[string]interface{}{
+			{"id": "123", "customerId": "CUST-001"},
+		}
+		records2 := []map[string]interface{}{
+			{"id": "456", "customerId": "CUST-001"}, // Same customerId
+		}
+
+		_, err = module.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request, got %d", requestCount)
+		}
+
+		// Second record with same customerId should use cache
+		_, err = module.Process(context.Background(), records2)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request (cache hit with same customerId), got %d", requestCount)
+		}
+
+		// Third record with different customerId should make new request
+		records3 := []map[string]interface{}{
+			{"id": "789", "customerId": "CUST-002"},
+		}
+		_, err = module.Process(context.Background(), records3)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 2 {
+			t.Errorf("expected 2 requests (different customerId), got %d", requestCount)
+		}
+	})
+
+	t.Run("cache key from dot notation path", func(t *testing.T) {
+		var requestCount int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&requestCount, 1)
+			response := map[string]interface{}{"enriched": "data"}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}))
+		defer server.Close()
+
+		config := EnrichmentConfig{
+			Endpoint: server.URL,
+			Key: KeyConfig{
+				Field:     "id",
+				ParamType: "query",
+				ParamName: "id",
+			},
+			Cache: CacheConfig{
+				MaxSize:    10,
+				DefaultTTL: 300,
+				Key:        "user.profile.id",
+			},
+		}
+
+		module, err := NewEnrichmentFromConfig(config)
+		if err != nil {
+			t.Fatalf("failed to create module: %v", err)
+		}
+
+		records1 := []map[string]interface{}{
+			{
+				"id": "123",
+				"user": map[string]interface{}{
+					"profile": map[string]interface{}{
+						"id": "PROFILE-001",
+					},
+				},
+			},
+		}
+		records2 := []map[string]interface{}{
+			{
+				"id": "456",
+				"user": map[string]interface{}{
+					"profile": map[string]interface{}{
+						"id": "PROFILE-001", // Same profile ID
+					},
+				},
+			},
+		}
+
+		_, err = module.Process(context.Background(), records1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request, got %d", requestCount)
+		}
+
+		// Second record with same profile ID should use cache
+		_, err = module.Process(context.Background(), records2)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request (cache hit with same profile ID), got %d", requestCount)
+		}
+	})
+
+	t.Run("cache key falls back to default when path not found", func(t *testing.T) {
+		var requestCount int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&requestCount, 1)
+			response := map[string]interface{}{"enriched": "data"}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}))
+		defer server.Close()
+
+		config := EnrichmentConfig{
+			Endpoint: server.URL,
+			Key: KeyConfig{
+				Field:     "id",
+				ParamType: "query",
+				ParamName: "id",
+			},
+			Cache: CacheConfig{
+				MaxSize:    10,
+				DefaultTTL: 300,
+				Key:        "$.nonexistent",
+			},
+		}
+
+		module, err := NewEnrichmentFromConfig(config)
+		if err != nil {
+			t.Fatalf("failed to create module: %v", err)
+		}
+
+		records := []map[string]interface{}{
+			{"id": "123"}, // Missing "nonexistent" field
+		}
+
+		_, err = module.Process(context.Background(), records)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Should make request (path not found, falls back to default key)
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request, got %d", requestCount)
+		}
+
+		// Second call with same ID should use cache (default key behavior)
+		_, err = module.Process(context.Background(), records)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if atomic.LoadInt32(&requestCount) != 1 {
+			t.Errorf("expected 1 request (cache hit with default key), got %d", requestCount)
 		}
 	})
 }

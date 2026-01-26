@@ -58,6 +58,8 @@ connector:
       cache:
         maxSize: 1000      # Maximum number of cached entries
         defaultTTL: 300    # Cache entries expire after 5 minutes (300 seconds)
+        # key: "$.customerId"  # Optional: Custom cache key (JSON path or static string)
+                                # If not specified, uses: endpoint + "::" + keyValue
 
       # Merge strategy: how to combine enrichment data with the record
       # - merge: Deep merge (default) - adds/updates fields recursively

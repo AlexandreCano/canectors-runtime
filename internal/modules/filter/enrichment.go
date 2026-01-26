@@ -61,6 +61,13 @@ type CacheConfig struct {
 	MaxSize int `json:"maxSize"`
 	// DefaultTTL is the TTL for cache entries in seconds (default 300)
 	DefaultTTL int `json:"defaultTTL"`
+	// Key is the cache key configuration (optional).
+	// If not specified, uses default: endpoint + "::" + keyValue.
+	// Can be:
+	//   - A static string: "my-cache-key"
+	//   - A JSON path expression: "$.customerId" or "customerId" (extracts value from record)
+	//   - Dot notation path: "user.profile.id" (extracts nested value from record)
+	Key string `json:"key"`
 }
 
 // EnrichmentConfig represents the configuration for an enrichment filter module.
@@ -108,6 +115,7 @@ type EnrichmentModule struct {
 	onError       string
 	headers       map[string]string
 	cacheTTL      time.Duration
+	cacheKey      string // Cache key configuration (optional)
 }
 
 // EnrichmentError carries structured context for enrichment failures.
@@ -247,6 +255,7 @@ func NewEnrichmentFromConfig(config EnrichmentConfig) (*EnrichmentModule, error)
 		slog.String("on_error", onError),
 		slog.Int("cache_max_size", cacheMaxSize),
 		slog.Int("cache_ttl_seconds", cacheTTLSeconds),
+		slog.String("cache_key", config.Cache.Key),
 		slog.Bool("has_auth", authHandler != nil),
 	)
 
@@ -263,6 +272,7 @@ func NewEnrichmentFromConfig(config EnrichmentConfig) (*EnrichmentModule, error)
 		onError:       onError,
 		headers:       config.Headers,
 		cacheTTL:      cacheTTL,
+		cacheKey:      config.Cache.Key,
 	}, nil
 }
 
@@ -284,104 +294,92 @@ func validateKeyConfig(key KeyConfig) error {
 }
 
 // ParseEnrichmentConfig parses an enrichment filter configuration from raw config map.
-func ParseEnrichmentConfig(cfg map[string]interface{}) (EnrichmentConfig, error) {
+// The authentication parameter is passed separately (from cfg.Authentication) to match
+// the ModuleConfig structure used by input and output modules.
+func ParseEnrichmentConfig(cfg map[string]interface{}, auth *connector.AuthConfig) (EnrichmentConfig, error) {
 	config := EnrichmentConfig{}
 
 	// Parse endpoint (required)
-	if endpoint, ok := cfg["endpoint"].(string); ok {
-		config.Endpoint = endpoint
-	}
+	config.Endpoint = parseStringField(cfg, "endpoint")
 
 	// Parse key configuration (required)
-	if keyRaw, ok := cfg["key"].(map[string]interface{}); ok {
-		if field, ok := keyRaw["field"].(string); ok {
-			config.Key.Field = field
-		}
-		if paramType, ok := keyRaw["paramType"].(string); ok {
-			config.Key.ParamType = paramType
-		}
-		if paramName, ok := keyRaw["paramName"].(string); ok {
-			config.Key.ParamName = paramName
-		}
-	}
+	config.Key = parseKeyConfig(cfg)
 
-	// Parse auth configuration (optional)
-	if authRaw, ok := cfg["auth"].(map[string]interface{}); ok {
-		config.Auth = parseAuthConfig(authRaw)
-	}
+	// Set authentication from separate parameter (consistent with input/output modules)
+	config.Auth = auth
 
 	// Parse cache configuration (optional)
+	config.Cache = parseCacheConfig(cfg)
+
+	// Parse optional fields
+	config.MergeStrategy = parseStringField(cfg, "mergeStrategy")
+	config.DataField = parseStringField(cfg, "dataField")
+	config.OnError = parseStringField(cfg, "onError")
+	config.TimeoutMs = parseIntField(cfg, "timeoutMs")
+	config.Headers = parseHeaders(cfg)
+
+	return config, nil
+}
+
+// parseStringField extracts a string field from the config map.
+func parseStringField(cfg map[string]interface{}, fieldName string) string {
+	if value, ok := cfg[fieldName].(string); ok {
+		return value
+	}
+	return ""
+}
+
+// parseIntField extracts an integer field from the config map.
+func parseIntField(cfg map[string]interface{}, fieldName string) int {
+	if value, ok := cfg[fieldName].(float64); ok {
+		return int(value)
+	}
+	return 0
+}
+
+// parseKeyConfig extracts the key configuration from the config map.
+func parseKeyConfig(cfg map[string]interface{}) KeyConfig {
+	keyConfig := KeyConfig{}
+	if keyRaw, ok := cfg["key"].(map[string]interface{}); ok {
+		keyConfig.Field = parseStringField(keyRaw, "field")
+		keyConfig.ParamType = parseStringField(keyRaw, "paramType")
+		keyConfig.ParamName = parseStringField(keyRaw, "paramName")
+	}
+	return keyConfig
+}
+
+// parseCacheConfig extracts the cache configuration from the config map.
+func parseCacheConfig(cfg map[string]interface{}) CacheConfig {
+	cacheConfig := CacheConfig{}
 	if cacheRaw, ok := cfg["cache"].(map[string]interface{}); ok {
 		if maxSize, ok := cacheRaw["maxSize"].(float64); ok {
 			maxSizeInt := int(maxSize)
 			if maxSizeInt > 0 {
-				config.Cache.MaxSize = maxSizeInt
+				cacheConfig.MaxSize = maxSizeInt
 			}
 		}
 		if ttl, ok := cacheRaw["defaultTTL"].(float64); ok {
 			ttlInt := int(ttl)
 			if ttlInt > 0 {
-				config.Cache.DefaultTTL = ttlInt
+				cacheConfig.DefaultTTL = ttlInt
 			}
 		}
+		cacheConfig.Key = parseStringField(cacheRaw, "key")
 	}
-
-	// Parse other optional fields
-	if mergeStrategy, ok := cfg["mergeStrategy"].(string); ok {
-		config.MergeStrategy = mergeStrategy
-	}
-	if dataField, ok := cfg["dataField"].(string); ok {
-		config.DataField = dataField
-	}
-	if onError, ok := cfg["onError"].(string); ok {
-		config.OnError = onError
-	}
-	if timeoutMs, ok := cfg["timeoutMs"].(float64); ok {
-		config.TimeoutMs = int(timeoutMs)
-	}
-
-	// Parse headers
-	if headersRaw, ok := cfg["headers"].(map[string]interface{}); ok {
-		config.Headers = make(map[string]string)
-		for k, v := range headersRaw {
-			if strVal, ok := v.(string); ok {
-				config.Headers[k] = strVal
-			}
-		}
-	}
-
-	return config, nil
+	return cacheConfig
 }
 
-// parseAuthConfig converts a raw map to AuthConfig.
-func parseAuthConfig(raw map[string]interface{}) *connector.AuthConfig {
-	authConfig := &connector.AuthConfig{
-		Credentials: make(map[string]string),
-	}
-
-	if authType, ok := raw["type"].(string); ok {
-		authConfig.Type = authType
-	}
-
-	// Extract credentials from nested object or flat structure
-	if creds, ok := raw["credentials"].(map[string]interface{}); ok {
-		for k, v := range creds {
+// parseHeaders extracts headers from the config map.
+func parseHeaders(cfg map[string]interface{}) map[string]string {
+	headers := make(map[string]string)
+	if headersRaw, ok := cfg["headers"].(map[string]interface{}); ok {
+		for k, v := range headersRaw {
 			if strVal, ok := v.(string); ok {
-				authConfig.Credentials[k] = strVal
-			}
-		}
-	} else {
-		// Flat structure: all non-type fields are credentials
-		for k, v := range raw {
-			if k != "type" {
-				if strVal, ok := v.(string); ok {
-					authConfig.Credentials[k] = strVal
-				}
+				headers[k] = strVal
 			}
 		}
 	}
-
-	return authConfig
+	return headers
 }
 
 // Process enriches each input record with data from an external API.
@@ -489,7 +487,7 @@ func (m *EnrichmentModule) processRecord(ctx context.Context, record map[string]
 	}
 
 	// Check cache first
-	cacheKey := m.buildCacheKey(keyValue)
+	cacheKey := m.buildCacheKey(keyValue, record)
 	if cachedData, found := m.cache.Get(cacheKey); found {
 		enrichmentData, ok := cachedData.(map[string]interface{})
 		if ok {
@@ -510,6 +508,8 @@ func (m *EnrichmentModule) processRecord(ctx context.Context, record map[string]
 	}
 
 	// Cache successful response (don't cache errors)
+	// Rebuild cache key in case it depends on record values
+	cacheKey = m.buildCacheKey(keyValue, record)
 	m.cache.Set(cacheKey, enrichmentData, m.cacheTTL)
 
 	logger.Debug("enrichment cache miss (fetched and cached)",
@@ -570,24 +570,130 @@ func (m *EnrichmentModule) extractKeyValue(record map[string]interface{}, record
 	return keyValue, nil
 }
 
-// buildCacheKey creates a unique cache key from the key value.
-func (m *EnrichmentModule) buildCacheKey(keyValue string) string {
-	// Include endpoint in cache key to isolate different enrichment modules
-	return m.endpoint + ":" + keyValue
+// buildCacheKey creates a unique cache key from the key value and record.
+// If cacheKey is configured, it can be:
+//   - A static string: used as-is
+//   - A JSON path expression (starting with "$." or dot notation): extracts value from record
+//
+// If cacheKey is not configured, uses default: endpoint + "::" + keyValue
+func (m *EnrichmentModule) buildCacheKey(keyValue string, record map[string]interface{}) string {
+	// If cacheKey is configured, use it
+	if m.cacheKey != "" {
+		// Check if it's a JSON path expression (starts with "$." or contains ".")
+		if strings.HasPrefix(m.cacheKey, "$.") {
+			// Remove "$." prefix and use dot notation
+			path := strings.TrimPrefix(m.cacheKey, "$.")
+			if value, found := getNestedValue(record, path); found {
+				return fmt.Sprintf("%v", value)
+			}
+			// If path not found, log warning and fall back to default behavior
+			logger.Warn("enrichment cache key path not found, using default key",
+				slog.String("module_type", "enrichment"),
+				slog.String("configured_path", m.cacheKey),
+				slog.String("fallback_key", m.endpoint+"::"+keyValue),
+			)
+			return m.endpoint + "::" + keyValue
+		} else if strings.Contains(m.cacheKey, ".") {
+			// Dot notation path (e.g., "user.profile.id")
+			if value, found := getNestedValue(record, m.cacheKey); found {
+				return fmt.Sprintf("%v", value)
+			}
+			// If path not found, log warning and fall back to default behavior
+			logger.Warn("enrichment cache key path not found, using default key",
+				slog.String("module_type", "enrichment"),
+				slog.String("configured_path", m.cacheKey),
+				slog.String("fallback_key", m.endpoint+"::"+keyValue),
+			)
+			return m.endpoint + "::" + keyValue
+		} else {
+			// Static string - use as-is
+			return m.cacheKey
+		}
+	}
+
+	// Default behavior: endpoint + "::" + keyValue
+	// Use "::" as delimiter to avoid collisions with ":" in URLs or key values
+	// This ensures endpoint="http://api.com" with keyValue="foo:bar" produces
+	// a different key than endpoint="http://api.com:foo" with keyValue="bar"
+	return m.endpoint + "::" + keyValue
 }
 
 // fetchEnrichmentData fetches data from the external API for the given key value.
 func (m *EnrichmentModule) fetchEnrichmentData(ctx context.Context, keyValue string, recordIdx int) (map[string]interface{}, error) {
+	// Build and execute HTTP request
+	body, statusCode, err := m.executeHTTPRequest(ctx, keyValue, recordIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse and extract response data
+	return m.parseResponseData(body, statusCode, recordIdx)
+}
+
+// executeHTTPRequest builds the HTTP request, executes it, and returns the response body and status code.
+func (m *EnrichmentModule) executeHTTPRequest(ctx context.Context, keyValue string, recordIdx int) ([]byte, int, error) {
 	// Build request URL
 	requestURL, err := m.buildRequestURL(keyValue)
 	if err != nil {
-		return nil, newEnrichmentError(
+		return nil, 0, newEnrichmentError(
 			ErrCodeEnrichmentHTTPError,
 			fmt.Sprintf("enrichment failed to build request URL: %v", err),
 			recordIdx, m.endpoint, 0, keyValue,
 		)
 	}
 
+	// Create and configure HTTP request
+	req, err := m.buildHTTPRequest(ctx, requestURL, keyValue, recordIdx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Execute request
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		classifiedErr := errhandling.ClassifyNetworkError(err)
+		return nil, 0, newEnrichmentError(
+			ErrCodeEnrichmentHTTPError,
+			fmt.Sprintf("enrichment HTTP request failed: %v", classifiedErr),
+			recordIdx, m.endpoint, 0, keyValue,
+		)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.Warn("failed to close enrichment response body",
+				slog.String("error", closeErr.Error()),
+			)
+		}
+	}()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, newEnrichmentError(
+			ErrCodeEnrichmentHTTPError,
+			fmt.Sprintf("enrichment failed to read response: %v", err),
+			recordIdx, m.endpoint, resp.StatusCode, keyValue,
+		)
+	}
+
+	// Check for HTTP errors
+	if resp.StatusCode >= 400 {
+		bodySnippet := string(body)
+		if len(bodySnippet) > 200 {
+			bodySnippet = bodySnippet[:200] + "..."
+		}
+		return nil, resp.StatusCode, newEnrichmentError(
+			ErrCodeEnrichmentHTTPError,
+			fmt.Sprintf("enrichment HTTP error %d: %s", resp.StatusCode, bodySnippet),
+			recordIdx, m.endpoint, resp.StatusCode, keyValue,
+		)
+	}
+
+	return body, resp.StatusCode, nil
+}
+
+// buildHTTPRequest creates and configures an HTTP request with headers and authentication.
+func (m *EnrichmentModule) buildHTTPRequest(ctx context.Context, requestURL, keyValue string, recordIdx int) (*http.Request, error) {
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -598,9 +704,11 @@ func (m *EnrichmentModule) fetchEnrichmentData(ctx context.Context, keyValue str
 		)
 	}
 
-	// Set headers
+	// Set default headers
 	req.Header.Set("User-Agent", "Canectors-Runtime/1.0")
 	req.Header.Set("Accept", "application/json")
+
+	// Set custom headers
 	for key, value := range m.headers {
 		req.Header.Set(key, value)
 	}
@@ -621,79 +729,59 @@ func (m *EnrichmentModule) fetchEnrichmentData(ctx context.Context, keyValue str
 		}
 	}
 
-	// Execute request
-	resp, err := m.httpClient.Do(req)
-	if err != nil {
-		classifiedErr := errhandling.ClassifyNetworkError(err)
-		return nil, newEnrichmentError(
-			ErrCodeEnrichmentHTTPError,
-			fmt.Sprintf("enrichment HTTP request failed: %v", classifiedErr),
-			recordIdx, m.endpoint, 0, keyValue,
-		)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.Warn("failed to close enrichment response body",
-				slog.String("error", closeErr.Error()),
-			)
-		}
-	}()
+	return req, nil
+}
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, newEnrichmentError(
-			ErrCodeEnrichmentHTTPError,
-			fmt.Sprintf("enrichment failed to read response: %v", err),
-			recordIdx, m.endpoint, resp.StatusCode, keyValue,
-		)
-	}
-
-	// Handle HTTP errors
-	if resp.StatusCode >= 400 {
-		bodySnippet := string(body)
-		if len(bodySnippet) > 200 {
-			bodySnippet = bodySnippet[:200] + "..."
-		}
-		return nil, newEnrichmentError(
-			ErrCodeEnrichmentHTTPError,
-			fmt.Sprintf("enrichment HTTP error %d: %s", resp.StatusCode, bodySnippet),
-			recordIdx, m.endpoint, resp.StatusCode, keyValue,
-		)
-	}
-
+// parseResponseData parses the JSON response and extracts the data field if configured.
+func (m *EnrichmentModule) parseResponseData(body []byte, statusCode int, recordIdx int) (map[string]interface{}, error) {
 	// Parse JSON response
 	var responseData map[string]interface{}
 	if err := json.Unmarshal(body, &responseData); err != nil {
 		return nil, newEnrichmentError(
 			ErrCodeEnrichmentJSONParse,
 			fmt.Sprintf("enrichment failed to parse response: %v", err),
-			recordIdx, m.endpoint, resp.StatusCode, keyValue,
+			recordIdx, m.endpoint, statusCode, "",
 		)
 	}
 
 	// Extract data field if configured
 	if m.dataField != "" {
-		if data, ok := responseData[m.dataField]; ok {
-			if dataMap, ok := data.(map[string]interface{}); ok {
-				return dataMap, nil
-			}
-			// If dataField points to an array with single element, use that
-			if dataArr, ok := data.([]interface{}); ok && len(dataArr) == 1 {
-				if dataMap, ok := dataArr[0].(map[string]interface{}); ok {
-					return dataMap, nil
-				}
-			}
-		}
-		// dataField not found or not an object - return empty
+		return m.extractDataField(responseData, recordIdx), nil
+	}
+
+	return responseData, nil
+}
+
+// extractDataField extracts the configured data field from the response.
+// Returns an empty map if the field is not found or invalid.
+func (m *EnrichmentModule) extractDataField(responseData map[string]interface{}, recordIdx int) map[string]interface{} {
+	data, ok := responseData[m.dataField]
+	if !ok {
 		logger.Warn("enrichment dataField not found or invalid",
 			slog.String("data_field", m.dataField),
 			slog.Int("record_index", recordIdx),
 		)
-		return make(map[string]interface{}), nil
+		return make(map[string]interface{})
 	}
 
-	return responseData, nil
+	// If dataField points to a map, return it
+	if dataMap, ok := data.(map[string]interface{}); ok {
+		return dataMap
+	}
+
+	// If dataField points to an array with single element, use that
+	if dataArr, ok := data.([]interface{}); ok && len(dataArr) == 1 {
+		if dataMap, ok := dataArr[0].(map[string]interface{}); ok {
+			return dataMap
+		}
+	}
+
+	// dataField not an object - return empty
+	logger.Warn("enrichment dataField not found or invalid",
+		slog.String("data_field", m.dataField),
+		slog.Int("record_index", recordIdx),
+	)
+	return make(map[string]interface{})
 }
 
 // buildRequestURL constructs the HTTP request URL based on the key configuration.

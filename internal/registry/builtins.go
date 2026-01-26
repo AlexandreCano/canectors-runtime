@@ -103,7 +103,7 @@ func registerBuiltinFilterModules() {
 
 	// enrichment - Dynamic enrichment filter module with HTTP requests and caching
 	RegisterFilter("enrichment", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
-		enrichmentConfig, err := filter.ParseEnrichmentConfig(cfg.Config)
+		enrichmentConfig, err := filter.ParseEnrichmentConfig(cfg.Config, cfg.Authentication)
 		if err != nil {
 			return nil, fmt.Errorf("invalid enrichment config at index %d: %w", index, err)
 		}
