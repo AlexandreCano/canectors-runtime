@@ -275,7 +275,7 @@ func validateKeyConfig(key KeyConfig) error {
 		return newEnrichmentError(ErrCodeEnrichmentKeyMissing, "enrichment key paramType is required", -1, "", 0, "")
 	}
 	if key.ParamType != "query" && key.ParamType != "path" && key.ParamType != "header" {
-		return newEnrichmentError(ErrCodeEnrichmentKeyMissing, "enrichment key paramType must be 'query', 'path', or 'header'", -1, "", 0, "")
+		return newEnrichmentError(ErrCodeEnrichmentKeyInvalid, "enrichment key paramType must be 'query', 'path', or 'header'", -1, "", 0, "")
 	}
 	if key.ParamName == "" {
 		return newEnrichmentError(ErrCodeEnrichmentKeyMissing, "enrichment key paramName is required", -1, "", 0, "")
