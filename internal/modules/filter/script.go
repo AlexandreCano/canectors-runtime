@@ -137,7 +137,7 @@ func NewScriptFromConfig(config ScriptConfig) (*ScriptModule, error) {
 
 	moduleID := "inline"
 	if config.ScriptFile != "" {
-		moduleID = config.ScriptFile
+		moduleID = filepath.Base(config.ScriptFile)
 	}
 
 	vm := goja.New()
