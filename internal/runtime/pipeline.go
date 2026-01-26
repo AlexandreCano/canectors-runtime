@@ -135,7 +135,7 @@ func (e *Executor) SetStateStore(store *persistence.StateStore) {
 }
 
 // persistState saves the execution state after successful pipeline execution.
-// It persists the execution start timestamp and/or maximum ID from records.
+// It persists the execution start timestamp and/or last ID from records (in reception order).
 func (e *Executor) persistState(pipelineID string, executionStart time.Time, records []map[string]interface{}, config *persistence.StatePersistenceConfig) {
 	state := &persistence.State{
 		PipelineID: pipelineID,
