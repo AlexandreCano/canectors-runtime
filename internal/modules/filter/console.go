@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
-	"unsafe"
 
 	"github.com/dop251/goja"
 
@@ -29,21 +28,32 @@ const (
 	placeholderObject   = "[Object]"
 )
 
+// formatSeen tracks seen values for circular-reference detection during formatting.
+// Use objs for *goja.Object identity; use ptrs for map/slice identity (via reflect).
+type formatSeen struct {
+	objs map[*goja.Object]bool
+	ptrs map[uintptr]bool
+}
+
+func newFormatSeen() *formatSeen {
+	return &formatSeen{
+		objs: make(map[*goja.Object]bool),
+		ptrs: make(map[uintptr]bool),
+	}
+}
+
 // jsConsole provides console.log/error/warn/info/debug methods for Goja runtime.
 // It routes JavaScript console output to the Go slog logger with appropriate log levels.
 type jsConsole struct {
-	runtime   *goja.Runtime
-	moduleID  string // Optional identifier for the script module
-	recordIdx *int   // Pointer to current record index (updated during processing)
+	moduleID     string // Optional identifier for the script module
+	recordIdx    int    // Current record index when processing
+	hasRecordIdx bool   // True when recordIdx is valid
 }
 
 // newJSConsole creates a new jsConsole instance and registers it in the Goja runtime.
 // The moduleID is used to identify log messages from this script module.
 func newJSConsole(runtime *goja.Runtime, moduleID string) (*jsConsole, error) {
-	c := &jsConsole{
-		runtime:  runtime,
-		moduleID: moduleID,
-	}
+	c := &jsConsole{moduleID: moduleID}
 
 	console := runtime.NewObject()
 	for name, fn := range map[string]func(goja.FunctionCall) goja.Value{
@@ -66,12 +76,13 @@ func newJSConsole(runtime *goja.Runtime, moduleID string) (*jsConsole, error) {
 // SetRecordIndex updates the current record index for log context.
 // This should be called before processing each record.
 func (c *jsConsole) SetRecordIndex(idx int) {
-	c.recordIdx = &idx
+	c.recordIdx = idx
+	c.hasRecordIdx = true
 }
 
 // ClearRecordIndex clears the record index after processing.
 func (c *jsConsole) ClearRecordIndex() {
-	c.recordIdx = nil
+	c.hasRecordIdx = false
 }
 
 // log implements console.log() - logs at Info level
@@ -120,8 +131,8 @@ func (c *jsConsole) logWithLevel(level slog.Level, args []goja.Value) {
 	if c.moduleID != "" {
 		attrs = append(attrs, slog.String("module_id", c.moduleID))
 	}
-	if c.recordIdx != nil {
-		attrs = append(attrs, slog.Int("record_index", *c.recordIdx))
+	if c.hasRecordIdx {
+		attrs = append(attrs, slog.Int("record_index", c.recordIdx))
 	}
 
 	// Log using appropriate level
@@ -148,7 +159,7 @@ func (c *jsConsole) formatArgs(args []goja.Value) string {
 
 	parts := make([]string, 0, len(args))
 	for _, arg := range args {
-		parts = append(parts, c.formatValue(arg, 0, make(map[uintptr]bool)))
+		parts = append(parts, c.formatValue(arg, 0, newFormatSeen()))
 	}
 
 	return strings.Join(parts, " ")
@@ -156,7 +167,7 @@ func (c *jsConsole) formatArgs(args []goja.Value) string {
 
 // formatValue converts a single JavaScript value to string.
 // Handles objects, arrays, and primitives with circular reference detection.
-func (c *jsConsole) formatValue(val goja.Value, depth int, seen map[uintptr]bool) string {
+func (c *jsConsole) formatValue(val goja.Value, depth int, seen *formatSeen) string {
 	if val == nil || goja.IsUndefined(val) {
 		return "undefined"
 	}
@@ -192,18 +203,17 @@ func (c *jsConsole) formatValue(val goja.Value, depth int, seen map[uintptr]bool
 }
 
 // formatArray formats a JavaScript array to string.
-// Uses object identity (uintptr of *goja.Object) for circular reference detection.
-func (c *jsConsole) formatArray(val goja.Value, depth int, seen map[uintptr]bool) string {
+// Uses map[*goja.Object]bool for cycle detection; *goja.Object is comparable.
+func (c *jsConsole) formatArray(val goja.Value, depth int, seen *formatSeen) string {
 	obj, ok := val.(*goja.Object)
 	if !ok {
 		return "[]"
 	}
 
-	ptr := uintptr(unsafe.Pointer(obj))
-	if seen[ptr] && depth > 0 {
+	if seen.objs[obj] && depth > 0 {
 		return placeholderCircular
 	}
-	seen[ptr] = true
+	seen.objs[obj] = true
 
 	lengthVal := obj.Get("length")
 	if lengthVal == nil || goja.IsUndefined(lengthVal) {
@@ -235,20 +245,20 @@ func (c *jsConsole) formatArray(val goja.Value, depth int, seen map[uintptr]bool
 }
 
 // formatObject formats a Go map to JSON-like string with circular reference handling.
-func (c *jsConsole) formatObject(obj map[string]interface{}, depth int, seen map[uintptr]bool) string {
+func (c *jsConsole) formatObject(obj map[string]interface{}, depth int, seen *formatSeen) string {
 	return c.formatMapSafe(obj, depth, seen)
 }
 
 // formatMapSafe serializes a map with circular reference detection.
-func (c *jsConsole) formatMapSafe(m map[string]interface{}, depth int, seen map[uintptr]bool) string {
+func (c *jsConsole) formatMapSafe(m map[string]interface{}, depth int, seen *formatSeen) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
 	ptr := reflect.ValueOf(m).Pointer()
-	if seen[ptr] {
+	if seen.ptrs[ptr] {
 		return placeholderCircular
 	}
-	seen[ptr] = true
+	seen.ptrs[ptr] = true
 
 	var b strings.Builder
 	b.WriteByte('{')
@@ -276,7 +286,7 @@ func quoteJSONKey(s string) string {
 }
 
 // formatGoValue formats a Go value (from Export) for logging.
-func (c *jsConsole) formatGoValue(v interface{}, depth int, seen map[uintptr]bool) string {
+func (c *jsConsole) formatGoValue(v interface{}, depth int, seen *formatSeen) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
@@ -302,15 +312,21 @@ func (c *jsConsole) formatGoValue(v interface{}, depth int, seen map[uintptr]boo
 }
 
 // formatSliceSafe serializes a slice with circular reference detection.
-func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, seen map[uintptr]bool) string {
+// Short-circuits for len==0; skips seen-tracking when ptr==0 (empty/nil slices).
+func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, seen *formatSeen) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
-	ptr := reflect.ValueOf(s).Pointer()
-	if seen[ptr] {
-		return placeholderCircular
+	if len(s) == 0 {
+		return "[]"
 	}
-	seen[ptr] = true
+	ptr := reflect.ValueOf(s).Pointer()
+	if ptr != 0 {
+		if seen.ptrs[ptr] {
+			return placeholderCircular
+		}
+		seen.ptrs[ptr] = true
+	}
 
 	parts := make([]string, 0, len(s))
 	for _, v := range s {
@@ -320,7 +336,7 @@ func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, seen map[uintptr
 }
 
 // formatGojaObject formats a Goja object to string.
-func (c *jsConsole) formatGojaObject(obj *goja.Object, depth int, seen map[uintptr]bool) string {
+func (c *jsConsole) formatGojaObject(obj *goja.Object, depth int, seen *formatSeen) string {
 	if obj.ClassName() == "Array" {
 		return c.formatArray(obj, depth, seen)
 	}

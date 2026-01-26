@@ -127,7 +127,7 @@ func TestJSConsole_ObjectFormatting(t *testing.T) {
 	}
 
 	objVal := vm.Get("testObj")
-	result := c.formatValue(objVal, 0, make(map[uintptr]bool))
+	result := c.formatValue(objVal, 0, newFormatSeen())
 
 	if !strings.Contains(result, "name") || !strings.Contains(result, "test") {
 		t.Errorf("expected object to contain 'name' and 'test', got '%s'", result)
@@ -145,7 +145,7 @@ func TestJSConsole_ArrayFormatting(t *testing.T) {
 	}
 
 	arrVal := vm.Get("testArr")
-	result := c.formatValue(arrVal, 0, make(map[uintptr]bool))
+	result := c.formatValue(arrVal, 0, newFormatSeen())
 
 	if !strings.Contains(result, "1") || !strings.Contains(result, "four") {
 		t.Errorf("expected array to contain '1' and 'four', got '%s'", result)
@@ -168,7 +168,7 @@ func TestJSConsole_NullUndefined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := c.formatValue(tt.value, 0, make(map[uintptr]bool))
+			result := c.formatValue(tt.value, 0, newFormatSeen())
 			if result != tt.expected {
 				t.Errorf("expected '%s', got '%s'", tt.expected, result)
 			}
@@ -184,10 +184,25 @@ func TestJSConsole_CircularReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	obj := vm.Get("o")
-	seen := make(map[uintptr]bool)
-	out := c.formatValue(obj, 0, seen)
+	out := c.formatValue(obj, 0, newFormatSeen())
 	if !strings.Contains(out, placeholderCircular) {
 		t.Errorf("expected %q in output for self-ref object, got %q", placeholderCircular, out)
+	}
+}
+
+// TestJSConsole_EmptySlicesNotCircular regresses on empty-slice ptr==0: [[], []] must not mark second as [Circular].
+// formatSliceSafe uses reflect.ValueOf(s).Pointer(), which is 0 for empty slices; we short-circuit and skip seen-tracking.
+func TestJSConsole_EmptySlicesNotCircular(t *testing.T) {
+	vm := goja.New()
+	c := mustJSConsole(t, vm)
+	// Use formatGoValue so we hit formatSliceSafe (Go slices); formatValue->formatArray uses seen.objs for JS arrays.
+	inner := []interface{}{[]interface{}{}, []interface{}{}}
+	out := c.formatGoValue(inner, 0, newFormatSeen())
+	if strings.Contains(out, placeholderCircular) {
+		t.Errorf("[[], []] must not contain %q; got %q", placeholderCircular, out)
+	}
+	if out != "[[], []]" {
+		t.Errorf("expected [[], []], got %q", out)
 	}
 }
 
@@ -209,7 +224,7 @@ func TestJSConsole_DepthLimit(t *testing.T) {
 	}
 
 	deepVal := vm.Get("deep")
-	result := c.formatValue(deepVal, 0, make(map[uintptr]bool))
+	result := c.formatValue(deepVal, 0, newFormatSeen())
 
 	// Should not cause infinite recursion or stack overflow
 	if result == "" {
@@ -222,20 +237,20 @@ func TestJSConsole_RecordIndex(t *testing.T) {
 	c := mustJSConsole(t, vm)
 
 	// Initially no record index
-	if c.recordIdx != nil {
-		t.Error("recordIdx should initially be nil")
+	if c.hasRecordIdx {
+		t.Error("hasRecordIdx should be false initially")
 	}
 
 	// Set record index
 	c.SetRecordIndex(5)
-	if c.recordIdx == nil || *c.recordIdx != 5 {
-		t.Error("recordIdx should be 5")
+	if !c.hasRecordIdx || c.recordIdx != 5 {
+		t.Error("hasRecordIdx should be true, recordIdx should be 5")
 	}
 
 	// Clear record index
 	c.ClearRecordIndex()
-	if c.recordIdx != nil {
-		t.Error("recordIdx should be nil after clear")
+	if c.hasRecordIdx {
+		t.Error("hasRecordIdx should be false after clear")
 	}
 }
 
