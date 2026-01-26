@@ -2,15 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://canectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json",
   "title": "Canectors Pipeline Configuration Schema",
-  "description": "Schema for defining declarative modular pipeline configurations. Supports Input → Filter → Output pattern with extensible module types.",
+  "description": "Schema for defining declarative modular pipeline configurations. Supports Input \u2192 Filter \u2192 Output pattern with extensible module types.",
   "type": "object",
-  "required": ["connector"],
+  "required": [
+    "connector"
+  ],
   "properties": {
     "schemaVersion": {
       "type": "string",
       "description": "Version of the schema this configuration conforms to.",
       "pattern": "^\\d+\\.\\d+\\.\\d+$",
-      "examples": ["1.0.0", "1.1.0"]
+      "examples": [
+        "1.0.0",
+        "1.1.0"
+      ]
     },
     "connector": {
       "$ref": "#/$defs/connector"
@@ -20,7 +25,6 @@
     }
   },
   "additionalProperties": false,
-
   "$defs": {
     "connections": {
       "type": "object",
@@ -29,21 +33,28 @@
         "$ref": "#/$defs/connection"
       }
     },
-
     "connection": {
       "type": "object",
       "description": "A reusable connection configuration.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
           "description": "Connection type.",
-          "examples": ["http", "sql", "kafka"]
+          "examples": [
+            "http",
+            "sql",
+            "kafka"
+          ]
         },
         "baseUrl": {
           "type": "string",
           "description": "Base URL for HTTP connections. Module endpoint is appended unless endpoint is absolute URL.",
-          "examples": ["https://api.example.com"]
+          "examples": [
+            "https://api.example.com"
+          ]
         },
         "auth": {
           "$ref": "#/$defs/authentication"
@@ -61,11 +72,16 @@
       },
       "additionalProperties": true
     },
-
     "connector": {
       "type": "object",
       "description": "The connector pipeline configuration.",
-      "required": ["name", "version", "input", "filters", "output"],
+      "required": [
+        "name",
+        "version",
+        "input",
+        "filters",
+        "output"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -85,13 +101,18 @@
         },
         "tags": {
           "type": "array",
-          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
           "uniqueItems": true
         },
         "labels": {
           "type": "object",
           "description": "Key-value metadata (team, domain, etc.).",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "defaults": {
           "$ref": "#/$defs/moduleDefaults",
@@ -102,7 +123,9 @@
         },
         "filters": {
           "type": "array",
-          "items": { "$ref": "#/$defs/filterModule" }
+          "items": {
+            "$ref": "#/$defs/filterModule"
+          }
         },
         "output": {
           "$ref": "#/$defs/outputModule"
@@ -115,7 +138,6 @@
       },
       "additionalProperties": true
     },
-
     "moduleDefaults": {
       "type": "object",
       "description": "Default settings applied to all modules unless overridden at module level.",
@@ -123,7 +145,11 @@
         "onError": {
           "type": "string",
           "description": "Default error action.",
-          "enum": ["fail", "skip", "log"],
+          "enum": [
+            "fail",
+            "skip",
+            "log"
+          ],
           "default": "fail"
         },
         "timeoutMs": {
@@ -138,7 +164,6 @@
       },
       "additionalProperties": true
     },
-
     "retryConfig": {
       "type": "object",
       "description": "Retry configuration. Precedence: module > defaults > errorHandling.",
@@ -172,8 +197,18 @@
         "retryableStatusCodes": {
           "type": "array",
           "description": "HTTP status codes that trigger retry.",
-          "items": { "type": "integer", "minimum": 400, "maximum": 599 },
-          "default": [429, 500, 502, 503, 504]
+          "items": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "default": [
+            429,
+            500,
+            502,
+            503,
+            504
+          ]
         },
         "useRetryAfterHeader": {
           "type": "boolean",
@@ -188,7 +223,6 @@
       },
       "additionalProperties": true
     },
-
     "moduleBase": {
       "type": "object",
       "description": "Common properties for all modules.",
@@ -214,7 +248,9 @@
         },
         "tags": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "notes": {
           "type": "string",
@@ -223,7 +259,11 @@
         "onError": {
           "type": "string",
           "description": "Error action for this module. Overrides defaults.",
-          "enum": ["fail", "skip", "log"]
+          "enum": [
+            "fail",
+            "skip",
+            "log"
+          ]
         },
         "timeoutMs": {
           "type": "integer",
@@ -236,11 +276,12 @@
         }
       }
     },
-
     "inputModule": {
       "type": "object",
       "description": "Input module configuration.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -264,56 +305,114 @@
           "description": "CRON expression for polling input types. Required for httpPolling, not allowed for webhook. Validated at runtime.",
           "minLength": 9
         },
-        "method": { "$ref": "#/$defs/httpMethod" },
-        "headers": { "$ref": "#/$defs/httpHeaders" },
+        "method": {
+          "$ref": "#/$defs/httpMethod"
+        },
+        "headers": {
+          "$ref": "#/$defs/httpHeaders"
+        },
         "queryParams": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
-        "authentication": { "$ref": "#/$defs/authentication" },
-        "pagination": { "$ref": "#/$defs/pagination" }
+        "authentication": {
+          "$ref": "#/$defs/authentication"
+        },
+        "pagination": {
+          "$ref": "#/$defs/pagination"
+        }
       },
       "additionalProperties": true,
       "allOf": [
-        { "$ref": "#/$defs/moduleBase" },
         {
-          "if": { "properties": { "type": { "const": "httpPolling" } }, "required": ["type"] },
-          "then": { "required": ["endpoint", "schedule"] }
+          "$ref": "#/$defs/moduleBase"
         },
         {
-          "if": { "properties": { "type": { "const": "webhook" } }, "required": ["type"] },
+          "if": {
+            "properties": {
+              "type": {
+                "const": "httpPolling"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
           "then": {
-            "required": ["path"],
-            "not": { "required": ["schedule"] }
+            "required": [
+              "endpoint",
+              "schedule"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "webhook"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "path"
+            ],
+            "not": {
+              "required": [
+                "schedule"
+              ]
+            }
           }
         }
       ]
     },
-
     "pagination": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["cursor", "offset", "page", "link"]
+          "enum": [
+            "cursor",
+            "offset",
+            "page",
+            "link"
+          ]
         },
-        "cursorPath": { "type": "string" },
-        "cursorParam": { "type": "string" },
-        "itemsPath": { "type": "string" },
-        "limitParam": { "type": "string" },
-        "limit": { "type": "integer", "minimum": 1, "default": 100 }
+        "cursorPath": {
+          "type": "string"
+        },
+        "cursorParam": {
+          "type": "string"
+        },
+        "itemsPath": {
+          "type": "string"
+        },
+        "limitParam": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100
+        }
       },
       "additionalProperties": true
     },
-
     "filterModule": {
       "type": "object",
       "description": "Filter module configuration.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "description": "Filter type. Canonical: mapping, condition, script.",
+          "description": "Filter type. Canonical: mapping, condition, script, enrichment.",
           "minLength": 1
         },
         "script": {
@@ -325,18 +424,33 @@
           "type": "string",
           "description": "Path to a JavaScript file for script filter. Must define a transform(record) function. Use either 'script' or 'scriptFile', not both."
         },
-        "connectionRef": { "type": "string" },
-        "sourceSchema": { "type": "string" },
-        "targetSchema": { "type": "string" },
+        "connectionRef": {
+          "type": "string"
+        },
+        "sourceSchema": {
+          "type": "string"
+        },
+        "targetSchema": {
+          "type": "string"
+        },
         "mappings": {
           "type": "array",
-          "items": { "$ref": "#/$defs/fieldMapping" }
+          "items": {
+            "$ref": "#/$defs/fieldMapping"
+          }
         },
-        "mapping": { "$ref": "#/$defs/advancedMapping" },
+        "mapping": {
+          "$ref": "#/$defs/advancedMapping"
+        },
         "lang": {
           "type": "string",
           "description": "Expression language for conditions.",
-          "enum": ["cel", "jsonata", "jmespath", "simple"],
+          "enum": [
+            "cel",
+            "jsonata",
+            "jmespath",
+            "simple"
+          ],
           "default": "simple"
         },
         "expression": {
@@ -345,141 +459,393 @@
         },
         "onTrue": {
           "type": "string",
-          "enum": ["continue", "skip"],
+          "enum": [
+            "continue",
+            "skip"
+          ],
           "default": "continue"
         },
         "onFalse": {
           "type": "string",
-          "enum": ["continue", "skip"],
+          "enum": [
+            "continue",
+            "skip"
+          ],
           "default": "skip"
         },
         "copies": {
           "type": "array",
-          "items": { "$ref": "#/$defs/cloneCopy" }
+          "items": {
+            "$ref": "#/$defs/cloneCopy"
+          }
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "HTTP endpoint URL for enrichment filter. May contain {paramName} placeholder for path parameters."
+        },
+        "key": {
+          "$ref": "#/$defs/enrichmentKey",
+          "description": "Key configuration for enrichment filter."
+        },
+        "cache": {
+          "$ref": "#/$defs/enrichmentCache",
+          "description": "Cache configuration for enrichment filter."
+        },
+        "mergeStrategy": {
+          "type": "string",
+          "description": "How to merge enrichment data into records.",
+          "enum": [
+            "merge",
+            "replace",
+            "append"
+          ],
+          "default": "merge"
+        },
+        "dataField": {
+          "type": "string",
+          "description": "JSON field containing the data in the enrichment response."
+        },
+        "authentication": {
+          "$ref": "#/$defs/authentication",
+          "description": "Authentication for enrichment HTTP requests."
+        },
+        "headers": {
+          "$ref": "#/$defs/httpHeaders",
+          "description": "Custom headers for enrichment HTTP requests."
         }
       },
       "additionalProperties": true,
       "allOf": [
-        { "$ref": "#/$defs/moduleBase" },
         {
-          "if": { "properties": { "type": { "const": "mapping" } }, "required": ["type"] },
-          "then": { "required": ["mappings"] }
+          "$ref": "#/$defs/moduleBase"
         },
         {
-          "if": { "properties": { "type": { "const": "condition" } }, "required": ["type"] },
-          "then": { "required": ["expression"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "mapping"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "mappings"
+            ]
+          }
         },
         {
-          "if": { "properties": { "type": { "const": "script" } }, "required": ["type"] },
+          "if": {
+            "properties": {
+              "type": {
+                "const": "condition"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "expression"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "script"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
           "then": {
             "allOf": [
               {
                 "anyOf": [
-                  { "required": ["script"] },
-                  { "required": ["scriptFile"] }
+                  {
+                    "required": [
+                      "script"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "scriptFile"
+                    ]
+                  }
                 ]
               },
               {
                 "not": {
-                  "required": ["script", "scriptFile"]
+                  "required": [
+                    "script",
+                    "scriptFile"
+                  ]
                 }
               }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enrichment"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "endpoint",
+              "key"
             ]
           }
         }
       ]
     },
-
+    "enrichmentKey": {
+      "type": "object",
+      "description": "Key extraction configuration for enrichment filter.",
+      "required": [
+        "field",
+        "paramType",
+        "paramName"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Dot-notation path to extract key value from record (e.g., 'customer.id')."
+        },
+        "paramType": {
+          "type": "string",
+          "description": "How to include the key in the HTTP request.",
+          "enum": [
+            "query",
+            "path",
+            "header"
+          ]
+        },
+        "paramName": {
+          "type": "string",
+          "description": "Parameter name to use in the request."
+        }
+      },
+      "additionalProperties": false
+    },
+    "enrichmentCache": {
+      "type": "object",
+      "description": "Cache configuration for enrichment filter.",
+      "properties": {
+        "maxSize": {
+          "type": "integer",
+          "description": "Maximum number of entries in the cache.",
+          "minimum": 1,
+          "default": 1000
+        },
+        "defaultTTL": {
+          "type": "integer",
+          "description": "Default TTL for cache entries in seconds.",
+          "minimum": 1,
+          "default": 300
+        },
+        "key": {
+          "type": "string",
+          "description": "Cache key configuration (optional). If not specified, uses default: endpoint + '::' + keyValue. Can be: a static string, a JSON path expression starting with '$.', or a dot notation path (e.g., 'user.profile.id')."
+        }
+      },
+      "additionalProperties": false
+    },
     "cloneCopy": {
       "type": "object",
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "properties": {
-        "id": { "type": "string" },
-        "select": { "type": "string" },
-        "build": { "type": "object", "additionalProperties": true }
-      },
-      "additionalProperties": true
-    },
-
-    "advancedMapping": {
-      "type": "object",
-      "properties": {
-        "targetRoot": { "type": "string", "default": "$" },
-        "fields": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/fieldMapping" }
+        "id": {
+          "type": "string"
+        },
+        "select": {
+          "type": "string"
+        },
+        "build": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "additionalProperties": true
     },
-
+    "advancedMapping": {
+      "type": "object",
+      "properties": {
+        "targetRoot": {
+          "type": "string",
+          "default": "$"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldMapping"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
     "outputModule": {
       "type": "object",
       "description": "Output module configuration.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
           "description": "Output type. Canonical: httpRequest, multi.",
           "minLength": 1
         },
-        "connectionRef": { "type": "string" },
-        "endpoint": { "type": "string" },
-        "method": { "$ref": "#/$defs/httpMethod" },
-        "headers": { "$ref": "#/$defs/httpHeaders" },
-        "authentication": { "$ref": "#/$defs/authentication" },
-        "request": { "$ref": "#/$defs/httpRequestConfig" },
+        "connectionRef": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/httpMethod"
+        },
+        "headers": {
+          "$ref": "#/$defs/httpHeaders"
+        },
+        "authentication": {
+          "$ref": "#/$defs/authentication"
+        },
+        "request": {
+          "$ref": "#/$defs/httpRequestConfig"
+        },
         "outputs": {
           "type": "array",
           "description": "Sub-outputs for type=multi.",
-          "items": { "$ref": "#/$defs/outputModule" },
+          "items": {
+            "$ref": "#/$defs/outputModule"
+          },
           "minItems": 1
         },
-        "success": { "$ref": "#/$defs/successCondition" }
+        "success": {
+          "$ref": "#/$defs/successCondition"
+        }
       },
       "additionalProperties": true,
       "allOf": [
-        { "$ref": "#/$defs/moduleBase" },
         {
-          "if": { "properties": { "type": { "const": "httpRequest" } }, "required": ["type"] },
-          "then": { "required": ["endpoint", "method"] }
+          "$ref": "#/$defs/moduleBase"
         },
         {
-          "if": { "properties": { "type": { "const": "multi" } }, "required": ["type"] },
-          "then": { "required": ["outputs"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "httpRequest"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "endpoint",
+              "method"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "multi"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "outputs"
+            ]
+          }
         }
       ]
     },
-
     "httpRequestConfig": {
       "type": "object",
       "properties": {
-        "method": { "$ref": "#/$defs/httpMethod" },
-        "path": { "type": "string" },
-        "pathParams": { "type": "object", "additionalProperties": { "type": "string" } },
-        "query": { "type": "object", "additionalProperties": { "type": "string" } },
-        "bodyFrom": { "type": "string" },
-        "headers": { "$ref": "#/$defs/httpHeaders" }
+        "method": {
+          "$ref": "#/$defs/httpMethod"
+        },
+        "path": {
+          "type": "string"
+        },
+        "pathParams": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "query": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "bodyFrom": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/$defs/httpHeaders"
+        }
       },
       "additionalProperties": true
     },
-
     "successCondition": {
       "type": "object",
       "properties": {
-        "lang": { "type": "string", "enum": ["cel", "jsonata", "simple"], "default": "simple" },
-        "expression": { "type": "string" }
+        "lang": {
+          "type": "string",
+          "enum": [
+            "cel",
+            "jsonata",
+            "simple"
+          ],
+          "default": "simple"
+        },
+        "expression": {
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
-
     "fieldMapping": {
       "type": "object",
       "description": "Field mapping. Requires {source, target}.",
-      "required": ["source", "target"],
+      "required": [
+        "source",
+        "target"
+      ],
       "properties": {
-        "source": { "type": "string", "description": "Source field path." },
-        "target": { "type": "string", "description": "Target field path." },
+        "source": {
+          "type": "string",
+          "description": "Source field path."
+        },
+        "target": {
+          "type": "string",
+          "description": "Target field path."
+        },
         "confidence": {
           "type": "number",
           "minimum": 0,
@@ -487,105 +853,201 @@
         },
         "transforms": {
           "type": "array",
-          "items": { "$ref": "#/$defs/transformOp" }
+          "items": {
+            "$ref": "#/$defs/transformOp"
+          }
         },
         "defaultValue": {},
         "onMissing": {
           "type": "string",
-          "enum": ["setNull", "skipField", "useDefault", "fail"],
+          "enum": [
+            "setNull",
+            "skipField",
+            "useDefault",
+            "fail"
+          ],
           "default": "setNull"
         }
       },
       "additionalProperties": true
     },
-
     "transformOp": {
       "type": "object",
-      "required": ["op"],
+      "required": [
+        "op"
+      ],
       "properties": {
         "op": {
           "type": "string",
           "description": "Operation name.",
-          "examples": ["trim", "lowercase", "uppercase", "dateFormat", "replace", "split", "join", "toString", "toInt", "toFloat", "toBool", "toArray", "toObject"]
+          "examples": [
+            "trim",
+            "lowercase",
+            "uppercase",
+            "dateFormat",
+            "replace",
+            "split",
+            "join",
+            "toString",
+            "toInt",
+            "toFloat",
+            "toBool",
+            "toArray",
+            "toObject"
+          ]
         },
-        "format": { "type": "string" },
-        "pattern": { "type": "string" },
-        "replacement": { "type": "string" },
-        "separator": { "type": "string" }
+        "format": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "replacement": {
+          "type": "string"
+        },
+        "separator": {
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
-
     "authentication": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "oneOf": [
-        { "$ref": "#/$defs/apiKeyAuth" },
-        { "$ref": "#/$defs/bearerAuth" },
-        { "$ref": "#/$defs/oauth2Auth" },
-        { "$ref": "#/$defs/extensibleAuth" }
+        {
+          "$ref": "#/$defs/apiKeyAuth"
+        },
+        {
+          "$ref": "#/$defs/bearerAuth"
+        },
+        {
+          "$ref": "#/$defs/oauth2Auth"
+        },
+        {
+          "$ref": "#/$defs/extensibleAuth"
+        }
       ]
     },
-
     "apiKeyAuth": {
       "type": "object",
-      "required": ["type", "header", "valueRef"],
+      "required": [
+        "type",
+        "header",
+        "valueRef"
+      ],
       "properties": {
-        "type": { "const": "apiKey" },
-        "header": { "type": "string" },
-        "valueRef": { "type": "string", "pattern": "^\\$\\{[A-Z_][A-Z0-9_]*\\}$" }
+        "type": {
+          "const": "apiKey"
+        },
+        "header": {
+          "type": "string"
+        },
+        "valueRef": {
+          "type": "string",
+          "pattern": "^\\$\\{[A-Z_][A-Z0-9_]*\\}$"
+        }
       },
       "additionalProperties": false
     },
-
     "bearerAuth": {
       "type": "object",
-      "required": ["type", "token"],
+      "required": [
+        "type",
+        "token"
+      ],
       "properties": {
-        "type": { "const": "bearer" },
-        "token": { "type": "string" }
+        "type": {
+          "const": "bearer"
+        },
+        "token": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
-
     "oauth2Auth": {
       "type": "object",
       "description": "OAuth2 authentication. Use either clientId or clientIdRef (not both), same for clientSecret.",
-      "required": ["type", "tokenUrl"],
+      "required": [
+        "type",
+        "tokenUrl"
+      ],
       "properties": {
-        "type": { "enum": ["oauth2Basic", "oauth2_client_credentials"] },
-        "tokenUrl": { "type": "string", "format": "uri" },
-        "clientIdRef": { "type": "string", "description": "Reference to env var: ${VAR_NAME}" },
-        "clientId": { "type": "string", "description": "Direct value (avoid in production)" },
-        "clientSecretRef": { "type": "string", "description": "Reference to env var: ${VAR_NAME}" },
-        "clientSecret": { "type": "string", "description": "Direct value (avoid in production)" },
-        "scope": { "type": "string" }
+        "type": {
+          "enum": [
+            "oauth2Basic",
+            "oauth2_client_credentials"
+          ]
+        },
+        "tokenUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "clientIdRef": {
+          "type": "string",
+          "description": "Reference to env var: ${VAR_NAME}"
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Direct value (avoid in production)"
+        },
+        "clientSecretRef": {
+          "type": "string",
+          "description": "Reference to env var: ${VAR_NAME}"
+        },
+        "clientSecret": {
+          "type": "string",
+          "description": "Direct value (avoid in production)"
+        },
+        "scope": {
+          "type": "string"
+        }
       },
       "allOf": [
         {
-          "not": { "required": ["clientId", "clientIdRef"] },
+          "not": {
+            "required": [
+              "clientId",
+              "clientIdRef"
+            ]
+          },
           "errorMessage": "Use either clientId or clientIdRef, not both"
         },
         {
-          "not": { "required": ["clientSecret", "clientSecretRef"] },
+          "not": {
+            "required": [
+              "clientSecret",
+              "clientSecretRef"
+            ]
+          },
           "errorMessage": "Use either clientSecret or clientSecretRef, not both"
         }
       ],
       "additionalProperties": false
     },
-
     "extensibleAuth": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "not": { "enum": ["apiKey", "bearer", "oauth2Basic", "oauth2_client_credentials"] }
+          "not": {
+            "enum": [
+              "apiKey",
+              "bearer",
+              "oauth2Basic",
+              "oauth2_client_credentials"
+            ]
+          }
         }
       },
       "additionalProperties": true
     },
-
     "errorHandling": {
       "type": "object",
       "description": "DEPRECATED: Use connector.defaults instead. Kept for backward compatibility.",
@@ -617,27 +1079,47 @@
         },
         "retryableStatusCodes": {
           "type": "array",
-          "items": { "type": "integer", "minimum": 400, "maximum": 599 },
-          "default": [429, 500, 502, 503, 504]
+          "items": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "default": [
+            429,
+            500,
+            502,
+            503,
+            504
+          ]
         },
         "onError": {
           "type": "string",
-          "enum": ["fail", "skip", "log"],
+          "enum": [
+            "fail",
+            "skip",
+            "log"
+          ],
           "default": "fail"
         }
       },
       "additionalProperties": true
     },
-
     "httpMethod": {
       "type": "string",
-      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
       "default": "GET"
     },
-
     "httpHeaders": {
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   }
 }

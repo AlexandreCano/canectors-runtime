@@ -532,6 +532,7 @@ The configuration file uses a simple structure with Input, Filters (optional), a
 - **Mapping**: Field-to-field mapping with transformations (formatDate, toFloat, etc.)
 - **Condition**: Filter records based on expressions (`status == 'active' && price > 0`)
 - **Script**: JavaScript transformation using Goja for complex business logic
+- **Enrichment**: Dynamic enrichment with HTTP requests and caching
 
 ##### Script Filter Module
 
@@ -574,6 +575,77 @@ filters:
 - Goja is sandboxed (no file system, network access)
 - Scripts are compiled once at initialization for performance
 - Script file paths are validated before reading
+
+##### Enrichment Filter Module
+
+The enrichment filter module enriches records with additional data fetched from external APIs. It supports configurable caching to reduce redundant API calls and supports all authentication types.
+
+**Configuration:**
+```yaml
+filters:
+  - type: enrichment
+    endpoint: https://api.example.com/customers/{id}
+    key:
+      field: customerId        # Dot-notation path to extract key from record
+      paramType: path          # How to include key: query, path, or header
+      paramName: id            # Parameter name (matches {id} in endpoint)
+    authentication:            # Optional: same auth types as input modules
+      type: api-key
+      credentials:
+        key: ${API_KEY}
+        headerName: X-API-Key
+    cache:                     # Optional: cache configuration
+      maxSize: 1000            # Maximum cache entries (default: 1000)
+      defaultTTL: 300          # Cache TTL in seconds (default: 300 = 5 minutes)
+    mergeStrategy: merge       # Optional: merge (default), replace, append
+    dataField: data            # Optional: extract data from nested field
+    onError: fail              # Optional: fail (default), skip, log
+    timeoutMs: 5000            # Optional: request timeout (default: 30000)
+    headers:                  # Optional: custom headers
+      Accept: application/json
+```
+
+**Key Configuration:**
+- `field`: Dot-notation path to extract the key value from the record (e.g., `customer.id`, `order.customerId`)
+- `paramType`: How to include the key in the HTTP request:
+  - `query`: Adds as query parameter (e.g., `?id=value`)
+  - `path`: Replaces `{paramName}` placeholder in endpoint URL
+  - `header`: Adds as HTTP header
+- `paramName`: The parameter name to use (must match placeholder in endpoint for `path` type)
+
+**Cache Configuration:**
+- Cache is scoped per filter module instance (not shared across instances)
+- Uses LRU (Least Recently Used) eviction when size limit is reached
+- Cache entries expire according to TTL configuration
+- Only successful responses are cached (errors are not cached)
+- **Cache Key**: Configurable via `cache.key` (optional):
+  - If not specified: uses `endpoint + "::" + keyValue` (default behavior)
+  - Static string: `"my-cache-key"` (all records share same cache entry)
+  - JSON path: `"$.customerId"` or `"customerId"` (extracts value from record)
+  - Dot notation: `"user.profile.id"` (extracts nested value from record)
+  - If path not found, falls back to default behavior
+
+**Merge Strategies:**
+- `merge` (default): Deep merge - adds/updates fields recursively, preserves nested structures
+- `replace`: Overwrites matching fields, preserves non-matching original fields
+- `append`: Adds enrichment data under `_enrichment` key, preserves all original fields
+
+**Security Considerations:**
+- **Rate Limiting**: The enrichment module does not implement built-in rate limiting. For high-volume scenarios, consider:
+  - Implementing rate limiting at the API gateway level
+  - Using appropriate cache TTL to reduce request frequency
+  - Configuring reasonable `timeoutMs` values to prevent hanging requests
+- **Cache Size Limits**: The `maxSize` configuration prevents memory exhaustion (DoS protection). Default is 1000 entries per filter instance.
+- **Authentication**: All authentication types are supported (API key, Bearer, Basic, OAuth2). Credentials are never logged.
+- **Error Handling**: Failed requests are not cached. Use `onError: skip` or `onError: log` for graceful degradation.
+
+**Example Use Cases:**
+- Enrich orders with customer details from CRM API
+- Add product information to order items
+- Fetch geolocation data for addresses
+- Lookup user preferences or settings
+
+**See also:** `configs/examples/17-filters-enrichment.yaml` for a complete example.
 
 #### Supported Output Modes
 

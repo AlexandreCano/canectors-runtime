@@ -100,6 +100,19 @@ func registerBuiltinFilterModules() {
 		}
 		return module, nil
 	})
+
+	// enrichment - Dynamic enrichment filter module with HTTP requests and caching
+	RegisterFilter("enrichment", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
+		enrichmentConfig, err := filter.ParseEnrichmentConfig(cfg.Config, cfg.Authentication)
+		if err != nil {
+			return nil, fmt.Errorf("invalid enrichment config at index %d: %w", index, err)
+		}
+		module, err := filter.NewEnrichmentFromConfig(enrichmentConfig)
+		if err != nil {
+			return nil, fmt.Errorf("invalid enrichment config at index %d: %w", index, err)
+		}
+		return module, nil
+	})
 }
 
 // registerBuiltinOutputModules registers all built-in output module types.
