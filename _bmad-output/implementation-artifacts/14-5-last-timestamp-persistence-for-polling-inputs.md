@@ -34,7 +34,7 @@ so that I can ensure reliable resumption of data polling after restarts, avoidin
    **And** The runtime uses the ID to filter or query records (if the API supports ID-based filtering, e.g., `?after_id=12345`)
    **And** The runtime only processes records with ID greater than the last processed ID
    **And** If no previous ID exists, the runtime processes all records from the first execution
-   **And** The runtime extracts the maximum ID from processed records and persists it after successful execution
+   **And** The runtime extracts the ID from the last processed record (in reception order) and persists it after successful execution
 
 4. **Given** I have a connector with state persistence (timestamp and/or ID) that has stored state
    **When** The runtime restarts or the pipeline is re-executed
