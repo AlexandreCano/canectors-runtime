@@ -28,15 +28,16 @@ const (
 	placeholderObject   = "[Object]"
 )
 
-// formatSeen tracks seen values for circular-reference detection during formatting.
-// Use objs for *goja.Object identity; use ptrs for map/slice identity (via reflect).
-type formatSeen struct {
+// formatPath tracks the current recursion path for circular-reference detection.
+// Only values on the path (push before descend, pop on return) count as cycles.
+// Repeated refs like [a, a] or {x: a, y: a} are not circular.
+type formatPath struct {
 	objs map[*goja.Object]bool
 	ptrs map[uintptr]bool
 }
 
-func newFormatSeen() *formatSeen {
-	return &formatSeen{
+func newFormatPath() *formatPath {
+	return &formatPath{
 		objs: make(map[*goja.Object]bool),
 		ptrs: make(map[uintptr]bool),
 	}
@@ -159,7 +160,7 @@ func (c *jsConsole) formatArgs(args []goja.Value) string {
 
 	parts := make([]string, 0, len(args))
 	for _, arg := range args {
-		parts = append(parts, c.formatValue(arg, 0, newFormatSeen()))
+		parts = append(parts, c.formatValue(arg, 0, newFormatPath()))
 	}
 
 	return strings.Join(parts, " ")
@@ -167,7 +168,7 @@ func (c *jsConsole) formatArgs(args []goja.Value) string {
 
 // formatValue converts a single JavaScript value to string.
 // Handles objects, arrays, and primitives with circular reference detection.
-func (c *jsConsole) formatValue(val goja.Value, depth int, seen *formatSeen) string {
+func (c *jsConsole) formatValue(val goja.Value, depth int, path *formatPath) string {
 	if val == nil || goja.IsUndefined(val) {
 		return "undefined"
 	}
@@ -189,13 +190,12 @@ func (c *jsConsole) formatValue(val goja.Value, depth int, seen *formatSeen) str
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		return fmt.Sprintf("%v", v)
 	case []interface{}:
-		return c.formatArray(val, depth, seen)
+		return c.formatArray(val, depth, path)
 	case map[string]interface{}:
-		return c.formatObject(v, depth, seen)
+		return c.formatObject(v, depth, path)
 	default:
-		// Try to get the object for further inspection
 		if obj, ok := val.(*goja.Object); ok {
-			return c.formatGojaObject(obj, depth, seen)
+			return c.formatGojaObject(obj, depth, path)
 		}
 		// Fallback to string representation
 		return val.String()
@@ -203,17 +203,18 @@ func (c *jsConsole) formatValue(val goja.Value, depth int, seen *formatSeen) str
 }
 
 // formatArray formats a JavaScript array to string.
-// Uses map[*goja.Object]bool for cycle detection; *goja.Object is comparable.
-func (c *jsConsole) formatArray(val goja.Value, depth int, seen *formatSeen) string {
+// Tracks path (push before descend, pop on return) so only true cycles become [Circular].
+func (c *jsConsole) formatArray(val goja.Value, depth int, path *formatPath) string {
 	obj, ok := val.(*goja.Object)
 	if !ok {
 		return "[]"
 	}
 
-	if seen.objs[obj] && depth > 0 {
+	if path.objs[obj] && depth > 0 {
 		return placeholderCircular
 	}
-	seen.objs[obj] = true
+	path.objs[obj] = true
+	defer delete(path.objs, obj)
 
 	lengthVal := obj.Get("length")
 	if lengthVal == nil || goja.IsUndefined(lengthVal) {
@@ -230,7 +231,7 @@ func (c *jsConsole) formatArray(val goja.Value, depth int, seen *formatSeen) str
 		parts := make([]string, 0, maxElements+1)
 		for i := 0; i < maxElements; i++ {
 			elem := obj.Get(fmt.Sprintf("%d", i))
-			parts = append(parts, c.formatValue(elem, depth+1, seen))
+			parts = append(parts, c.formatValue(elem, depth+1, path))
 		}
 		parts = append(parts, fmt.Sprintf("... %d more items", length-maxElements))
 		return "[" + strings.Join(parts, ", ") + "]"
@@ -239,26 +240,28 @@ func (c *jsConsole) formatArray(val goja.Value, depth int, seen *formatSeen) str
 	parts := make([]string, 0, length)
 	for i := 0; i < length; i++ {
 		elem := obj.Get(fmt.Sprintf("%d", i))
-		parts = append(parts, c.formatValue(elem, depth+1, seen))
+		parts = append(parts, c.formatValue(elem, depth+1, path))
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // formatObject formats a Go map to JSON-like string with circular reference handling.
-func (c *jsConsole) formatObject(obj map[string]interface{}, depth int, seen *formatSeen) string {
-	return c.formatMapSafe(obj, depth, seen)
+func (c *jsConsole) formatObject(obj map[string]interface{}, depth int, path *formatPath) string {
+	return c.formatMapSafe(obj, depth, path)
 }
 
 // formatMapSafe serializes a map with circular reference detection.
-func (c *jsConsole) formatMapSafe(m map[string]interface{}, depth int, seen *formatSeen) string {
+// Tracks path (push before descend, pop on return) so only true cycles become [Circular].
+func (c *jsConsole) formatMapSafe(m map[string]interface{}, depth int, path *formatPath) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
 	ptr := reflect.ValueOf(m).Pointer()
-	if seen.ptrs[ptr] {
+	if path.ptrs[ptr] {
 		return placeholderCircular
 	}
-	seen.ptrs[ptr] = true
+	path.ptrs[ptr] = true
+	defer delete(path.ptrs, ptr)
 
 	var b strings.Builder
 	b.WriteByte('{')
@@ -268,10 +271,9 @@ func (c *jsConsole) formatMapSafe(m map[string]interface{}, depth int, seen *for
 			b.WriteString(", ")
 		}
 		first = false
-		// Escape key for JSON-like output
 		b.WriteString(quoteJSONKey(k))
 		b.WriteString(": ")
-		b.WriteString(c.formatGoValue(v, depth+1, seen))
+		b.WriteString(c.formatGoValue(v, depth+1, path))
 	}
 	b.WriteByte('}')
 	return b.String()
@@ -286,7 +288,7 @@ func quoteJSONKey(s string) string {
 }
 
 // formatGoValue formats a Go value (from Export) for logging.
-func (c *jsConsole) formatGoValue(v interface{}, depth int, seen *formatSeen) string {
+func (c *jsConsole) formatGoValue(v interface{}, depth int, path *formatPath) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
@@ -299,9 +301,9 @@ func (c *jsConsole) formatGoValue(v interface{}, depth int, seen *formatSeen) st
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		return fmt.Sprintf("%v", x)
 	case []interface{}:
-		return c.formatSliceSafe(x, depth, seen)
+		return c.formatSliceSafe(x, depth, path)
 	case map[string]interface{}:
-		return c.formatMapSafe(x, depth, seen)
+		return c.formatMapSafe(x, depth, path)
 	default:
 		data, err := json.Marshal(v)
 		if err != nil {
@@ -312,8 +314,9 @@ func (c *jsConsole) formatGoValue(v interface{}, depth int, seen *formatSeen) st
 }
 
 // formatSliceSafe serializes a slice with circular reference detection.
-// Short-circuits for len==0; skips seen-tracking when ptr==0 (empty/nil slices).
-func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, seen *formatSeen) string {
+// Short-circuits for len==0; skips path-tracking when ptr==0 (empty/nil slices).
+// Tracks path (push before descend, pop on return) so only true cycles become [Circular].
+func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, path *formatPath) string {
 	if depth > MaxObjectDepth {
 		return placeholderObject
 	}
@@ -322,29 +325,29 @@ func (c *jsConsole) formatSliceSafe(s []interface{}, depth int, seen *formatSeen
 	}
 	ptr := reflect.ValueOf(s).Pointer()
 	if ptr != 0 {
-		if seen.ptrs[ptr] {
+		if path.ptrs[ptr] {
 			return placeholderCircular
 		}
-		seen.ptrs[ptr] = true
+		path.ptrs[ptr] = true
+		defer delete(path.ptrs, ptr)
 	}
 
 	parts := make([]string, 0, len(s))
 	for _, v := range s {
-		parts = append(parts, c.formatGoValue(v, depth+1, seen))
+		parts = append(parts, c.formatGoValue(v, depth+1, path))
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // formatGojaObject formats a Goja object to string.
-func (c *jsConsole) formatGojaObject(obj *goja.Object, depth int, seen *formatSeen) string {
+func (c *jsConsole) formatGojaObject(obj *goja.Object, depth int, path *formatPath) string {
 	if obj.ClassName() == "Array" {
-		return c.formatArray(obj, depth, seen)
+		return c.formatArray(obj, depth, path)
 	}
 
 	exported := obj.Export()
 	if m, ok := exported.(map[string]interface{}); ok {
-		return c.formatObject(m, depth, seen)
+		return c.formatObject(m, depth, path)
 	}
-	// Use formatGoValue for other types (handles slices, cycles)
-	return c.formatGoValue(exported, depth, seen)
+	return c.formatGoValue(exported, depth, path)
 }

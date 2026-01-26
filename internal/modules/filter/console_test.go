@@ -127,7 +127,7 @@ func TestJSConsole_ObjectFormatting(t *testing.T) {
 	}
 
 	objVal := vm.Get("testObj")
-	result := c.formatValue(objVal, 0, newFormatSeen())
+	result := c.formatValue(objVal, 0, newFormatPath())
 
 	if !strings.Contains(result, "name") || !strings.Contains(result, "test") {
 		t.Errorf("expected object to contain 'name' and 'test', got '%s'", result)
@@ -145,7 +145,7 @@ func TestJSConsole_ArrayFormatting(t *testing.T) {
 	}
 
 	arrVal := vm.Get("testArr")
-	result := c.formatValue(arrVal, 0, newFormatSeen())
+	result := c.formatValue(arrVal, 0, newFormatPath())
 
 	if !strings.Contains(result, "1") || !strings.Contains(result, "four") {
 		t.Errorf("expected array to contain '1' and 'four', got '%s'", result)
@@ -168,7 +168,7 @@ func TestJSConsole_NullUndefined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := c.formatValue(tt.value, 0, newFormatSeen())
+			result := c.formatValue(tt.value, 0, newFormatPath())
 			if result != tt.expected {
 				t.Errorf("expected '%s', got '%s'", tt.expected, result)
 			}
@@ -184,9 +184,40 @@ func TestJSConsole_CircularReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	obj := vm.Get("o")
-	out := c.formatValue(obj, 0, newFormatSeen())
+	out := c.formatValue(obj, 0, newFormatPath())
 	if !strings.Contains(out, placeholderCircular) {
 		t.Errorf("expected %q in output for self-ref object, got %q", placeholderCircular, out)
+	}
+}
+
+// TestJSConsole_RepeatedRefNotCircular regresses on path vs global-seen: [a, a] or {x: a, y: a} must NOT be [Circular].
+func TestJSConsole_RepeatedRefNotCircular(t *testing.T) {
+	vm := goja.New()
+	c := mustJSConsole(t, vm)
+
+	// [a, a] — same object twice
+	_, err := vm.RunString(`var a = {id: 1}; var arr = [a, a];`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arr := vm.Get("arr")
+	out := c.formatValue(arr, 0, newFormatPath())
+	if strings.Contains(out, placeholderCircular) {
+		t.Errorf("[a, a] must not contain %q; got %q", placeholderCircular, out)
+	}
+	if !strings.Contains(out, "id") || !strings.Contains(out, "1") {
+		t.Errorf("expected both elements formatted; got %q", out)
+	}
+
+	// {x: a, y: a} — same object in two keys
+	_, err = vm.RunString(`var b = {n: 2}; var obj = {x: b, y: b};`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj := vm.Get("obj")
+	out2 := c.formatValue(obj, 0, newFormatPath())
+	if strings.Contains(out2, placeholderCircular) {
+		t.Errorf("{x: a, y: a} must not contain %q; got %q", placeholderCircular, out2)
 	}
 }
 
@@ -195,9 +226,9 @@ func TestJSConsole_CircularReference(t *testing.T) {
 func TestJSConsole_EmptySlicesNotCircular(t *testing.T) {
 	vm := goja.New()
 	c := mustJSConsole(t, vm)
-	// Use formatGoValue so we hit formatSliceSafe (Go slices); formatValue->formatArray uses seen.objs for JS arrays.
+	// Use formatGoValue so we hit formatSliceSafe (Go slices); formatValue->formatArray uses path.objs for JS arrays.
 	inner := []interface{}{[]interface{}{}, []interface{}{}}
-	out := c.formatGoValue(inner, 0, newFormatSeen())
+	out := c.formatGoValue(inner, 0, newFormatPath())
 	if strings.Contains(out, placeholderCircular) {
 		t.Errorf("[[], []] must not contain %q; got %q", placeholderCircular, out)
 	}
@@ -224,7 +255,7 @@ func TestJSConsole_DepthLimit(t *testing.T) {
 	}
 
 	deepVal := vm.Get("deep")
-	result := c.formatValue(deepVal, 0, newFormatSeen())
+	result := c.formatValue(deepVal, 0, newFormatPath())
 
 	// Should not cause infinite recursion or stack overflow
 	if result == "" {
