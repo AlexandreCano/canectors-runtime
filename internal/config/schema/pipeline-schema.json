@@ -313,7 +313,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Filter type. Canonical: mapping, condition, script.",
+          "description": "Filter type. Canonical: mapping, condition, script, enrichment.",
           "minLength": 1
         },
         "script": {
@@ -356,6 +356,36 @@
         "copies": {
           "type": "array",
           "items": { "$ref": "#/$defs/cloneCopy" }
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "HTTP endpoint URL for enrichment filter. May contain {paramName} placeholder for path parameters."
+        },
+        "key": {
+          "$ref": "#/$defs/enrichmentKey",
+          "description": "Key configuration for enrichment filter."
+        },
+        "cache": {
+          "$ref": "#/$defs/enrichmentCache",
+          "description": "Cache configuration for enrichment filter."
+        },
+        "mergeStrategy": {
+          "type": "string",
+          "description": "How to merge enrichment data into records.",
+          "enum": ["merge", "replace", "append"],
+          "default": "merge"
+        },
+        "dataField": {
+          "type": "string",
+          "description": "JSON field containing the data in the enrichment response."
+        },
+        "authentication": {
+          "$ref": "#/$defs/authentication",
+          "description": "Authentication for enrichment HTTP requests."
+        },
+        "headers": {
+          "$ref": "#/$defs/httpHeaders",
+          "description": "Custom headers for enrichment HTTP requests."
         }
       },
       "additionalProperties": true,
@@ -386,8 +416,54 @@
               }
             ]
           }
+        },
+        {
+          "if": { "properties": { "type": { "const": "enrichment" } }, "required": ["type"] },
+          "then": { "required": ["endpoint", "key"] }
         }
       ]
+    },
+
+    "enrichmentKey": {
+      "type": "object",
+      "description": "Key extraction configuration for enrichment filter.",
+      "required": ["field", "paramType", "paramName"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Dot-notation path to extract key value from record (e.g., 'customer.id')."
+        },
+        "paramType": {
+          "type": "string",
+          "description": "How to include the key in the HTTP request.",
+          "enum": ["query", "path", "header"]
+        },
+        "paramName": {
+          "type": "string",
+          "description": "Parameter name to use in the request."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "enrichmentCache": {
+      "type": "object",
+      "description": "Cache configuration for enrichment filter.",
+      "properties": {
+        "maxSize": {
+          "type": "integer",
+          "description": "Maximum number of entries in the cache.",
+          "minimum": 1,
+          "default": 1000
+        },
+        "defaultTTL": {
+          "type": "integer",
+          "description": "Default TTL for cache entries in seconds.",
+          "minimum": 1,
+          "default": 300
+        }
+      },
+      "additionalProperties": false
     },
 
     "cloneCopy": {
