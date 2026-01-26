@@ -247,7 +247,7 @@ State persistence enables reliable resumption of data polling after restarts, av
 
 **How it works:**
 1. **First execution**: No state exists, fetches all records
-2. **Runtime persists state**: After successful execution (Input → Filter → Output), saves execution start timestamp and/or maximum ID from processed records
+2. **Runtime persists state**: After successful execution (Input → Filter → Output), saves execution start timestamp and/or ID from the last processed record (in reception order)
 3. **Subsequent executions**: Loads persisted state and adds query parameters to API requests (e.g., `?since=2026-01-26T10:30:00Z` or `?after_id=12345`)
 4. **API filtering**: Only processes records newer than the last execution timestamp or with ID greater than the last processed ID
 
