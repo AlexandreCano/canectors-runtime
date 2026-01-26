@@ -95,22 +95,12 @@ func (s *StateStore) Save(pipelineID string, state *State) error {
 	defer s.mu.Unlock()
 
 	// Ensure directory exists
-	// Handle race condition: if directory is created by another process between check and create,
-	// MkdirAll will return nil (success) if the directory already exists
 	if err := os.MkdirAll(s.basePath, 0700); err != nil {
-		// Check if directory exists now (another process might have created it)
-		if _, statErr := os.Stat(s.basePath); statErr == nil {
-			// Directory exists now, continue (race condition resolved)
-			logger.Debug("state directory created by another process",
-				"path", s.basePath,
-			)
-		} else {
-			logger.Warn("failed to create state directory",
-				"path", s.basePath,
-				"error", err.Error(),
-			)
-			return fmt.Errorf("creating state directory: %w", err)
-		}
+		logger.Warn("failed to create state directory",
+			"path", s.basePath,
+			"error", err.Error(),
+		)
+		return fmt.Errorf("creating state directory: %w", err)
 	}
 
 	// Ensure state has the correct pipeline ID
