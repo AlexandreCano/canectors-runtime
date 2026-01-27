@@ -11,34 +11,32 @@ connector:
 
   input:
     type: database
-    config:
-      # Connection string via environment variable (recommended)
-      connectionStringRef: "${DATABASE_URL}"
-      # Or direct connection (avoid in production):
-      # connectionString: "postgres://user:pass@localhost:5432/mydb?sslmode=disable"
-      
-      # Driver auto-detected from connection string, or specify explicitly:
-      # driver: postgres  # postgres, mysql, sqlite
-      
-      # SQL query to execute
-      query: |
-        SELECT id, name, email, created_at, status
-        FROM users
-        WHERE status = 'active'
-        ORDER BY created_at DESC
-      
-      # Connection pool settings
-      maxOpenConns: 10
-      maxIdleConns: 5
-      connMaxLifetimeSeconds: 1800
-      connMaxIdleTimeSeconds: 300
-      
-      # Query timeout
-      timeoutMs: 30000
+    # Connection string via environment variable (recommended)
+    connectionStringRef: "${DATABASE_URL}"
+    # Or direct connection (avoid in production):
+    # connectionString: "postgres://user:pass@localhost:5432/mydb?sslmode=disable"
+    
+    # Driver auto-detected from connection string, or specify explicitly:
+    # driver: postgres  # postgres, mysql, sqlite
+    
+    # SQL query to execute
+    query: |
+      SELECT id, name, email, created_at, status
+      FROM users
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+    
+    # Connection pool settings
+    maxOpenConns: 10
+    maxIdleConns: 5
+    connMaxLifetimeSeconds: 1800
+    connMaxIdleTimeSeconds: 300
+    
+    # Query timeout
+    timeoutMs: 30000
     
     # Schedule periodic polling
-    schedule:
-      cron: "*/5 * * * *"  # Every 5 minutes
+    schedule: "*/5 * * * *"  # Every 5 minutes
 
   filters:
     - type: mapping
