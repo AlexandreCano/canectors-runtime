@@ -1026,22 +1026,9 @@ func (h *HTTPRequestModule) executeHTTPRequest(ctx context.Context, endpoint str
 		return fmt.Errorf("creating http request: %w", err)
 	}
 
-	// Set default headers
-	req.Header.Set(headerUserAgent, defaultUserAgent)
-	req.Header.Set(headerContentType, defaultContentType)
-
-	// Set static headers from config only. Templated headers are set from recordHeaders
-	// (evaluated per-record); setting raw config here would send unresolved placeholders
-	// when a templated value resolves to empty and is skipped in extractHeadersFromRecord.
-	for key, value := range h.headers {
-		if HasTemplateVariables(value) {
-			continue
-		}
-		req.Header.Set(key, value)
-	}
-
-	// Set headers from record data (evaluated templated + HeadersFromRecord; overrides config)
-	for key, value := range recordHeaders {
+	// Apply validated headers (defaults + static config + record; all custom headers validated via tryAddValidHeader)
+	headers := h.buildBaseHeadersMap(recordHeaders)
+	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
 
@@ -1555,27 +1542,31 @@ func (h *HTTPRequestModule) previewSingleRecordMode(records []map[string]interfa
 	return previews, nil
 }
 
-// buildPreviewHeaders constructs the headers map for preview
-// If opts.ShowCredentials is false, sensitive auth headers are masked
-func (h *HTTPRequestModule) buildPreviewHeaders(recordHeaders map[string]string, opts PreviewOptions) map[string]string {
+// buildBaseHeadersMap returns defaults + validated static config headers + record headers.
+// Static config headers are validated via tryAddValidHeader; templated ones are omitted
+// (they come from recordHeaders, already validated in extractHeadersFromRecord).
+func (h *HTTPRequestModule) buildBaseHeadersMap(recordHeaders map[string]string) map[string]string {
 	headers := make(map[string]string)
-
-	// Set default headers
 	headers[headerUserAgent] = defaultUserAgent
 	headers[headerContentType] = defaultContentType
 
-	// Set static headers from config only; templated ones come from recordHeaders
 	for key, value := range h.headers {
 		if HasTemplateVariables(value) {
 			continue
 		}
-		headers[key] = value
+		tryAddValidHeader(headers, key, value)
 	}
 
-	// Set headers from record data (evaluated templated + HeadersFromRecord; overrides config)
 	for key, value := range recordHeaders {
 		headers[key] = value
 	}
+	return headers
+}
+
+// buildPreviewHeaders constructs the headers map for preview
+// If opts.ShowCredentials is false, sensitive auth headers are masked
+func (h *HTTPRequestModule) buildPreviewHeaders(recordHeaders map[string]string, opts PreviewOptions) map[string]string {
+	headers := h.buildBaseHeadersMap(recordHeaders)
 
 	// Add authentication headers LAST (masked unless showCredentials is enabled)
 	// This ensures auth headers are always present and masked, even if custom/record headers tried to override
