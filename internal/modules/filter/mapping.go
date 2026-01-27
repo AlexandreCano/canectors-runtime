@@ -522,13 +522,33 @@ func (m *MappingModule) processRecord(record map[string]interface{}, recordIdx i
 // createTargetRecord creates a new target record and preserves metadata from source.
 func (m *MappingModule) createTargetRecord(record map[string]interface{}) map[string]interface{} {
 	target := make(map[string]interface{})
-	// Preserve _metadata field from source record
+	// Preserve _metadata field from source record, but avoid sharing mutable state.
 	if metadata, exists := record["_metadata"]; exists {
-		target["_metadata"] = metadata
+		target["_metadata"] = deepCopyMetadata(metadata)
 	}
 	return target
 }
 
+// deepCopyMetadata performs a deep copy of common metadata structures to avoid shared mutable state.
+// It handles map[string]interface{} and []interface{} recursively and returns other types as-is.
+func deepCopyMetadata(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		copied := make(map[string]interface{}, len(v))
+		for key, val := range v {
+			copied[key] = deepCopyMetadata(val)
+		}
+		return copied
+	case []interface{}:
+		copied := make([]interface{}, len(v))
+		for i, val := range v {
+			copied[i] = deepCopyMetadata(val)
+		}
+		return copied
+	default:
+		return v
+	}
+}
 // getSourceValue retrieves the source value for a mapping, handling missing field cases.
 func (m *MappingModule) getSourceValue(record map[string]interface{}, mapping MappingConfig, recordIdx, mappingIdx int) (interface{}, bool, error) {
 	value, found := getNestedValue(record, mapping.Source)
