@@ -97,7 +97,7 @@ development_status:
   14-5-last-timestamp-persistence-for-polling-inputs: done
   14-6-output-templating-with-record-data: done
   14-7-record-metadata-storage: done
-  14-8-database-connections-input-filter-output: ready-for-dev
+  14-8-database-connections-input-filter-output: done
   14-9-distributed-scheduler-support: backlog
   epic-14-retrospective: optional
 

@@ -285,7 +285,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Input type. Canonical: httpPolling, webhook.",
+          "description": "Input type. Canonical: httpPolling, webhook, database.",
           "minLength": 1
         },
         "connectionRef": {
@@ -510,7 +510,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Filter type. Canonical: mapping, condition, script, http_call.",
+          "description": "Filter type. Canonical: mapping, condition, script, http_call, sql_call.",
           "minLength": 1
         },
         "script": {
@@ -815,7 +815,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Output type. Canonical: httpRequest, multi.",
+          "description": "Output type. Canonical: httpRequest, database, multi.",
           "minLength": 1
         },
         "connectionRef": {
@@ -1239,6 +1239,270 @@
       "type": "object",
       "additionalProperties": {
         "type": "string"
+      }
+    },
+    "databaseConnectionConfig": {
+      "type": "object",
+      "description": "Database connection configuration. Supports PostgreSQL, MySQL, SQLite.",
+      "properties": {
+        "connectionString": {
+          "type": "string",
+          "description": "Database connection string (DSN). Avoid in production - use connectionStringRef instead.",
+          "examples": [
+            "postgres://user:pass@host:5432/db?sslmode=require",
+            "user:pass@tcp(host:3306)/db?tls=true",
+            "file:./database.db"
+          ]
+        },
+        "connectionStringRef": {
+          "type": "string",
+          "description": "Environment variable reference for connection string. Format: ${ENV_VAR_NAME}",
+          "pattern": "^\\$\\{[A-Z_][A-Z0-9_]*\\}$",
+          "examples": [
+            "${DATABASE_URL}",
+            "${POSTGRES_CONNECTION_STRING}"
+          ]
+        },
+        "driver": {
+          "type": "string",
+          "description": "Database driver. Auto-detected from connection string if not specified.",
+          "enum": ["postgres", "mysql", "sqlite"]
+        },
+        "maxOpenConns": {
+          "type": "integer",
+          "description": "Maximum number of open connections in the pool.",
+          "minimum": 1,
+          "default": 10
+        },
+        "maxIdleConns": {
+          "type": "integer",
+          "description": "Maximum number of idle connections in the pool.",
+          "minimum": 0,
+          "default": 5
+        },
+        "connMaxLifetimeSeconds": {
+          "type": "integer",
+          "description": "Maximum lifetime of a connection in seconds.",
+          "minimum": 0,
+          "default": 1800
+        },
+        "connMaxIdleTimeSeconds": {
+          "type": "integer",
+          "description": "Maximum idle time for a connection in seconds.",
+          "minimum": 0,
+          "default": 300
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "Query timeout in milliseconds.",
+          "minimum": 0,
+          "default": 30000
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["connectionString"] },
+        { "required": ["connectionStringRef"] }
+      ]
+    },
+    "databaseInputConfig": {
+      "type": "object",
+      "description": "Database input module configuration. Executes SQL queries to fetch data. Supports {{lastRunTimestamp}} placeholder for incremental queries.",
+      "allOf": [
+        { "$ref": "#/$defs/databaseConnectionConfig" }
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "SQL query to execute. Supports {{lastRunTimestamp}} and :paramName placeholders."
+        },
+        "queryFile": {
+          "type": "string",
+          "description": "Path to SQL file. Supports {{lastRunTimestamp}} and :paramName placeholders."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Query parameters. Keys are parameter names (used with :paramName syntax).",
+          "additionalProperties": true
+        },
+        "pagination": {
+          "$ref": "#/$defs/databasePaginationConfig"
+        },
+        "incremental": {
+          "$ref": "#/$defs/databaseIncrementalConfig"
+        }
+      }
+    },
+    "databasePaginationConfig": {
+      "type": "object",
+      "description": "Pagination configuration for database queries.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Pagination type.",
+          "enum": ["limit-offset", "cursor"],
+          "default": "limit-offset"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Number of records per page.",
+          "minimum": 1,
+          "default": 1000
+        },
+        "offsetParam": {
+          "type": "string",
+          "description": "Parameter name for offset (limit-offset pagination)."
+        },
+        "cursorField": {
+          "type": "string",
+          "description": "Field to use for cursor value (cursor pagination)."
+        },
+        "cursorParam": {
+          "type": "string",
+          "description": "Parameter name for cursor value (cursor pagination)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "databaseIncrementalConfig": {
+      "type": "object",
+      "description": "Incremental query configuration. Tracks last processed timestamp or ID.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable incremental queries.",
+          "default": false
+        },
+        "timestampField": {
+          "type": "string",
+          "description": "Field name for timestamp-based incremental queries."
+        },
+        "timestampParam": {
+          "type": "string",
+          "description": "Parameter name for timestamp in query."
+        },
+        "idField": {
+          "type": "string",
+          "description": "Field name for ID-based incremental queries."
+        },
+        "idParam": {
+          "type": "string",
+          "description": "Parameter name for ID in query."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sqlCallFilterConfig": {
+      "type": "object",
+      "description": "SQL call filter module configuration. Executes SQL queries for record enrichment.",
+      "allOf": [
+        { "$ref": "#/$defs/databaseConnectionConfig" }
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "SQL query with {{record.field}} templates for parameterized execution."
+        },
+        "queryFile": {
+          "type": "string",
+          "description": "Path to SQL file with {{record.field}} templates."
+        },
+        "queries": {
+          "type": "array",
+          "description": "Multiple SQL queries executed sequentially.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "condition": {
+          "type": "string",
+          "description": "Expression to evaluate before executing query. Supports {{record.field}} syntax."
+        },
+        "mergeStrategy": {
+          "type": "string",
+          "description": "How to merge query results with input records.",
+          "enum": ["merge", "replace", "append"],
+          "default": "merge"
+        },
+        "dataField": {
+          "type": "string",
+          "description": "Field to extract from query result."
+        },
+        "resultKey": {
+          "type": "string",
+          "description": "Key for storing result in append mode."
+        },
+        "onError": {
+          "type": "string",
+          "description": "Error handling strategy.",
+          "enum": ["fail", "skip", "log"],
+          "default": "fail"
+        },
+        "cache": {
+          "$ref": "#/$defs/sqlCallCacheConfig"
+        }
+      }
+    },
+    "sqlCallCacheConfig": {
+      "type": "object",
+      "description": "Cache configuration for SQL call filter.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable caching of query results.",
+          "default": false
+        },
+        "maxSize": {
+          "type": "integer",
+          "description": "Maximum number of cached entries.",
+          "minimum": 1,
+          "default": 1000
+        },
+        "defaultTTL": {
+          "type": "integer",
+          "description": "Cache entry TTL in seconds.",
+          "minimum": 0,
+          "default": 300
+        },
+        "key": {
+          "type": "string",
+          "description": "Cache key template using {{record.field}} syntax."
+        }
+      },
+      "additionalProperties": false
+    },
+    "databaseOutputConfig": {
+      "type": "object",
+      "description": "Database output module configuration. Executes SQL queries to write records.",
+      "allOf": [
+        { "$ref": "#/$defs/databaseConnectionConfig" }
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "SQL query with {{record.field}} templates for parameterized execution."
+        },
+        "queryFile": {
+          "type": "string",
+          "description": "Path to SQL file with {{record.field}} templates."
+        },
+        "batchSize": {
+          "type": "integer",
+          "description": "Number of records per batch operation.",
+          "minimum": 1,
+          "default": 100
+        },
+        "transaction": {
+          "type": "boolean",
+          "description": "Wrap operations in a transaction.",
+          "default": false
+        },
+        "onError": {
+          "type": "string",
+          "description": "Error handling strategy.",
+          "enum": ["fail", "skip", "log"],
+          "default": "fail"
+        }
       }
     }
   }
