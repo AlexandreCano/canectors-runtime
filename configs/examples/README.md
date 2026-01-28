@@ -160,7 +160,7 @@ cannectors run --dry-run ./configs/examples/14-webhook.yaml
 ```
 
 #### 15-retry-configuration.json / 15-retry-configuration.yaml
-Advanced retry configuration example (Story 13.3).
+Advanced retry configuration example.
 
 **Features:**
 - Custom retryable status codes (`retryableStatusCodes`)
@@ -184,10 +184,87 @@ cannectors validate ./configs/examples/15-retry-configuration.yaml
 cannectors run --dry-run ./configs/examples/15-retry-configuration.yaml
 ```
 
+### Filter Examples (Advanced)
+
+#### 16-filters-script.yaml
+JavaScript script filter for complex business logic transformations.
+
+**Features:**
+- Goja JavaScript engine for inline scripts
+- Complex calculations (discounts, taxes, totals)
+- Script can be inline or loaded from file (`scriptFile`)
+- Chaining with condition and mapping filters
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/16-filters-script.yaml
+cannectors run --dry-run ./configs/examples/16-filters-script.yaml
+```
+
+#### 17-filters-enrichment.yaml
+HTTP call enrichment filter for fetching additional data from external APIs.
+
+**Features:**
+- Dynamic HTTP requests with key extraction from records
+- Caching to reduce API calls (configurable TTL and max size)
+- Parameter types: query, path, header
+- Merge strategies: merge, replace, append
+- Error handling modes: fail, skip, log
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/17-filters-enrichment.yaml
+cannectors run --dry-run ./configs/examples/17-filters-enrichment.yaml
+```
+
+### State Persistence Examples
+
+#### 18-timestamp-persistence.yaml
+Timestamp-based state persistence for incremental polling.
+
+**Features:**
+- Automatic timestamp tracking across executions
+- Query parameter injection (`?updated_after=<timestamp>`)
+- Reliable resumption after restarts
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/18-timestamp-persistence.yaml
+cannectors run --dry-run ./configs/examples/18-timestamp-persistence.yaml
+```
+
+#### 19-id-persistence.yaml
+ID-based state persistence for cursor/ID pagination.
+
+**Features:**
+- Max ID extraction from processed records
+- Query parameter injection (`?since_id=<lastId>`)
+- Supports nested field paths for ID extraction
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/19-id-persistence.yaml
+cannectors run --dry-run ./configs/examples/19-id-persistence.yaml
+```
+
+#### 20-timestamp-and-id-persistence.yaml
+Combined timestamp and ID persistence for maximum reliability.
+
+**Features:**
+- Dual tracking: both timestamp and last ID
+- Custom storage path configuration
+- Works with cursor-based pagination
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/20-timestamp-and-id-persistence.yaml
+cannectors run --dry-run ./configs/examples/20-timestamp-and-id-persistence.yaml
+```
+
 ### Templating Examples
 
-#### 21-output-templating.json / 21-output-templating.yaml
-Dynamic output templating with record data (Story 14.6).
+#### 21-output-templating.yaml
+Dynamic output templating with record data.
 
 **Features:**
 - Template syntax: `{{record.field}}` for accessing record data
@@ -209,7 +286,7 @@ cannectors validate ./configs/examples/21-output-templating.yaml
 cannectors run --dry-run ./configs/examples/21-output-templating.yaml
 ```
 
-#### 22-output-templating-batch.json / 22-output-templating-batch.yaml
+#### 22-output-templating-batch.yaml
 Templating in batch mode (`bodyFrom: "records"`).
 
 **Features:**
@@ -225,7 +302,7 @@ cannectors validate ./configs/examples/22-output-templating-batch.yaml
 cannectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
 ```
 
-#### 23-output-templating-soap.json / 23-output-templating-soap.yaml
+#### 23-output-templating-soap.yaml
 SOAP/XML templating for legacy API integration.
 
 **Features:**
@@ -254,7 +331,7 @@ cannectors validate ./configs/examples/23-output-templating-soap.yaml
 cannectors run --dry-run ./configs/examples/23-output-templating-soap.yaml
 ```
 
-#### 24-enrichment-templating.json / 24-enrichment-templating.yaml
+#### 24-enrichment-templating.yaml
 Templating in enrichment filters for dynamic API lookups.
 
 **Features:**
@@ -269,6 +346,129 @@ Templating in enrichment filters for dynamic API lookups.
 ```bash
 cannectors validate ./configs/examples/24-enrichment-templating.yaml
 cannectors run --dry-run ./configs/examples/24-enrichment-templating.yaml
+```
+
+### Metadata Examples
+
+#### 25-record-metadata-storage.yaml
+Internal metadata storage for state tracking through the pipeline.
+
+**Features:**
+- `_metadata` field for internal state (excluded from output body)
+- Processing timestamps, batch IDs, validation flags
+- Metadata accessible in condition filters and headers
+- Automatic exclusion from request body
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/25-record-metadata-storage.yaml
+cannectors run --dry-run ./configs/examples/25-record-metadata-storage.yaml
+```
+
+#### 26-metadata-in-templates.yaml
+Using metadata values in output templates.
+
+**Features:**
+- Metadata in endpoint URLs (`{{_metadata.region}}`)
+- Metadata in query parameters and headers
+- Routing based on metadata (region, priority)
+- TTL and timing information in metadata
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/26-metadata-in-templates.yaml
+cannectors run --dry-run ./configs/examples/26-metadata-in-templates.yaml
+```
+
+### Database Examples
+
+#### 27-database-input.yaml
+Database input module for fetching data from SQL databases.
+
+**Features:**
+- Supports PostgreSQL, MySQL, SQLite
+- Connection string via environment variable
+- Custom SQL queries with timeout configuration
+- Scheduled polling
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/27-database-input.yaml
+cannectors run --dry-run ./configs/examples/27-database-input.yaml
+```
+
+#### 28-database-incremental.yaml
+Incremental database queries using `{{lastRunTimestamp}}`.
+
+**Features:**
+- `{{lastRunTimestamp}}` placeholder for incremental queries
+- First run uses epoch time (fetches all records)
+- Subsequent runs fetch only new/updated records
+- State persistence for reliable resumption
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/28-database-incremental.yaml
+cannectors run --dry-run ./configs/examples/28-database-incremental.yaml
+```
+
+#### 29-sql-call-enrichment.yaml
+SQL call filter for enriching records with database data.
+
+**Features:**
+- Query templating with `{{record.field}}` syntax
+- Merge strategies: merge, replace, append
+- Caching to avoid repeated queries
+- Error handling: fail, skip, log
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/29-sql-call-enrichment.yaml
+cannectors run --dry-run ./configs/examples/29-sql-call-enrichment.yaml
+```
+
+#### 30-database-output-insert.yaml
+Database output module with INSERT queries.
+
+**Features:**
+- SQL queries with `{{record.field}}` placeholders
+- Parameterized values for security
+- Transaction mode for atomic writes
+- Error handling per record
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/30-database-output-insert.yaml
+cannectors run --dry-run ./configs/examples/30-database-output-insert.yaml
+```
+
+#### 31-database-output-upsert.yaml
+Database upsert (insert or update on conflict).
+
+**Features:**
+- PostgreSQL `ON CONFLICT DO UPDATE` syntax
+- MySQL `ON DUPLICATE KEY UPDATE` (commented example)
+- SQLite `INSERT OR REPLACE` (commented example)
+- Transaction support
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/31-database-output-upsert.yaml
+cannectors run --dry-run ./configs/examples/31-database-output-upsert.yaml
+```
+
+#### 32-database-custom-query.yaml
+Database output with external SQL files.
+
+**Features:**
+- `queryFile` for complex SQL queries
+- Separation of SQL from configuration
+- Same `{{record.field}}` templating in files
+
+**Usage:**
+```bash
+cannectors validate ./configs/examples/32-database-custom-query.yaml
+cannectors run --dry-run ./configs/examples/32-database-custom-query.yaml
 ```
 
 ## Using the Examples
@@ -329,6 +529,9 @@ cannectors run my-pipeline.json
 |------|---------------|
 | `mapping` | Array of field mappings with optional transforms |
 | `condition` | Expression string with optional nested modules |
+| `script` | JavaScript transformation (inline or from file) |
+| `http_call` | HTTP enrichment with caching and merge strategies |
+| `sql_call` | SQL enrichment with caching and merge strategies |
 
 ### Output Modes
 
@@ -336,6 +539,16 @@ cannectors run my-pipeline.json
 |------|-------------|
 | `records` (default) | Send all records in single request as JSON array |
 | `record` | Send one request per record with path/query parameters |
+
+### Input/Output Types
+
+| Type | Module | Description |
+|------|--------|-------------|
+| `httpPolling` | Input | Poll HTTP API on schedule |
+| `webhook` | Input | Receive HTTP POST events |
+| `database` | Input | Query SQL database |
+| `httpRequest` | Output | Send HTTP requests |
+| `database` | Output | Execute SQL queries |
 
 ## Environment Variables
 
@@ -355,50 +568,6 @@ Set these before running:
 export API_TOKEN="your-token-here"
 export API_KEY="your-api-key-here"
 # ... etc
-```
-
-### Output Templating Examples (Story 14.6)
-
-#### 21-output-templating.yaml
-Output templating with record data for dynamic endpoints, headers, and bodies.
-
-**Features:**
-- Templated endpoint URLs (`/customers/{{record.customer_id}}/orders`)
-- Templated HTTP headers (`X-Correlation-ID: {{record.correlation_id}}`)
-- Custom body templates with field mapping
-- Default values for missing fields (`{{record.field | default: "value"}}`)
-- Single record mode (`bodyFrom: "record"`)
-
-**Template Syntax:**
-- `{{record.field}}` - Access field from record
-- `{{record.nested.field}}` - Access nested fields using dot notation
-- `{{record.array[0].field}}` - Access array elements by index
-- `{{record.field | default: "value"}}` - Use default value if field is missing/null
-
-**Usage:**
-```bash
-cannectors validate ./configs/examples/21-output-templating.yaml
-cannectors run --dry-run ./configs/examples/21-output-templating.yaml
-```
-
-#### 22-output-templating-batch.yaml
-Output templating in batch mode for multi-tenant or grouped data scenarios.
-
-**Features:**
-- Batch mode with templated endpoint (uses first record for template evaluation)
-- Tenant-based routing (`/tenants/{{record.tenant_id}}/events/bulk`)
-- Body template applied to each record in the batch
-- Suitable for multi-tenant APIs
-
-**Batch Mode Behavior:**
-- In batch mode (`bodyFrom: "records"`), endpoint and header templates use the **first record**
-- All records should share common metadata (tenant ID, batch ID) for batch mode templating
-- Each record in the batch array is individually templated using `bodyTemplate`
-
-**Usage:**
-```bash
-cannectors validate ./configs/examples/22-output-templating-batch.yaml
-cannectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
 ```
 
 ## Notes
