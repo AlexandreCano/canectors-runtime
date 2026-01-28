@@ -89,7 +89,7 @@ So that I can transform data according to field-to-field mappings.
 ### Architecture Requirements
 
 **Filter Module Execution:**
-- **Location:** `canectors-runtime/internal/modules/filter/mapping.go`
+- **Location:** `cannectors-runtime/internal/modules/filter/mapping.go`
 - **Interface:** Implements `filter.Module` interface with `Process(records []map[string]interface{}) ([]map[string]interface{}, error)`
 - **Configuration:** Reads from `connector.Pipeline.Filters[]` array, filter with `type: "mapping"`
 - **Purpose:** Transforms data records by applying field-to-field mappings between source and target schemas
@@ -177,7 +177,7 @@ So that I can transform data according to field-to-field mappings.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── modules/
 │       └── filter/
@@ -301,12 +301,12 @@ func (m *Mapping) Process(records []map[string]interface{}) ([]map[string]interf
 ### File Structure Requirements
 
 **Implementation File:**
-- `canectors-runtime/internal/modules/filter/mapping.go`
+- `cannectors-runtime/internal/modules/filter/mapping.go`
 - Package: `package filter`
 - Exports: `Mapping` struct, `NewMapping()` constructor, `Process()` method
 
 **Test File:**
-- `canectors-runtime/internal/modules/filter/mapping_test.go`
+- `cannectors-runtime/internal/modules/filter/mapping_test.go`
 - Package: `package filter`
 - Test functions: `TestNewMapping()`, `TestMapping_Process()`, `TestMapping_TypeConversions()`, etc.
 
@@ -346,7 +346,7 @@ func (m *Mapping) Process(records []map[string]interface{}) ([]map[string]interf
 - **Architecture Document:** [Source: planning-artifacts/architecture.md#module-execution]
 - **Project Context:** [Source: project-context.md#go-runtime]
 - **Previous Story 3.2:** [Source: implementation-artifacts/3-2-implement-input-module-execution-webhook.md]
-- **Pipeline Executor:** [Source: canectors-runtime/internal/runtime/pipeline.go#executeFilters]
+- **Pipeline Executor:** [Source: cannectors-runtime/internal/runtime/pipeline.go#executeFilters]
 
 ## Dev Agent Record
 
@@ -372,17 +372,17 @@ Claude Opus 4.5 (Amelia - Developer Agent)
 ### File List
 
 **New files:**
-- `canectors-runtime/internal/modules/filter/mapping.go` - Mapping module implementation (974 lines)
-- `canectors-runtime/internal/modules/filter/mapping_test.go` - Comprehensive test suite (33 tests)
+- `cannectors-runtime/internal/modules/filter/mapping.go` - Mapping module implementation (974 lines)
+- `cannectors-runtime/internal/modules/filter/mapping_test.go` - Comprehensive test suite (33 tests)
 
 **Modified files:**
-- `canectors-runtime/internal/modules/filter/filter.go` - Removed placeholder Mapping struct (replaced by MappingModule)
-- `canectors-runtime/cmd/canectors/main.go` - Use real mapping module in filter factory, handle config parse errors
-- `canectors-runtime/internal/runtime/pipeline.go` - Added inputModule.Close() for resource cleanup
-- `canectors-runtime/internal/runtime/pipeline_test.go` - Added mapping filter integration test
-- `canectors-runtime/internal/config/schema/pipeline-schema.json` - Removed from/to/transform, added conversion ops, removed locale
-- `canectors-BMAD/types/pipeline-schema.json` - Removed from/to/transform, added conversion ops, removed locale
-- `canectors-BMAD/docs/pipeline-configuration-schema.md` - Removed from/to/transform, updated ops list
+- `cannectors-runtime/internal/modules/filter/filter.go` - Removed placeholder Mapping struct (replaced by MappingModule)
+- `cannectors-runtime/cmd/cannectors/main.go` - Use real mapping module in filter factory, handle config parse errors
+- `cannectors-runtime/internal/runtime/pipeline.go` - Added inputModule.Close() for resource cleanup
+- `cannectors-runtime/internal/runtime/pipeline_test.go` - Added mapping filter integration test
+- `cannectors-runtime/internal/config/schema/pipeline-schema.json` - Removed from/to/transform, added conversion ops, removed locale
+- `cannectors-BMAD/types/pipeline-schema.json` - Removed from/to/transform, added conversion ops, removed locale
+- `cannectors-BMAD/docs/pipeline-configuration-schema.md` - Removed from/to/transform, updated ops list
 
 ### Change Log
 

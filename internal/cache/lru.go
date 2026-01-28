@@ -1,4 +1,4 @@
-// Package cache provides caching implementations for the Canectors runtime.
+// Package cache provides caching implementations for the Cannectors runtime.
 // It includes an LRU cache with TTL support for use in enrichment modules.
 package cache
 

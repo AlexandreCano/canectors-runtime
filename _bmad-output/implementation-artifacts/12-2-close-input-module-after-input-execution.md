@@ -144,7 +144,7 @@ so that network resources are released promptly and implicit dependencies are av
 
 **Files to Modify:**
 ```
-canectors-runtime/
+cannectors-runtime/
   internal/runtime/
     pipeline.go                    # Remove defer, add explicit close after input
     pipeline_test.go             # Add tests for input module cleanup timing

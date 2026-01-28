@@ -9,13 +9,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/canectors/runtime/internal/errhandling"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/modules/filter"
-	"github.com/canectors/runtime/internal/modules/input"
-	"github.com/canectors/runtime/internal/modules/output"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/modules/filter"
+	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/modules/output"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Error codes for pipeline execution errors

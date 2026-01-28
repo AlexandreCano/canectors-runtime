@@ -1,5 +1,5 @@
 ---
-project_name: 'canectors-bmad'
+project_name: 'cannectors-bmad'
 user_name: 'Cano'
 date: '2026-01-11'
 sections_completed: ['technology_stack', 'language_specific', 'framework_specific', 'testing', 'code_quality', 'workflow', 'critical_rules']

@@ -1,4 +1,4 @@
-# TYPE AND METHOD MAP — Canectors Runtime
+# TYPE AND METHOD MAP — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -8,7 +8,7 @@
 
 ## Navigation Rapide
 
-1. [Package cmd/canectors](#1-package-cmdcanectors)
+1. [Package cmd/cannectors](#1-package-cmdcannectors)
 2. [Package pkg/connector](#2-package-pkgconnector)
 3. [Package internal/config](#3-package-internalconfig)
 4. [Package internal/runtime](#4-package-internalruntime)
@@ -23,7 +23,7 @@
 
 ---
 
-## 1. Package `cmd/canectors`
+## 1. Package `cmd/cannectors`
 
 ### Type: `PipelineExecutorAdapter`
 
@@ -231,7 +231,7 @@ type ExecutionResult struct {
 
 **Créé par**: `runtime.Executor.Execute()`
 
-**Consommé par**: `cmd/canectors` pour print résultats
+**Consommé par**: `cmd/cannectors` pour print résultats
 
 ---
 
@@ -290,7 +290,7 @@ func (r *Result) IsValid() bool {
 }
 ```
 
-**Appelée par**: `cmd/canectors` pour déterminer exit code
+**Appelée par**: `cmd/cannectors` pour déterminer exit code
 
 ---
 
@@ -416,7 +416,7 @@ return e.ExecuteWithContext(context.Background(), pipeline)
 ```
 
 **Appelée par**:
-- `cmd/canectors` (one-shot mode)
+- `cmd/cannectors` (one-shot mode)
 - `PipelineExecutorAdapter` (scheduled mode)
 
 ---
@@ -546,7 +546,7 @@ CreateInputModule(config)
 
 **Note**: Actuellement retourne Stub, pas impl réelle (à compléter)
 
-**Appelée par**: `cmd/canectors` lors setup pipeline
+**Appelée par**: `cmd/cannectors` lors setup pipeline
 
 **Erreurs**: Aucune (retourne toujours module, même stub)
 
@@ -604,7 +604,7 @@ CreateFilterModules(configs)
           └─ filter.NewStub(type, index)
 ```
 
-**Appelée par**: `cmd/canectors`
+**Appelée par**: `cmd/cannectors`
 
 **Erreurs possibles**:
 - Invalid mapping config (missing source/target)
@@ -655,7 +655,7 @@ CreateOutputModule(config)
           └─ output.NewStub(type, endpoint, method)
 ```
 
-**Appelée par**: `cmd/canectors`
+**Appelée par**: `cmd/cannectors`
 
 **Erreurs possibles**:
 - Missing required fields (endpoint, method)
@@ -1549,7 +1549,7 @@ Register(pipeline)
   └─ s.mu.Unlock()
 ```
 
-**Appelée par**: `cmd/canectors` (scheduled mode)
+**Appelée par**: `cmd/cannectors` (scheduled mode)
 
 **Erreurs possibles**:
 - ErrNilPipeline
@@ -1581,7 +1581,7 @@ Start(ctx)
   └─ s.cron.Start()  // Start CRON (non-blocking)
 ```
 
-**Appelée par**: `cmd/canectors`
+**Appelée par**: `cmd/cannectors`
 
 **Effets de bord**: Start goroutine CRON loop
 
@@ -1625,7 +1625,7 @@ Stop(ctx)
   └─ s.mu.Unlock()
 ```
 
-**Appelée par**: `cmd/canectors` (on SIGINT/SIGTERM)
+**Appelée par**: `cmd/cannectors` (on SIGINT/SIGTERM)
 
 **Timeout**: Défini par caller (typiquement 30s)
 

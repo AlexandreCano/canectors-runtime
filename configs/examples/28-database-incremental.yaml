@@ -1,8 +1,6 @@
 # Example: Database Input with lastRunTimestamp
 # Demonstrates using {{lastRunTimestamp}} for incremental queries
 
-schemaVersion: "1.1.0"
-
 connector:
   name: database-incremental-example
   version: "1.0.0"
@@ -22,13 +20,14 @@ connector:
       ORDER BY updated_at ASC
       LIMIT 1000
 
-    # Enable incremental mode to persist lastRunTimestamp between runs
-    incremental:
-      enabled: true
-      timestampField: "updated_at"  # Field to track for next run
-
     timeoutMs: 60000
     schedule: "*/1 * * * *"  # Every minute
+
+    # State persistence for incremental queries
+    statePersistence:
+      timestamp:
+        enabled: true
+        queryParam: updated_at  # not used for DB, but tracks last timestamp
 
   filters:
     - type: mapping
@@ -41,8 +40,8 @@ connector:
           target: "amount"
         - source: "status"
           target: "order_status"
+
   output:
     type: httpRequest
-    config:
-      endpoint: "https://api.example.com/orders/sync"
-      method: POST
+    endpoint: "https://api.example.com/orders/sync"
+    method: POST

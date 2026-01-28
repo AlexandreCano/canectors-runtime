@@ -5,7 +5,7 @@ package httpconfig
 import (
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values

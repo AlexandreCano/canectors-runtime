@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // ConvertToPipeline converts parsed configuration data to a Pipeline struct.

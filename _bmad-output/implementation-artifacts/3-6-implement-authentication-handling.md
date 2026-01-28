@@ -83,7 +83,7 @@ So that connectors can authenticate with source and target systems.
 ### Architecture Requirements
 
 **Authentication Handling:**
-- **Location:** `canectors-runtime/internal/auth/auth.go` (new shared package)
+- **Location:** `cannectors-runtime/internal/auth/auth.go` (new shared package)
 - **Purpose:** Centralized authentication handling for Input and Output modules
 - **Scope:** API key, Bearer token, Basic auth, OAuth2 client credentials
 
@@ -143,7 +143,7 @@ So that connectors can authenticate with source and target systems.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   ├── auth/                      # NEW: Shared authentication package
 │   │   ├── auth.go                # AuthHandler interface and implementations
@@ -261,16 +261,16 @@ canectors-runtime/
 
 ### References
 
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.6` - Story requirements and acceptance criteria
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, authentication requirements, security requirements, deterministic execution requirements
-- **Source:** `canectors-runtime/pkg/connector/types.go` - AuthConfig type definition
-- **Source:** `canectors-runtime/internal/modules/input/http_polling.go` - Current authentication implementation in Input module
-- **Source:** `canectors-runtime/internal/modules/output/http_request.go` - Current authentication implementation in Output module
-- **Source:** `canectors-runtime/internal/config/schema/pipeline-schema.json` - Authentication configuration schema
-- **Source:** `canectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization, security best practices
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-5-implement-output-module-execution-http-request.md` - Previous story learnings and authentication patterns
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-1-implement-input-module-execution-http-polling.md` - Previous story learnings and authentication patterns
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-4-implement-filter-module-execution-conditions.md` - Previous story learnings and patterns
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.6` - Story requirements and acceptance criteria
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, authentication requirements, security requirements, deterministic execution requirements
+- **Source:** `cannectors-runtime/pkg/connector/types.go` - AuthConfig type definition
+- **Source:** `cannectors-runtime/internal/modules/input/http_polling.go` - Current authentication implementation in Input module
+- **Source:** `cannectors-runtime/internal/modules/output/http_request.go` - Current authentication implementation in Output module
+- **Source:** `cannectors-runtime/internal/config/schema/pipeline-schema.json` - Authentication configuration schema
+- **Source:** `cannectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization, security best practices
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-5-implement-output-module-execution-http-request.md` - Previous story learnings and authentication patterns
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-1-implement-input-module-execution-http-polling.md` - Previous story learnings and authentication patterns
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-4-implement-filter-module-execution-conditions.md` - Previous story learnings and patterns
 
 ## Dev Agent Record
 
@@ -335,16 +335,16 @@ Claude Opus 4.5
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/auth/auth.go`
-- `canectors-runtime/internal/auth/oauth2.go`
-- `canectors-runtime/internal/auth/auth_test.go`
-- `canectors-runtime/internal/auth/oauth2_test.go`
+- `cannectors-runtime/internal/auth/auth.go`
+- `cannectors-runtime/internal/auth/oauth2.go`
+- `cannectors-runtime/internal/auth/auth_test.go`
+- `cannectors-runtime/internal/auth/oauth2_test.go`
 
 **Modified Files:**
-- `canectors-runtime/internal/modules/input/http_polling.go` (removed auth code, uses shared package)
-- `canectors-runtime/internal/modules/input/http_polling_test.go` (updated API key header test)
-- `canectors-runtime/internal/modules/output/http_request.go` (removed auth code, uses shared package)
-- `canectors-runtime/internal/modules/output/http_request_test.go` (updated validation timing tests)
+- `cannectors-runtime/internal/modules/input/http_polling.go` (removed auth code, uses shared package)
+- `cannectors-runtime/internal/modules/input/http_polling_test.go` (updated API key header test)
+- `cannectors-runtime/internal/modules/output/http_request.go` (removed auth code, uses shared package)
+- `cannectors-runtime/internal/modules/output/http_request_test.go` (updated validation timing tests)
 
 ## Change Log
 

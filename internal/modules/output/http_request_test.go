@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/internal/errhandling"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // testServer is a helper to create test HTTP servers

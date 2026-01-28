@@ -1,4 +1,4 @@
-# GO CONCEPTS FOR JAVA DEVS — Canectors Runtime
+# GO CONCEPTS FOR JAVA DEVS — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -196,7 +196,7 @@ type ReadWriter interface {
 }
 ```
 
-**Canectors Example**:
+**Cannectors Example**:
 ```go
 // Small interface (2 methods)
 type Module interface {
@@ -341,7 +341,7 @@ func fetch() ([]Record, error) {
 }
 ```
 
-**Canectors Pattern**:
+**Cannectors Pattern**:
 ```go
 // errhandling/errors.go
 type ClassifiedError struct {
@@ -446,7 +446,7 @@ requestID := ctx.Value(requestIDKey).(string)
 | **Cleanup** | Manual (`remove()`) | **Automatic** (defer cancel) |
 | **Type safety** | Generic `<T>` | `interface{}` (need type assertion) |
 
-### Canectors Usage
+### Cannectors Usage
 
 ```go
 // runtime/pipeline.go
@@ -576,7 +576,7 @@ for _, module := range modules {
 }
 ```
 
-**Canectors Pattern**:
+**Cannectors Pattern**:
 ```go
 // No base class, only interfaces
 type InputModule interface {
@@ -738,7 +738,7 @@ func main() {
 2. `init()` functions (ordre: imports → current package)
 3. `main()` (si package main)
 
-**Exemple Canectors**:
+**Exemple Cannectors**:
 ```go
 // internal/logger/logger.go
 package logger
@@ -752,11 +752,11 @@ func init() {
     logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 }
 
-// cmd/canectors/main.go
+// cmd/cannectors/main.go
 package main
 
 import (
-    "github.com/canectors/runtime/internal/logger"  // Triggers logger.init()
+    "github.com/cannectors/runtime/internal/logger"  // Triggers logger.init()
 )
 
 func init() {
@@ -840,7 +840,7 @@ wg.Wait()  // Wait all goroutines finish
 | **Cost** | Création coûteuse | Création cheap (millions possible) |
 | **Communication** | Shared memory + locks | **Channels** (CSP model) |
 
-### Canectors Usage
+### Cannectors Usage
 
 ```go
 // scheduler/scheduler.go
@@ -961,7 +961,7 @@ func (m *SafeMap) Set(key string, value int) {
 | **Reentrant** | ✅ Oui (`synchronized` on same object) | ❌ Non (deadlock si re-lock) |
 | **Read-Write** | `ReadWriteLock` (manual) | `sync.RWMutex` |
 
-### Canectors Usage
+### Cannectors Usage
 
 ```go
 // scheduler/scheduler.go
@@ -1084,7 +1084,7 @@ exists := set["item"]
 | **Null values** | ✅ Possible (`null`) | ❌ Zero value (0, "", false, nil) |
 | **Thread safety** | `ConcurrentHashMap`, `Collections.synchronizedList()` | Manual (sync.Mutex) ou `sync.Map` |
 
-### Canectors Usage
+### Cannectors Usage
 
 ```go
 // Slices
@@ -1170,7 +1170,7 @@ err := json.Unmarshal(data, &pipeline)
 | `json:",omitempty"` | Omit if zero value |
 | `json:"name,string"` | Force string encoding |
 
-**Canectors Usage**:
+**Cannectors Usage**:
 ```go
 // pkg/connector/types.go
 type ExecutionResult struct {

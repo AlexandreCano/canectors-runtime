@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // mockExecutor is a test double for pipeline execution

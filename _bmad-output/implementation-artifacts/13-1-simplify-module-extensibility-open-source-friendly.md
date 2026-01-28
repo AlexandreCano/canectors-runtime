@@ -15,7 +15,7 @@ so that I can contribute or use custom modules (e.g. community plugins) without 
 1. **Given** I want to add a new input module type (e.g. `sql`, `kafka`)
    **When** I implement the `input.Module` interface and register it
    **Then** The runtime can instantiate my module from config using its type string
-   **And** I do **not** need to edit `internal/factory/modules.go` or `cmd/canectors/main.go`
+   **And** I do **not** need to edit `internal/factory/modules.go` or `cmd/cannectors/main.go`
    **And** Unknown types still resolve to stubs (or a configurable fallback) with clear behaviour
 
 2. **Given** I want to add a new filter module type (e.g. `transform`, `enrich`)
@@ -92,7 +92,7 @@ so that I can contribute or use custom modules (e.g. community plugins) without 
 **Current behaviour:**
 
 - `internal/factory/modules.go`: `CreateInputModule`, `CreateFilterModules`, `CreateOutputModule` use `switch cfg.Type` to pick implementations. Adding a type = editing the factory.
-- `cmd/canectors/main.go`: Calls `factory.CreateInputModule`, `factory.CreateFilterModules`, `factory.CreateOutputModule` (e.g. around lines 246, 252, 363, 364, 377). No registry.
+- `cmd/cannectors/main.go`: Calls `factory.CreateInputModule`, `factory.CreateFilterModules`, `factory.CreateOutputModule` (e.g. around lines 246, 252, 363, 364, 377). No registry.
 - Modules live in `internal/modules/input`, `internal/modules/filter`, `internal/modules/output`. Interfaces: `input.Module`, `filter.Module`, `output.Module`.
 
 **Target behaviour:**
@@ -104,7 +104,7 @@ so that I can contribute or use custom modules (e.g. community plugins) without 
 
 ### Architecture Compliance
 
-- **Go runtime**: This is the `canectors-runtime` CLI. No Next.js/tRPC; all work is in Go.
+- **Go runtime**: This is the `cannectors-runtime` CLI. No Next.js/tRPC; all work is in Go.
 - **Layout**: Keep `cmd/`, `internal/`, `pkg/` structure. Prefer `internal/registry` or `internal/factory` for registry; avoid new top-level packages unless justified.
 - **Interfaces**: Keep `input.Module`, `filter.Module`, `output.Module` unchanged. Registry returns these types.
 - **Config**: Continue using `connector.ModuleConfig` (`Type`, `Config`, `Authentication`). No schema changes required for this story.
@@ -127,7 +127,7 @@ so that I can contribute or use custom modules (e.g. community plugins) without 
 - **New**: `internal/registry/` (or `internal/factory/registry.go`) with registration + lookup.
 - **Modify**: `internal/factory/modules.go` – replace switch-based creation with registry lookups.
 - **Modify**: Initialisation of built-ins (e.g. in `factory` or dedicated `internal/modules` init) to register default types.
-- **Touch**: `cmd/canectors/main.go` only if you need to pass a registry or options; otherwise keep using `factory.Create*` as the public API.
+- **Touch**: `cmd/cannectors/main.go` only if you need to pass a registry or options; otherwise keep using `factory.Create*` as the public API.
 - **Tests**: `internal/registry/*_test.go` and/or `internal/factory/*_test.go` for registry and creation behaviour.
 
 ### Testing Requirements

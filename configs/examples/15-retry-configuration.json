@@ -1,23 +1,19 @@
 {
-  "id": "retry-configuration-example",
-  "name": "Retry Configuration Example",
-  "description": "Example demonstrating advanced retry configuration options for output modules",
-  "version": "1.0.0",
-  "enabled": true,
-  "input": {
-    "type": "httpPolling",
-    "config": {
+  "connector": {
+    "name": "retry-configuration-example",
+    "version": "1.0.0",
+    "description": "Example demonstrating advanced retry configuration options for output modules",
+    "input": {
+      "type": "httpPolling",
       "endpoint": "https://api.example.com/data",
       "schedule": "*/5 * * * *",
       "headers": {
         "Accept": "application/json"
       }
-    }
-  },
-  "filters": [],
-  "output": {
-    "type": "httpRequest",
-    "config": {
+    },
+    "filters": [],
+    "output": {
+      "type": "httpRequest",
       "endpoint": "https://api.destination.com/v1/ingest",
       "method": "POST",
       "headers": {
@@ -31,11 +27,13 @@
         "retryableStatusCodes": [408, 429, 502, 503, 504],
         "useRetryAfterHeader": true,
         "retryHintFromBody": "body.error.code != \"PERMANENT\""
+      },
+      "authentication": {
+        "type": "bearer",
+        "credentials": {
+          "token": "${DEST_API_TOKEN}"
+        }
       }
-    },
-    "authentication": {
-      "type": "bearer",
-      "token": "${DEST_API_TOKEN}"
     }
   }
 }

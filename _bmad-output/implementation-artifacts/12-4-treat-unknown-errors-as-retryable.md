@@ -145,7 +145,7 @@ so that transient network, I/O, and timeout errors are automatically retried ins
 
 **Files to Modify:**
 ```
-canectors-runtime/
+cannectors-runtime/
   internal/errhandling/
     errors.go                    # Update classification functions
     errors_test.go              # Add tests for unknown error retryability

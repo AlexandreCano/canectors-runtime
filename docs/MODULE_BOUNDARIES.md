@@ -4,7 +4,7 @@ This document explains the clear boundaries between module types and the runtime
 
 ## Overview
 
-The Canectors runtime follows a strict separation of concerns with well-defined boundaries:
+The Cannectors runtime follows a strict separation of concerns with well-defined boundaries:
 
 - **Input modules**: Fetch data from sources
 - **Filter modules**: Transform data
@@ -264,7 +264,7 @@ func (m *InputModule) Fetch(ctx context.Context) ([]map[string]interface{}, erro
 
 ```go
 // ❌ Wrong: Module imports runtime internals
-import "github.com/canectors/runtime/internal/runtime"
+import "github.com/cannectors/runtime/internal/runtime"
 
 func (m *MyModule) Process(ctx context.Context, records []map[string]interface{}) ([]map[string]interface{}, error) {
     // Accessing runtime internals - breaks boundary
@@ -343,9 +343,9 @@ package kafka
 
 import (
     "context"
-    "github.com/canectors/runtime/internal/modules/input"
-    "github.com/canectors/runtime/internal/registry"
-    "github.com/canectors/runtime/pkg/connector"
+    "github.com/cannectors/runtime/internal/modules/input"
+    "github.com/cannectors/runtime/internal/registry"
+    "github.com/cannectors/runtime/pkg/connector"
 )
 
 func init() {

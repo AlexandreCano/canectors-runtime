@@ -145,7 +145,7 @@ so that I can implement custom modules confidently without over-engineering or b
 
 ### Architecture Compliance
 
-- **Go runtime**: This is the `canectors-runtime` CLI. All work is in Go.
+- **Go runtime**: This is the `cannectors-runtime` CLI. All work is in Go.
 - **Layout**: Keep `internal/modules/`, `internal/registry/`, `pkg/connector/` structure
 - **Interfaces**: Refine existing interfaces (`input.Module`, `filter.Module`, `output.Module`) - do not add unnecessary methods
 - **Documentation**: Use godoc comments and `docs/` directory for comprehensive documentation
@@ -252,7 +252,7 @@ claude-sonnet-4-5-20250929 (Code Review)
 - ✅ **AC#6 Fix**: Added compile-time interface compliance checks in runtime package
 - ✅ **Documentation Fix**: Eliminated duplication between MODULE_EXTENSIBILITY.md and MODULE_BOUNDARIES.md
 - ✅ **Filter Error Fix**: Corrected obsolete "Epic 3" error message
-- ✅ **README Enhancement**: Added "Extending Canectors" section with module boundaries documentation
+- ✅ **README Enhancement**: Added "Extending Cannectors" section with module boundaries documentation
 - ✅ All tests pass including new examples and boundary compliance test
 
 **Key Achievements:**
@@ -279,7 +279,7 @@ claude-sonnet-4-5-20250929 (Code Review)
 - `internal/modules/output/output.go` - Added complete implementation example in godoc, clarified RequestPreview HTTP-specificity
 - `internal/runtime/pipeline.go` - Added interface compliance checks and boundary documentation
 - `docs/MODULE_EXTENSIBILITY.md` - Removed duplication, added cross-references to MODULE_BOUNDARIES.md
-- `README.md` - Added "Extending Canectors" section with module boundaries documentation
+- `README.md` - Added "Extending Cannectors" section with module boundaries documentation
 
 **New Files (Code Review Fixes):**
 - `internal/modules/boundary_test.go` - Boundary compliance test (verifies modules don't import runtime internals)

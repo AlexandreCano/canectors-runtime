@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/internal/modules/input"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // waitForWebhook waits for the webhook server to be ready (address available).

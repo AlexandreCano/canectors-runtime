@@ -1,6 +1,6 @@
 // Package connector provides public types and interfaces for connector pipelines.
 // This package is intended to be importable by external projects that need
-// to interact with the Canectors runtime.
+// to interact with the Cannectors runtime.
 package connector
 
 import "time"

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // OAuth2 error types

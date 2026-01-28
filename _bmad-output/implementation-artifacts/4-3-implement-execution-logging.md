@@ -126,7 +126,7 @@ So that I can debug and monitor connector executions.
 ### Architecture Requirements
 
 **Execution Logging Implementation:**
-- **Location:** `canectors-runtime/internal/logger/` (logger package), `canectors-runtime/internal/runtime/pipeline.go` (executor), `canectors-runtime/cmd/canectors/main.go` (CLI)
+- **Location:** `cannectors-runtime/internal/logger/` (logger package), `cannectors-runtime/internal/runtime/pipeline.go` (executor), `cannectors-runtime/cmd/cannectors/main.go` (CLI)
 - **Purpose:** Generate clear, structured execution logs for debugging and monitoring
 - **Scope:** All pipeline execution stages (Input, Filter, Output) and complete pipeline lifecycle
 
@@ -147,7 +147,7 @@ So that I can debug and monitor connector executions.
 **Existing Code Structure:**
 - `internal/logger/logger.go` - Basic logger with JSON output
 - `internal/runtime/pipeline.go` - Executor with basic logging
-- `cmd/canectors/main.go` - CLI with verbose/quiet flags
+- `cmd/cannectors/main.go` - CLI with verbose/quiet flags
 - `internal/modules/input/` - Input modules (HTTP polling, webhook)
 - `internal/modules/filter/` - Filter modules (mapping, conditions)
 - `internal/modules/output/` - Output modules (HTTP request)
@@ -155,20 +155,20 @@ So that I can debug and monitor connector executions.
 ### Project Structure Notes
 
 **File Locations:**
-- Logger implementation: `canectors-runtime/internal/logger/logger.go`
-- Logger tests: `canectors-runtime/internal/logger/logger_test.go`
-- Executor implementation: `canectors-runtime/internal/runtime/pipeline.go`
-- Executor tests: `canectors-runtime/internal/runtime/pipeline_test.go`
-- CLI implementation: `canectors-runtime/cmd/canectors/main.go`
-- CLI tests: `canectors-runtime/cmd/canectors/main_test.go`
-- Module implementations: `canectors-runtime/internal/modules/{input,filter,output}/`
+- Logger implementation: `cannectors-runtime/internal/logger/logger.go`
+- Logger tests: `cannectors-runtime/internal/logger/logger_test.go`
+- Executor implementation: `cannectors-runtime/internal/runtime/pipeline.go`
+- Executor tests: `cannectors-runtime/internal/runtime/pipeline_test.go`
+- CLI implementation: `cannectors-runtime/cmd/cannectors/main.go`
+- CLI tests: `cannectors-runtime/cmd/cannectors/main_test.go`
+- Module implementations: `cannectors-runtime/internal/modules/{input,filter,output}/`
 
 **Dependencies:**
 - Use existing `log/slog` package (Go standard library)
-- Use existing `github.com/canectors/runtime/pkg/connector` for types
-- Use existing `github.com/canectors/runtime/internal/runtime` for Executor
-- Use existing `github.com/canectors/runtime/internal/logger` for logging
-- Use existing `github.com/canectors/runtime/internal/modules/*` for modules
+- Use existing `github.com/cannectors/runtime/pkg/connector` for types
+- Use existing `github.com/cannectors/runtime/internal/runtime` for Executor
+- Use existing `github.com/cannectors/runtime/internal/logger` for logging
+- Use existing `github.com/cannectors/runtime/internal/modules/*` for modules
 
 ### Technical Requirements
 
@@ -251,10 +251,10 @@ So that I can debug and monitor connector executions.
 - `encoding/json` - JSON formatting (already used by slog)
 
 **Existing Dependencies (already in go.mod):**
-- `github.com/canectors/runtime/pkg/connector` - Pipeline and execution result types
-- `github.com/canectors/runtime/internal/runtime` - Executor
-- `github.com/canectors/runtime/internal/modules/*` - Module interfaces
-- `github.com/canectors/runtime/internal/logger` - Logger package
+- `github.com/cannectors/runtime/pkg/connector` - Pipeline and execution result types
+- `github.com/cannectors/runtime/internal/runtime` - Executor
+- `github.com/cannectors/runtime/internal/modules/*` - Module interfaces
+- `github.com/cannectors/runtime/internal/logger` - Logger package
 - `github.com/spf13/cobra` - CLI framework
 
 **No New Dependencies Required:**
@@ -300,7 +300,7 @@ So that I can debug and monitor connector executions.
 
 **From Story 2.1 (Go CLI Project Structure):**
 - Project structure follows Go best practices
-- CLI structure in `/cmd/canectors/main.go` ready for enhancements
+- CLI structure in `/cmd/cannectors/main.go` ready for enhancements
 - Test structure co-located with source files
 - Logger package already initialized in project structure
 
@@ -324,7 +324,7 @@ So that I can debug and monitor connector executions.
 
 **Files Recently Modified:**
 - `internal/scheduler/scheduler.go` - CRON scheduler implementation
-- `cmd/canectors/main.go` - CLI with scheduler and dry-run integration
+- `cmd/cannectors/main.go` - CLI with scheduler and dry-run integration
 - `internal/modules/output/http_request.go` - HTTP Request output module
 - `internal/runtime/pipeline.go` - Pipeline executor with logging
 - `internal/logger/logger.go` - Basic logger package
@@ -403,10 +403,10 @@ ed with sufficient context for debugging
 - **Architecture Decision:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI Architecture]
 - **Epic Definition:** [Source: _bmad-output/planning-artifacts/epics.md#Epic 4: Advanced Runtime Features]
 - **Story Requirements:** [Source: _bmad-output/planning-artifacts/epics.md#Story 4.3: Implement Execution Logging]
-- **Logger Implementation:** [Source: canectors-runtime/internal/logger/logger.go]
-- **Executor Implementation:** [Source: canectors-runtime/internal/runtime/pipeline.go]
-- **CLI Implementation:** [Source: canectors-runtime/cmd/canectors/main.go]
-- **Module Implementations:** [Source: canectors-runtime/internal/modules/]
+- **Logger Implementation:** [Source: cannectors-runtime/internal/logger/logger.go]
+- **Executor Implementation:** [Source: cannectors-runtime/internal/runtime/pipeline.go]
+- **CLI Implementation:** [Source: cannectors-runtime/cmd/cannectors/main.go]
+- **Module Implementations:** [Source: cannectors-runtime/internal/modules/]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 
 ## Dev Agent Record
@@ -433,12 +433,12 @@ ed with sufficient context for debugging
 
 ### File List
 
-- `canectors-runtime/README.md` - Documentation mise à jour avec section logging complète
-- `canectors-runtime/cmd/canectors/main.go` - Ajout flags `--log-file`, `--verbose`, `--quiet` avec support format human-readable
-- `canectors-runtime/internal/logger/logger.go` - Implémentation complète des helpers d'exécution (WithExecution, LogExecutionStart, LogStageStart, LogStageEnd, LogMetrics, LogError), support format human-readable, support log file
-- `canectors-runtime/internal/logger/logger_test.go` - Tests complets pour tous les helpers d'exécution, format human-readable, log file
-- `canectors-runtime/internal/runtime/pipeline.go` - Intégration logging d'exécution avec helpers structurés
-- `canectors-runtime/internal/modules/input/http_polling.go` - Logging détaillé avec contexte d'exécution
-- `canectors-runtime/internal/modules/filter/mapping.go` - Logging détaillé avec contexte d'exécution
-- `canectors-runtime/internal/modules/filter/condition.go` - Logging détaillé avec contexte d'exécution
-- `canectors-runtime/internal/modules/output/http_request.go` - Logging détaillé avec contexte d'exécution
+- `cannectors-runtime/README.md` - Documentation mise à jour avec section logging complète
+- `cannectors-runtime/cmd/cannectors/main.go` - Ajout flags `--log-file`, `--verbose`, `--quiet` avec support format human-readable
+- `cannectors-runtime/internal/logger/logger.go` - Implémentation complète des helpers d'exécution (WithExecution, LogExecutionStart, LogStageStart, LogStageEnd, LogMetrics, LogError), support format human-readable, support log file
+- `cannectors-runtime/internal/logger/logger_test.go` - Tests complets pour tous les helpers d'exécution, format human-readable, log file
+- `cannectors-runtime/internal/runtime/pipeline.go` - Intégration logging d'exécution avec helpers structurés
+- `cannectors-runtime/internal/modules/input/http_polling.go` - Logging détaillé avec contexte d'exécution
+- `cannectors-runtime/internal/modules/filter/mapping.go` - Logging détaillé avec contexte d'exécution
+- `cannectors-runtime/internal/modules/filter/condition.go` - Logging détaillé avec contexte d'exécution
+- `cannectors-runtime/internal/modules/output/http_request.go` - Logging détaillé avec contexte d'exécution

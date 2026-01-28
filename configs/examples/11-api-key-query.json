@@ -1,27 +1,25 @@
 {
-  "id": "api-key-query-example",
-  "name": "API Key in Query Parameter Example",
-  "description": "Example with API key in query parameter",
-  "version": "1.0.0",
-  "enabled": true,
-  "input": {
-    "type": "http-polling",
-    "config": {
+  "connector": {
+    "name": "api-key-query-example",
+    "version": "1.0.0",
+    "description": "Example with API key in query parameter",
+    "input": {
+      "type": "httpPolling",
       "endpoint": "https://api.example.com/data",
-      "timeout": 30
-    },
-    "authentication": {
-      "type": "api-key",
-      "credentials": {
-        "key": "${API_KEY}",
-        "location": "query",
-        "paramName": "apikey"
+      "schedule": "*/5 * * * *",
+      "timeoutMs": 30000,
+      "authentication": {
+        "type": "api-key",
+        "credentials": {
+          "key": "${API_KEY}",
+          "location": "query",
+          "paramName": "apikey"
+        }
       }
-    }
-  },
-  "output": {
-    "type": "http-request",
-    "config": {
+    },
+    "filters": [],
+    "output": {
+      "type": "httpRequest",
       "endpoint": "https://api.destination.com/data",
       "method": "POST"
     }

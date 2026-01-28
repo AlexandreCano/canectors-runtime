@@ -1,7 +1,7 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 6, 7, 8, 9, 10, 11]
 inputDocuments: 
-  - 'product-brief-canectors-2026-01-10.md'
+  - 'product-brief-cannectors-2026-01-10.md'
   - 'research/market-api-connector-automation-saas-research-2026-01-10.md'
 briefCount: 1
 researchCount: 1
@@ -11,7 +11,7 @@ workflowType: 'prd'
 lastStep: 11
 ---
 
-# Product Requirements Document - Canectors
+# Product Requirements Document - Cannectors
 
 **Author:** Cano
 **Date:** 2026-01-10

@@ -5,7 +5,7 @@ date: 2026-01-10
 author: Cano
 ---
 
-# Product Brief: Canectors
+# Product Brief: Cannectors
 
 ## Executive Summary
 

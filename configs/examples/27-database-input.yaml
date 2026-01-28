@@ -2,8 +2,6 @@
 # Demonstrates fetching data from a database using SQL queries
 # Supports PostgreSQL, MySQL, and SQLite
 
-schemaVersion: "1.1.0"
-
 connector:
   name: database-input-example
   version: "1.0.0"
@@ -25,12 +23,6 @@ connector:
       FROM users
       WHERE status = 'active'
       ORDER BY created_at DESC
-
-    # Connection pool settings
-    maxOpenConns: 10
-    maxIdleConns: 5
-    connMaxLifetimeSeconds: 1800
-    connMaxIdleTimeSeconds: 300
 
     # Query timeout
     timeoutMs: 30000

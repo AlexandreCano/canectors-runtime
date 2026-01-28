@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // waitForServer waits for the webhook server to be ready (address available)

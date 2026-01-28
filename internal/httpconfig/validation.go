@@ -4,7 +4,7 @@ package httpconfig
 import (
 	"fmt"
 
-	"github.com/canectors/runtime/internal/template"
+	"github.com/cannectors/runtime/internal/template"
 )
 
 // ValidationError represents a configuration validation error.

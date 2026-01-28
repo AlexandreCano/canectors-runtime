@@ -73,7 +73,7 @@ So that I can validate configurations without side effects on target systems.
 ### Architecture Requirements
 
 **Dry-Run Mode Implementation:**
-- **Location:** `canectors-runtime/internal/runtime/pipeline.go` (Executor), `canectors-runtime/internal/modules/output/` (Output modules)
+- **Location:** `cannectors-runtime/internal/runtime/pipeline.go` (Executor), `cannectors-runtime/internal/modules/output/` (Output modules)
 - **Purpose:** Validate pipeline configurations without side effects on target systems
 - **Scope:** All pipeline executions (single run and scheduled)
 
@@ -92,26 +92,26 @@ So that I can validate configurations without side effects on target systems.
 **Existing Code Structure:**
 - `internal/runtime/pipeline.go` - Executor with dry-run support (partial)
 - `internal/modules/output/http_request.go` - HTTP Request output module
-- `cmd/canectors/main.go` - CLI with `--dry-run` flag
+- `cmd/cannectors/main.go` - CLI with `--dry-run` flag
 - `internal/scheduler/scheduler.go` - Scheduler with executor adapter
 
 ### Project Structure Notes
 
 **File Locations:**
-- Executor implementation: `canectors-runtime/internal/runtime/pipeline.go`
-- Executor tests: `canectors-runtime/internal/runtime/pipeline_test.go`
-- Output module interface: `canectors-runtime/internal/modules/output/output.go`
-- HTTP Request module: `canectors-runtime/internal/modules/output/http_request.go`
-- HTTP Request tests: `canectors-runtime/internal/modules/output/http_request_test.go`
-- CLI integration: `canectors-runtime/cmd/canectors/main.go`
-- CLI tests: `canectors-runtime/cmd/canectors/main_test.go`
-- Scheduler integration: `canectors-runtime/cmd/canectors/main.go` (PipelineExecutorAdapter)
+- Executor implementation: `cannectors-runtime/internal/runtime/pipeline.go`
+- Executor tests: `cannectors-runtime/internal/runtime/pipeline_test.go`
+- Output module interface: `cannectors-runtime/internal/modules/output/output.go`
+- HTTP Request module: `cannectors-runtime/internal/modules/output/http_request.go`
+- HTTP Request tests: `cannectors-runtime/internal/modules/output/http_request_test.go`
+- CLI integration: `cannectors-runtime/cmd/cannectors/main.go`
+- CLI tests: `cannectors-runtime/cmd/cannectors/main_test.go`
+- Scheduler integration: `cannectors-runtime/cmd/cannectors/main.go` (PipelineExecutorAdapter)
 
 **Dependencies:**
-- Use existing `github.com/canectors/runtime/pkg/connector` for types
-- Use existing `github.com/canectors/runtime/internal/runtime` for Executor
-- Use existing `github.com/canectors/runtime/internal/logger` for logging
-- Use existing `github.com/canectors/runtime/internal/modules/output` for output modules
+- Use existing `github.com/cannectors/runtime/pkg/connector` for types
+- Use existing `github.com/cannectors/runtime/internal/runtime` for Executor
+- Use existing `github.com/cannectors/runtime/internal/logger` for logging
+- Use existing `github.com/cannectors/runtime/internal/modules/output` for output modules
 
 ### Technical Requirements
 
@@ -167,11 +167,11 @@ So that I can validate configurations without side effects on target systems.
 - `strings` for string manipulation in preview
 
 **Existing Dependencies (already in go.mod):**
-- `github.com/canectors/runtime/pkg/connector` - Pipeline and execution result types
-- `github.com/canectors/runtime/internal/runtime` - Executor
-- `github.com/canectors/runtime/internal/modules/output` - Output module interface
-- `github.com/canectors/runtime/internal/logger` - Structured logging
-- `github.com/canectors/runtime/internal/auth` - Authentication handling
+- `github.com/cannectors/runtime/pkg/connector` - Pipeline and execution result types
+- `github.com/cannectors/runtime/internal/runtime` - Executor
+- `github.com/cannectors/runtime/internal/modules/output` - Output module interface
+- `github.com/cannectors/runtime/internal/logger` - Structured logging
+- `github.com/cannectors/runtime/internal/auth` - Authentication handling
 
 **No New Dependencies Required:**
 - All functionality can be implemented using existing dependencies
@@ -183,7 +183,7 @@ So that I can validate configurations without side effects on target systems.
 - Scheduler uses `PipelineExecutorAdapter` to execute pipelines
 - Scheduler already supports executor with dry-run flag (via adapter)
 - CLI already has scheduler mode that auto-detects from `schedule` field
-- Scheduler integration is in `cmd/canectors/main.go`
+- Scheduler integration is in `cmd/cannectors/main.go`
 
 **From Story 3.6 (Authentication Handling):**
 - Authentication is handled in `internal/auth/` package
@@ -210,7 +210,7 @@ So that I can validate configurations without side effects on target systems.
 
 **From Story 2.1 (Go CLI Project Structure):**
 - Project structure follows Go best practices
-- CLI structure in `/cmd/canectors/main.go` ready for enhancements
+- CLI structure in `/cmd/cannectors/main.go` ready for enhancements
 - Test structure co-located with source files
 
 ### Git Intelligence Summary
@@ -231,7 +231,7 @@ So that I can validate configurations without side effects on target systems.
 
 **Files Recently Modified:**
 - `internal/scheduler/scheduler.go` - CRON scheduler implementation
-- `cmd/canectors/main.go` - CLI with scheduler integration
+- `cmd/cannectors/main.go` - CLI with scheduler integration
 - `internal/modules/output/http_request.go` - HTTP Request output module
 - `internal/runtime/pipeline.go` - Pipeline executor
 
@@ -288,11 +288,11 @@ So that I can validate configurations without side effects on target systems.
 - **Architecture Decision:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI Architecture]
 - **Epic Definition:** [Source: _bmad-output/planning-artifacts/epics.md#Epic 4: Advanced Runtime Features]
 - **Story Requirements:** [Source: _bmad-output/planning-artifacts/epics.md#Story 4.2: Implement Dry-Run Mode]
-- **Executor Implementation:** [Source: canectors-runtime/internal/runtime/pipeline.go]
-- **Output Module Interface:** [Source: canectors-runtime/internal/modules/output/output.go]
-- **HTTP Request Module:** [Source: canectors-runtime/internal/modules/output/http_request.go]
-- **CLI Implementation:** [Source: canectors-runtime/cmd/canectors/main.go]
-- **Scheduler Implementation:** [Source: canectors-runtime/internal/scheduler/scheduler.go]
+- **Executor Implementation:** [Source: cannectors-runtime/internal/runtime/pipeline.go]
+- **Output Module Interface:** [Source: cannectors-runtime/internal/modules/output/output.go]
+- **HTTP Request Module:** [Source: cannectors-runtime/internal/modules/output/http_request.go]
+- **CLI Implementation:** [Source: cannectors-runtime/cmd/cannectors/main.go]
+- **Scheduler Implementation:** [Source: cannectors-runtime/internal/scheduler/scheduler.go]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 
 ## Dev Agent Record
@@ -356,7 +356,7 @@ Claude Opus 4.5
 - `pkg/connector/types.go` - Added `DryRunPreview` field and `RequestPreview` struct to `ExecutionResult`
 - `internal/runtime/pipeline.go` - Added `executeDryRunPreview()` method and integration in Execute/ExecuteWithRecords
 - `internal/runtime/pipeline_test.go` - Added 21 unit tests for dry-run preview and error handling
-- `cmd/canectors/main.go` - Added `printDryRunPreview()` and updated `createOutputModule()` for preview support
+- `cmd/cannectors/main.go` - Added `printDryRunPreview()` and updated `createOutputModule()` for preview support
 - `README.md` - Added comprehensive dry-run documentation section
 
 ## Change Log

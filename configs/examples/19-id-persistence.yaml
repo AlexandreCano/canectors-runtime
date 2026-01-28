@@ -22,9 +22,11 @@ connector:
     headers:
       Accept: application/json
     authentication:
-      type: apiKey
-      header: X-API-Key
-      valueRef: "${EVENTS_API_KEY}"
+      type: api-key
+      credentials:
+        key: "${EVENTS_API_KEY}"
+        location: header
+        headerName: X-API-Key
 
     # State persistence configuration
     statePersistence:

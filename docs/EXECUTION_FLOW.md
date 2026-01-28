@@ -1,4 +1,4 @@
-# EXECUTION FLOW — Canectors Runtime
+# EXECUTION FLOW — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -15,7 +15,7 @@ Imaginez une application Spring Boot avec:
 - Scheduling optionnel via `@Scheduled`
 - Gestion graceful shutdown
 
-**Canectors fait exactement ça**, mais:
+**Cannectors fait exactement ça**, mais:
 - Sans Spring container
 - CLI via Cobra (équivalent Picocli/JCommander)
 - Configuration déclarative JSON/YAML → Pipeline exécution
@@ -26,7 +26,7 @@ Imaginez une application Spring Boot avec:
 
 ### 2.1 Entry Point Principal
 
-**Fichier**: `cmd/canectors/main.go`
+**Fichier**: `cmd/cannectors/main.go`
 
 ```
 func main() {
@@ -38,9 +38,9 @@ func main() {
 
 **Équivalent Java**:
 ```java
-public class CanectorsApplication {
+public class CannectorsApplication {
     public static void main(String[] args) {
-        int exitCode = new CommandLine(new CanectorsCommand()).execute(args);
+        int exitCode = new CommandLine(new CannectorsCommand()).execute(args);
         System.exit(exitCode);
     }
 }
@@ -70,12 +70,12 @@ public class CanectorsApplication {
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as cmd/canectors
+    participant CLI as cmd/cannectors
     participant Config as config.Parser
     participant Validator as config.Validator
     participant CLIOut as cli.PrintErrors
 
-    User->>CLI: canectors validate config.yaml
+    User->>CLI: cannectors validate config.yaml
     CLI->>Config: ParseConfig(filepath)
 
     alt File not found
@@ -183,7 +183,7 @@ Error 2: /connector/output/method
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as cmd/canectors
+    participant CLI as cmd/cannectors
     participant Config as config
     participant Factory as factory
     participant Executor as runtime.Executor
@@ -192,7 +192,7 @@ sequenceDiagram
     participant Output as output.Module
     participant Logger
 
-    User->>CLI: canectors run config.yaml
+    User->>CLI: cannectors run config.yaml
 
     %% Phase 1: Configuration
     CLI->>Config: ParseConfig(filepath)
@@ -638,14 +638,14 @@ Exit Codes:
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as cmd/canectors
+    participant CLI as cmd/cannectors
     participant Config as config
     participant Factory as factory
     participant Scheduler
     participant Cron as robfig/cron
     participant Signal as OS Signals
 
-    User->>CLI: canectors run config.yaml
+    User->>CLI: cannectors run config.yaml
 
     %% Parse & Convert (identique)
     CLI->>Config: Parse + Convert
@@ -1077,7 +1077,7 @@ case result := <-responseChan:
 
 ### Activation
 
-**Flag CLI**: `canectors run config.yaml --dry-run`
+**Flag CLI**: `cannectors run config.yaml --dry-run`
 
 ---
 
@@ -1208,7 +1208,7 @@ MDC.clear();
 ### 10.1 Parse Error Path
 
 ```
-canectors run invalid.json
+cannectors run invalid.json
   ↓
 ParseConfig() → ParseError (invalid JSON syntax)
   ↓
@@ -1222,7 +1222,7 @@ Exit(2)
 ### 10.2 Validation Error Path
 
 ```
-canectors run missing-endpoint.yaml
+cannectors run missing-endpoint.yaml
   ↓
 ParseConfig() → Success
   ↓
@@ -1240,7 +1240,7 @@ Exit(1)
 ### 10.3 Module Creation Error Path
 
 ```
-canectors run config.yaml
+cannectors run config.yaml
   ↓
 Parse + Validate → Success
   ↓
@@ -1258,7 +1258,7 @@ Exit(3)
 ### 10.4 Runtime Error Path (Input Failure)
 
 ```
-canectors run config.yaml
+cannectors run config.yaml
   ↓
 ... (parse, validate, convert OK)
   ↓
@@ -1284,7 +1284,7 @@ Exit(3)
 ### 10.5 Runtime Error Path (Output Failure with OnError=skip)
 
 ```
-canectors run config.yaml (output onError: skip)
+cannectors run config.yaml (output onError: skip)
   ↓
 executor.Execute()
   ↓
@@ -1344,7 +1344,7 @@ Exit(0)
 
 ```java
 @SpringBootApplication
-public class CanectorsApplication {
+public class CannectorsApplication {
     public static void main(String[] args) {
         // 1. CLI parsing
         CommandLineArgs cliArgs = parseArgs(args);

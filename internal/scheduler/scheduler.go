@@ -19,8 +19,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Error definitions

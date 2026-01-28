@@ -57,7 +57,7 @@ So that I can load connector declarations before execution.
   - [x] Add helper functions for format detection (`IsJSON`, `IsYAML`)
   - [x] Add unit tests for format auto-detection, unified parsing
 - [x] Task 5: Integrate with CLI command (AC: all above, CLI integration)
-  - [x] Update `validate` command in `/cmd/canectors/main.go` to use new parser
+  - [x] Update `validate` command in `/cmd/cannectors/main.go` to use new parser
   - [x] Update `run` command to use parser for loading configs before execution
   - [x] Display parsing and validation errors in user-friendly format
   - [x] Exit with appropriate error codes (0 = success, 1 = validation error, 2 = parsing error)
@@ -79,7 +79,7 @@ So that I can load connector declarations before execution.
 - Pipeline schema: `/types/pipeline-schema.json` in Next.js project (Epic 1)
 - Options for Go runtime:
   1. **Embed schema at build time** (recommended) - Use `embed` package to include schema in binary
-  2. **Copy schema to runtime project** - Mirror schema file in `canectors-runtime/configs/pipeline-schema.json`
+  2. **Copy schema to runtime project** - Mirror schema file in `cannectors-runtime/configs/pipeline-schema.json`
   3. **Fetch schema from API** - Not recommended for CLI runtime (portability, offline support)
 - **Recommendation:** Embed schema using Go 1.16+ `embed` package for single-binary distribution
 
@@ -100,7 +100,7 @@ So that I can load connector declarations before execution.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── config/
 │       ├── parser.go          # JSON/YAML parsing
@@ -111,7 +111,7 @@ canectors-runtime/
 ├── configs/
 │   └── pipeline-schema.json   # Schema file (if not embedded)
 └── cmd/
-    └── canectors/
+    └── cannectors/
         └── main.go            # CLI commands using parser
 ```
 
@@ -255,8 +255,8 @@ require (
 - Performance: Parsing + validation should complete in <1 second for typical configs
 
 **Story 2.1 (Previous in Epic 2):**
-- Go CLI project initialized at `/home/alexandrecano/Workspace/canectors-runtime/` [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
-- Project structure: `/cmd/canectors/`, `/internal/`, `/pkg/connector/`
+- Go CLI project initialized at `/home/alexandrecano/Workspace/cannectors-runtime/` [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
+- Project structure: `/cmd/cannectors/`, `/internal/`, `/pkg/connector/`
 - CLI framework: Cobra (v1.10.2) for command-line parsing
 - Types defined: `Pipeline`, `ModuleConfig`, `AuthConfig`, `ErrorHandling`, `ExecutionResult` in `/pkg/connector/types.go`
 - Logger implemented: Structured logging with `log/slog` (Go 1.21+)
@@ -282,16 +282,16 @@ require (
 - This is greenfield Go parsing implementation
 
 **Repository Structure:**
-- Main project: `canectors/` (Next.js T3 Stack)
-- Runtime project: `canectors-runtime/` (Go - separate project)
+- Main project: `cannectors/` (Next.js T3 Stack)
+- Runtime project: `cannectors-runtime/` (Go - separate project)
 - Schema location: `/types/pipeline-schema.json` in main project
 
 **Files from Previous Stories:**
 - `/types/pipeline-schema.json` - Pipeline schema (Epic 1)
 - `/utils/pipeline-validator.ts` - TypeScript validator (Epic 1)
 - `/utils/yaml-parser.ts` - TypeScript YAML parser (Epic 1)
-- `/canectors-runtime/cmd/canectors/main.go` - CLI entry point (Story 2.1)
-- `/canectors-runtime/pkg/connector/types.go` - Go types (Story 2.1)
+- `/cannectors-runtime/cmd/cannectors/main.go` - CLI entry point (Story 2.1)
+- `/cannectors-runtime/pkg/connector/types.go` - Go types (Story 2.1)
 
 ### Latest Technical Information
 
@@ -382,8 +382,8 @@ N/A - No debugging issues encountered
 - `internal/config/testdata/invalid-schema-wrong-type.json` - Test fixture
 - `internal/config/testdata/empty.json` - Test fixture
 - `internal/config/testdata/empty.yaml` - Test fixture
-- `cmd/canectors/main.go` - CLI entry point with validate and run commands
-- `cmd/canectors/main_test.go` - CLI integration tests (13 tests)
+- `cmd/cannectors/main.go` - CLI entry point with validate and run commands
+- `cmd/cannectors/main_test.go` - CLI integration tests (13 tests)
 
 **Modified Files:**
 - `go.mod` - Added dependencies: gopkg.in/yaml.v3, github.com/santhosh-tekuri/jsonschema/v6
@@ -402,7 +402,7 @@ N/A - No debugging issues encountered
 
 **HIGH Severity (3):**
 1. ✅ FIXED: Deleted obsolete `internal/config/config.go` file with stub code
-2. ✅ FIXED: Removed unused `formatPath` function from `cmd/canectors/main.go`
+2. ✅ FIXED: Removed unused `formatPath` function from `cmd/cannectors/main.go`
 3. ✅ FIXED: Added `sync.Once` for thread-safe schema compilation in `validator.go`
 
 **MEDIUM Severity (4):**

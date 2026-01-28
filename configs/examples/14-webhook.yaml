@@ -3,8 +3,8 @@
 # Schedule is NOT ALLOWED for webhook (event-driven) input types.
 #
 # Usage:
-#   canectors validate ./configs/examples/14-webhook.yaml
-#   canectors run --dry-run ./configs/examples/14-webhook.yaml
+#   cannectors validate ./configs/examples/14-webhook.yaml
+#   cannectors run --dry-run ./configs/examples/14-webhook.yaml
 #
 # Compare with 13-scheduled.yaml (httpPolling + schedule required).
 

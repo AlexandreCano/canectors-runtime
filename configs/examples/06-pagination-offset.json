@@ -1,14 +1,13 @@
 {
-  "id": "pagination-offset-example",
-  "name": "Offset Pagination Example",
-  "description": "Example with offset-based pagination",
-  "version": "1.0.0",
-  "enabled": true,
-  "input": {
-    "type": "http-polling",
-    "config": {
+  "connector": {
+    "name": "pagination-offset-example",
+    "version": "1.0.0",
+    "description": "Example with offset-based pagination",
+    "input": {
+      "type": "httpPolling",
       "endpoint": "https://api.example.com/products",
-      "timeout": 30,
+      "schedule": "*/5 * * * *",
+      "timeoutMs": 30000,
       "dataField": "items",
       "pagination": {
         "type": "offset",
@@ -16,20 +15,19 @@
         "limitParam": "limit",
         "limit": 100,
         "totalField": "total"
+      },
+      "authentication": {
+        "type": "api-key",
+        "credentials": {
+          "key": "${API_KEY}",
+          "location": "query",
+          "paramName": "api_key"
+        }
       }
     },
-    "authentication": {
-      "type": "api-key",
-      "credentials": {
-        "key": "${API_KEY}",
-        "location": "query",
-        "paramName": "api_key"
-      }
-    }
-  },
-  "output": {
-    "type": "http-request",
-    "config": {
+    "filters": [],
+    "output": {
+      "type": "httpRequest",
       "endpoint": "https://api.destination.com/products",
       "method": "POST"
     }

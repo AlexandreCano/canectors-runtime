@@ -15,7 +15,7 @@ So that I can build a portable runtime for executing connector pipelines that wo
 **Given** I am setting up the CLI runtime project  
 **When** I initialize the Go project structure  
 **Then** The project follows Go best practices with:
-- `/cmd/canectors/` for main entry point
+- `/cmd/cannectors/` for main entry point
 - `/internal/modules/` for Input/Filter/Output modules
 - `/internal/runtime/` for pipeline execution engine
 - `/internal/config/` for configuration parsing and validation
@@ -31,14 +31,14 @@ So that I can build a portable runtime for executing connector pipelines that wo
 ## Tasks / Subtasks
 
 - [x] Task 1: Initialize Go module and project structure (AC: All)
-  - [x] Create project directory `canectors-runtime/` (separate from Next.js project)
-  - [x] Initialize Go module: `go mod init github.com/canectors/runtime` (or appropriate module path)
+  - [x] Create project directory `cannectors-runtime/` (separate from Next.js project)
+  - [x] Initialize Go module: `go mod init github.com/cannectors/runtime` (or appropriate module path)
   - [x] Create directory structure: `/cmd/`, `/internal/`, `/pkg/`, `/configs/`
-  - [x] Create subdirectories: `/cmd/canectors/`, `/internal/modules/input/`, `/internal/modules/filter/`, `/internal/modules/output/`, `/internal/runtime/`, `/internal/config/`, `/internal/scheduler/`, `/internal/logger/`, `/pkg/connector/`
+  - [x] Create subdirectories: `/cmd/cannectors/`, `/internal/modules/input/`, `/internal/modules/filter/`, `/internal/modules/output/`, `/internal/runtime/`, `/internal/config/`, `/internal/scheduler/`, `/internal/logger/`, `/pkg/connector/`
   - [x] Create `.gitignore` for Go artifacts (binaries, test coverage, vendor, etc.)
   - [x] Verify structure matches architecture specification
 - [x] Task 2: Create main entry point (AC: All)
-  - [x] Create `/cmd/canectors/main.go` with basic CLI structure
+  - [x] Create `/cmd/cannectors/main.go` with basic CLI structure
   - [x] Set up command-line argument parsing (use `cobra` or `flag` package)
   - [x] Add basic help command
   - [x] Add version command
@@ -66,18 +66,18 @@ So that I can build a portable runtime for executing connector pipelines that wo
 ### Architecture Requirements
 
 **Project Location:**
-- Separate project: `canectors-runtime/` (independent from Next.js `canectors/` project)
-- Root directory: At same level as main `canectors/` project or in subdirectory
+- Separate project: `cannectors-runtime/` (independent from Next.js `cannectors/` project)
+- Root directory: At same level as main `cannectors/` project or in subdirectory
 - This is a standalone Go project that will be deployed separately (Docker workers on Railway/Fly.io)
 
 **Go Module Structure:**
-- Module name: `github.com/canectors/runtime` (or appropriate path based on repository structure)
+- Module name: `github.com/cannectors/runtime` (or appropriate path based on repository structure)
 - Go version: Latest stable (1.21+ recommended for 2026)
 - Follow standard Go project layout: https://github.com/golang-standards/project-layout
 
 **Directory Structure (from Architecture):**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── README.md
 ├── go.mod
 ├── go.sum
@@ -86,7 +86,7 @@ canectors-runtime/
 │   └── workflows/
 │       └── ci.yml
 ├── cmd/
-│   └── canectors/
+│   └── cannectors/
 │       └── main.go
 ├── internal/
 │   ├── config/
@@ -257,8 +257,8 @@ canectors-runtime/
 - This is greenfield Go project initialization
 
 **Repository Structure:**
-- Main project: `canectors/` (Next.js T3 Stack)
-- Runtime project: `canectors-runtime/` (Go - to be created)
+- Main project: `cannectors/` (Next.js T3 Stack)
+- Runtime project: `cannectors-runtime/` (Go - to be created)
 - Both projects should be in same repository or separate repositories (decision needed)
 
 ### Latest Technical Information
@@ -303,7 +303,7 @@ Claude Opus 4.5
 
 ### Completion Notes List
 
-- **Task 1**: Created `canectors-runtime/` project at `/home/alexandrecano/Workspace/canectors-runtime/` with complete directory structure matching architecture specification. Go module initialized as `github.com/canectors/runtime` with Go 1.23.5.
+- **Task 1**: Created `cannectors-runtime/` project at `/home/alexandrecano/Workspace/cannectors-runtime/` with complete directory structure matching architecture specification. Go module initialized as `github.com/cannectors/runtime` with Go 1.23.5.
 
 - **Task 2**: Implemented main entry point using Cobra CLI framework (v1.10.2). CLI includes: help, version, run (with --dry-run flag), validate, and list (with --type filter) commands. Version info supports ldflags injection for build metadata.
 
@@ -321,7 +321,7 @@ Claude Opus 4.5
 
 ### File List
 
-**New Files Created (in /home/alexandrecano/Workspace/canectors-runtime/):**
+**New Files Created (in /home/alexandrecano/Workspace/cannectors-runtime/):**
 - `go.mod` - Go module definition
 - `go.sum` - Go dependency checksums
 - `.gitignore` - Git ignore patterns for Go artifacts
@@ -331,7 +331,7 @@ Claude Opus 4.5
 - `CONTRIBUTING.md` - Contribution guidelines (added in review)
 - `Makefile` - Build automation
 - `README.md` - Project documentation
-- `cmd/canectors/main.go` - CLI entry point with Cobra
+- `cmd/cannectors/main.go` - CLI entry point with Cobra
 - `internal/config/config.go` - Configuration loader placeholder
 - `internal/runtime/pipeline.go` - Pipeline executor placeholder
 - `internal/modules/input/input.go` - Input module placeholders

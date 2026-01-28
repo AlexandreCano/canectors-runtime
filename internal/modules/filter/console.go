@@ -11,7 +11,7 @@ import (
 
 	"github.com/dop251/goja"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // Console configuration limits

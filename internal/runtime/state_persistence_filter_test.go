@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/canectors/runtime/internal/factory"
-	"github.com/canectors/runtime/internal/modules/input"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/factory"
+	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // TestExecutor_StatePersistence_ID_WithFilterRenaming tests that ID extraction

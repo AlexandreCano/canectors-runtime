@@ -3,7 +3,7 @@ package output
 import (
 	"testing"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 func TestParseDatabaseOutputConfig(t *testing.T) {

@@ -3,7 +3,7 @@
 # Version: 6.0.0-alpha.22
 # Date: 2026-01-10T19:24:24.612Z
 
-project_name: canectors-bmad
+project_name: cannectors-bmad
 user_skill_level: intermediate
 planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
 implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"

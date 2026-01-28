@@ -13,18 +13,18 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/canectors/runtime/internal/auth"
-	"github.com/canectors/runtime/internal/errhandling"
-	"github.com/canectors/runtime/internal/httpconfig"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/auth"
+	"github.com/cannectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/httpconfig"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values
 const (
 	defaultTimeout     = 30 * time.Second
-	defaultUserAgent   = "Canectors-Runtime/1.0"
+	defaultUserAgent   = "Cannectors-Runtime/1.0"
 	maxPaginationPages = 1000 // Prevent infinite loops
 )
 

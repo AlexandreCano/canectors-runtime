@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"github.com/canectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
 // ErrorCategory represents the category of an error (re-exported from errhandling).

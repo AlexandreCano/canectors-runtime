@@ -1,16 +1,14 @@
 {
   "connector": {
-    "id": "hourly-sync",
     "name": "hourly-sync",
-    "description": "Synchronizes data from source API to destination every hour",
     "version": "1.0.0",
-    "enabled": true,
+    "description": "Synchronizes data from source API to destination every hour",
     "input": {
       "type": "httpPolling",
       "schedule": "0 * * * *",
       "endpoint": "https://api.example.com/data",
       "method": "GET",
-      "timeout": 30000,
+      "timeoutMs": 30000,
       "headers": {
         "Accept": "application/json"
       },
@@ -44,7 +42,7 @@
       "type": "httpRequest",
       "endpoint": "https://api.destination.com/import",
       "method": "POST",
-      "timeout": 60000,
+      "timeoutMs": 60000,
       "headers": {
         "Content-Type": "application/json"
       },
@@ -57,10 +55,12 @@
         }
       }
     },
-    "errorHandling": {
-      "retryCount": 3,
-      "retryDelay": 5000,
-      "onError": "stop"
+    "defaults": {
+      "onError": "fail",
+      "retry": {
+        "maxAttempts": 3,
+        "delayMs": 5000
+      }
     }
   }
 }

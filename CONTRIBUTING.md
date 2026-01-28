@@ -1,11 +1,11 @@
-# Contributing to Canectors Runtime
+# Contributing to Cannectors Runtime
 
-Thank you for your interest in contributing to Canectors Runtime!
+Thank you for your interest in contributing to Cannectors Runtime!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/canectors-runtime.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/cannectors-runtime.git`
 3. Create a feature branch: `git checkout -b feature/your-feature-name`
 4. Make your changes
 5. Run tests: `make test`

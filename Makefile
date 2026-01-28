@@ -1,8 +1,8 @@
-# Canectors Runtime Makefile
+# Cannectors Runtime Makefile
 # Build, test, and lint commands for the Go CLI
 
 # Build variables
-BINARY_NAME=canectors
+BINARY_NAME=cannectors
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -19,7 +19,7 @@ GOFMT=gofmt
 GOVET=$(GOCMD) vet
 
 # Directories
-CMD_DIR=./cmd/canectors
+CMD_DIR=./cmd/cannectors
 BIN_DIR=./bin
 DIST_DIR=./dist
 

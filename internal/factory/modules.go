@@ -17,11 +17,11 @@ package factory
 import (
 	"fmt"
 
-	"github.com/canectors/runtime/internal/modules/filter"
-	"github.com/canectors/runtime/internal/modules/input"
-	"github.com/canectors/runtime/internal/modules/output"
-	"github.com/canectors/runtime/internal/registry"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/modules/filter"
+	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/modules/output"
+	"github.com/cannectors/runtime/internal/registry"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // maxNestingDepth is the maximum allowed depth for nested module configurations.

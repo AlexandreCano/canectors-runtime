@@ -1,4 +1,4 @@
-module github.com/canectors/runtime
+module github.com/cannectors/runtime
 
 go 1.24.0
 

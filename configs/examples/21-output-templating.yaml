@@ -53,7 +53,7 @@ connector:
       Content-Type: "application/json"
       X-Correlation-ID: "{{record.correlation_id}}"
       X-Customer-Name: "{{record.customer_name}}"
-      X-Request-Source: "canectors-pipeline"  # Static header value
+      X-Request-Source: "cannectors-pipeline"  # Static header value
 
     request:
       bodyFrom: "record"  # One request per record

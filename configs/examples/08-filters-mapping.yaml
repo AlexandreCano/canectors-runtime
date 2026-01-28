@@ -1,16 +1,19 @@
-id: filters-mapping-example
-name: Mapping Filter Example
-description: Example with field mapping filter
-version: "1.0.0"
-enabled: true
-input:
-  type: http-polling
-  config:
+# Example: Mapping Filter
+# Demonstrates field mapping with transformations
+
+connector:
+  name: filters-mapping-example
+  version: "1.0.0"
+  description: Example with field mapping filter
+
+  input:
+    type: httpPolling
     endpoint: https://api.source.com/customers
-    timeout: 30
-filters:
-  - type: mapping
-    config:
+    schedule: "*/5 * * * *"
+    timeoutMs: 30000
+
+  filters:
+    - type: mapping
       mappings:
         - source: id
           target: customerId
@@ -24,11 +27,11 @@ filters:
         - source: created_at
           target: registrationDate
           transforms:
-            - op: formatDate
+            - op: dateFormat
               format: "2006-01-02"
       onError: skip
-output:
-  type: http-request
-  config:
+
+  output:
+    type: httpRequest
     endpoint: https://api.destination.com/customers
     method: POST

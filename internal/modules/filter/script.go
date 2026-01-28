@@ -15,8 +15,8 @@ import (
 
 	"github.com/dop251/goja"
 
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/pathutil"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/pathutil"
 )
 
 // Error codes for script module

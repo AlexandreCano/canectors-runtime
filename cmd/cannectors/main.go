@@ -1,4 +1,4 @@
-// Package main provides the CLI entry point for the Canectors runtime.
+// Package main provides the CLI entry point for the Cannectors runtime.
 package main
 
 import (
@@ -12,14 +12,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/canectors/runtime/internal/cli"
-	"github.com/canectors/runtime/internal/config"
-	"github.com/canectors/runtime/internal/factory"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/internal/runtime"
-	"github.com/canectors/runtime/internal/scheduler"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/cli"
+	"github.com/cannectors/runtime/internal/config"
+	"github.com/cannectors/runtime/internal/factory"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/internal/runtime"
+	"github.com/cannectors/runtime/internal/scheduler"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Exit codes
@@ -52,22 +52,22 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "canectors",
-	Short: "Canectors - Declarative data pipeline runtime",
-	Long: `Canectors is a CLI tool for running declarative data pipelines.
+	Use:   "cannectors",
+	Short: "Cannectors - Declarative data pipeline runtime",
+	Long: `Cannectors is a CLI tool for running declarative data pipelines.
 
 It parses and validates pipeline configurations (JSON/YAML format),
 then executes them according to the defined Input → Filter → Output pattern.
 
 Examples:
   # Validate a configuration file
-  canectors validate config.json
+  cannectors validate config.json
 
   # Run a pipeline
-  canectors run config.yaml
+  cannectors run config.yaml
 
   # Validate with verbose output (human-readable logs)
-  canectors validate --verbose config.json`,
+  cannectors validate --verbose config.json`,
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		logLevel := slog.LevelInfo
 		consoleFormat := logger.FormatJSON
@@ -107,9 +107,9 @@ Exit codes:
   2 - Parse errors (invalid JSON/YAML syntax)
 
 Examples:
-  canectors validate config.json
-  canectors validate pipeline.yaml
-  canectors validate --verbose config.json`,
+  cannectors validate config.json
+  cannectors validate pipeline.yaml
+  cannectors validate --verbose config.json`,
 	Args: cobra.ExactArgs(1),
 	Run:  runValidate,
 }
@@ -141,10 +141,10 @@ Exit codes:
   3 - Runtime errors
 
 Examples:
-  canectors run config.json                    # Run once
-  canectors run --verbose pipeline.yaml        # Run once with verbose output
-  canectors run --dry-run config.json          # Dry-run mode
-  canectors run scheduled-pipeline.yaml        # Run on CRON schedule (if input module has schedule)`,
+  cannectors run config.json                    # Run once
+  cannectors run --verbose pipeline.yaml        # Run once with verbose output
+  cannectors run --dry-run config.json          # Dry-run mode
+  cannectors run scheduled-pipeline.yaml        # Run on CRON schedule (if input module has schedule)`,
 	Args: cobra.ExactArgs(1),
 	Run:  runPipeline,
 }

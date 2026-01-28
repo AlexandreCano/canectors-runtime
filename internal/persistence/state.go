@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // DefaultStatePath is the default directory for state files.
-const DefaultStatePath = "./canectors-data/state"
+const DefaultStatePath = "./cannectors-data/state"
 
 // Common errors
 var (

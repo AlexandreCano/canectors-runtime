@@ -1,4 +1,4 @@
-# PACKAGE MAP — Canectors Runtime
+# PACKAGE MAP — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -9,8 +9,8 @@
 ## Vue d'Ensemble — Arborescence Packages
 
 ```
-canectors-runtime/
-├── cmd/canectors/          → CLI entry point
+cannectors-runtime/
+├── cmd/cannectors/          → CLI entry point
 ├── pkg/connector/          → API publique (types exportés)
 └── internal/               → Code privé (interne au projet)
     ├── auth/               → Authentification HTTP
@@ -29,7 +29,7 @@ canectors-runtime/
 
 ---
 
-## Package `cmd/canectors`
+## Package `cmd/cannectors`
 
 ### Responsabilité
 
@@ -81,10 +81,10 @@ canectors-runtime/
 
 ### Dépendances
 
-**Entrantes** (packages utilisant `cmd/canectors`):
+**Entrantes** (packages utilisant `cmd/cannectors`):
 - Aucune (entry point)
 
-**Sortantes** (packages utilisés par `cmd/canectors`):
+**Sortantes** (packages utilisés par `cmd/cannectors`):
 - `pkg/connector` → Types Pipeline, ExecutionResult
 - `internal/config` → Parse/validate config
 - `internal/factory` → Create modules
@@ -100,31 +100,31 @@ canectors-runtime/
 
 **Validate config**:
 ```bash
-canectors validate config.yaml
+cannectors validate config.yaml
 # Exit 0 si valide, 1 si validation errors, 2 si parse errors
 ```
 
 **Run pipeline once**:
 ```bash
-canectors run config.yaml
+cannectors run config.yaml
 # Exit 0 si success, 3 si runtime error
 ```
 
 **Run scheduled pipeline**:
 ```bash
-canectors run config.yaml  # Si config contient schedule CRON
+cannectors run config.yaml  # Si config contient schedule CRON
 # Tourne indéfiniment jusqu'à Ctrl+C
 ```
 
 **Dry-run mode**:
 ```bash
-canectors run config.yaml --dry-run
+cannectors run config.yaml --dry-run
 # Exécute pipeline sans envoyer data
 ```
 
 **Verbose logging**:
 ```bash
-canectors run config.yaml --verbose
+cannectors run config.yaml --verbose
 # Log level DEBUG + format human-readable
 ```
 
@@ -136,7 +136,7 @@ canectors run config.yaml --verbose
 
 **API publique** — Types exportés pour clients externes
 
-**Équivalent Java**: Package `com.canectors.api` avec classes DTO publiques
+**Équivalent Java**: Package `com.cannectors.api` avec classes DTO publiques
 
 ---
 
@@ -191,7 +191,7 @@ canectors run config.yaml --verbose
 
 ```java
 // pkg/connector types.go
-package com.canectors.api;
+package com.cannectors.api;
 
 public class Pipeline {
     private String id;
@@ -339,7 +339,7 @@ executor.Execute(pipeline)
 ### Dépendances
 
 **Entrantes**:
-- `cmd/canectors` → Parse/validate config
+- `cmd/cannectors` → Parse/validate config
 
 **Sortantes**:
 - `pkg/connector` → Types Pipeline, ModuleConfig
@@ -511,7 +511,7 @@ func (e *Executor) finalizeSuccess(result, startedAt, pipeline, timings) {
 ### Dépendances
 
 **Entrantes**:
-- `cmd/canectors` → Execute pipeline
+- `cmd/cannectors` → Execute pipeline
 - `scheduler` → Execute pipeline (via adapter)
 
 **Sortantes**:
@@ -709,7 +709,7 @@ func ParseConditionConfig(cfg map[string]interface{}) (filter.ConditionConfig, e
 ### Dépendances
 
 **Entrantes**:
-- `cmd/canectors` → Create modules
+- `cmd/cannectors` → Create modules
 
 **Sortantes**:
 - `pkg/connector` → ModuleConfig type
@@ -2134,7 +2134,7 @@ logger.LogError("HTTP request failed", errCtx)
 ```go
 // Dual output: console (human) + file (JSON)
 err := logger.SetLogFile(
-    "/var/log/canectors/pipeline.log",
+    "/var/log/cannectors/pipeline.log",
     slog.LevelInfo,
     logger.FormatHuman,  // Console format
 )
@@ -2484,7 +2484,7 @@ func (s *Scheduler) Register(pipeline *connector.Pipeline) error {
 ### Dépendances
 
 **Entrantes**:
-- `cmd/canectors` → Start scheduler pour pipelines scheduled
+- `cmd/cannectors` → Start scheduler pour pipelines scheduled
 
 **Sortantes**:
 - `pkg/connector` → Pipeline type
@@ -2702,14 +2702,14 @@ Hint: Use --verbose for detailed error information
   Version: 1.0.0
 ```
 
-**Utilisé par**: `canectors validate` command
+**Utilisé par**: `cannectors validate` command
 
 ---
 
 ### Dépendances
 
 **Entrantes**:
-- `cmd/canectors` → Affiche outputs CLI
+- `cmd/cannectors` → Affiche outputs CLI
 
 **Sortantes**:
 - `internal/config` → Types ParseError, ValidationError

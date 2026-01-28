@@ -5,8 +5,6 @@
 #
 # Use Case: Enrich order records with customer data from a CRM API
 
-schemaVersion: "1.1.0"
-
 connector:
   name: enrichment-templating-demo
   version: "1.0.0"
@@ -28,7 +26,8 @@ connector:
         X-Source: "order-enrichment"
       authentication:
         type: bearer
-        token: "${CRM_API_TOKEN}"
+        credentials:
+          token: "${CRM_API_TOKEN}"
       cache:
         maxSize: 1000
         defaultTTL: 300
@@ -42,11 +41,13 @@ connector:
       dataField: "result"
       headers:
         Content-Type: "application/json"
-        X-Correlation-ID: "{{record.correlation_id | default: \"unknown\"}}"
+        X-Correlation-ID: "{{record.correlation_id}}"
       authentication:
         type: api-key
-        key: "${LOOKUP_API_KEY}"
-        header: "X-API-Key"
+        credentials:
+          key: "${LOOKUP_API_KEY}"
+          location: header
+          headerName: "X-API-Key"
 
   output:
     type: httpRequest

@@ -95,7 +95,7 @@ So that I can send data to target REST APIs.
 ### Architecture Requirements
 
 **Output Module Execution:**
-- **Location:** `canectors-runtime/internal/modules/output/http_request.go`
+- **Location:** `cannectors-runtime/internal/modules/output/http_request.go`
 - **Interface:** Implements `output.Module` interface with `Send(records []map[string]interface{}) (int, error)` and `Close() error`
 - **Configuration:** Reads from `connector.Pipeline.Output` object, output with `type: "httpRequest"`
 - **Purpose:** Sends transformed data records to target REST APIs via HTTP requests
@@ -223,7 +223,7 @@ So that I can send data to target REST APIs.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── modules/
 │       └── output/
@@ -362,18 +362,18 @@ canectors-runtime/
 
 ### References
 
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.5` - Story requirements and acceptance criteria
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, module structure, deterministic execution requirements, HTTP client patterns
-- **Source:** `canectors-runtime/internal/modules/output/output.go` - Output module interface definition
-- **Source:** `canectors-runtime/internal/modules/filter/mapping.go` - Reference implementation for module pattern (Story 3.3)
-- **Source:** `canectors-runtime/internal/modules/filter/condition.go` - Reference implementation for module pattern (Story 3.4)
-- **Source:** `canectors-runtime/internal/modules/input/http_polling.go` - Reference implementation for HTTP client usage (Story 3.1)
-- **Source:** `canectors-runtime/pkg/connector/types.go` - Pipeline and ModuleConfig type definitions
-- **Source:** `canectors-runtime/internal/config/schema/pipeline-schema.json` - HTTP Request output schema definition (type, endpoint, method, headers, authentication, request, success)
-- **Source:** `canectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization, HTTP client best practices
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-4-implement-filter-module-execution-conditions.md` - Previous story learnings and patterns
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-3-implement-filter-module-execution-mapping.md` - Previous story learnings and patterns
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-1-implement-input-module-execution-http-polling.md` - HTTP client patterns and authentication handling
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.5` - Story requirements and acceptance criteria
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, module structure, deterministic execution requirements, HTTP client patterns
+- **Source:** `cannectors-runtime/internal/modules/output/output.go` - Output module interface definition
+- **Source:** `cannectors-runtime/internal/modules/filter/mapping.go` - Reference implementation for module pattern (Story 3.3)
+- **Source:** `cannectors-runtime/internal/modules/filter/condition.go` - Reference implementation for module pattern (Story 3.4)
+- **Source:** `cannectors-runtime/internal/modules/input/http_polling.go` - Reference implementation for HTTP client usage (Story 3.1)
+- **Source:** `cannectors-runtime/pkg/connector/types.go` - Pipeline and ModuleConfig type definitions
+- **Source:** `cannectors-runtime/internal/config/schema/pipeline-schema.json` - HTTP Request output schema definition (type, endpoint, method, headers, authentication, request, success)
+- **Source:** `cannectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization, HTTP client best practices
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-4-implement-filter-module-execution-conditions.md` - Previous story learnings and patterns
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-3-implement-filter-module-execution-mapping.md` - Previous story learnings and patterns
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-1-implement-input-module-execution-http-polling.md` - HTTP client patterns and authentication handling
 
 ## Dev Agent Record
 
@@ -401,12 +401,12 @@ Claude Opus 4.5 (via Cursor)
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/modules/output/http_request.go` - Main HTTP request output module implementation
-- `canectors-runtime/internal/modules/output/http_request_test.go` - Unit tests for HTTP request module
-- `canectors-runtime/internal/modules/output/integration_test.go` - Integration tests with pipeline executor
+- `cannectors-runtime/internal/modules/output/http_request.go` - Main HTTP request output module implementation
+- `cannectors-runtime/internal/modules/output/http_request_test.go` - Unit tests for HTTP request module
+- `cannectors-runtime/internal/modules/output/integration_test.go` - Integration tests with pipeline executor
 
 **Modified Files:**
-- `canectors-runtime/internal/modules/output/output.go` - Cleaned up to contain only Module interface
+- `cannectors-runtime/internal/modules/output/output.go` - Cleaned up to contain only Module interface
 
 ## Change Log
 

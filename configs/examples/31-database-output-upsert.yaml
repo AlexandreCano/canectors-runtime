@@ -1,8 +1,6 @@
 # Example: Database Upsert (Insert or Update)
 # Demonstrates upsert operations using native SQL syntax
 
-schemaVersion: "1.1.0"
-
 connector:
   name: database-upsert-example
   version: "1.0.0"

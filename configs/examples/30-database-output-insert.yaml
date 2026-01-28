@@ -1,8 +1,6 @@
 # Example: Database Output Module - INSERT
 # Demonstrates writing records to a database using raw SQL queries
 
-schemaVersion: "1.1.0"
-
 connector:
   name: database-output-insert-example
   version: "1.0.0"
