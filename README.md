@@ -1,4 +1,4 @@
-# Cannectors Runtime
+# Cannectors
 
 Cross-platform CLI for executing declarative data pipelines. Cannectors reads YAML/JSON pipeline configurations and orchestrates data transfers between systems using a modular Input → Filter → Output architecture.
 
