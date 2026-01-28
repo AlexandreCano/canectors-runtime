@@ -478,11 +478,12 @@ func (d *DatabaseInput) fetchCursor(ctx context.Context, query string, args []in
 		cursorArgs := make([]interface{}, len(args))
 		copy(cursorArgs, args)
 
-		if cursor != nil && cursorParam != "" {
+		if cursorParam != "" {
 			placeholder := ":" + cursorParam
 			if strings.Contains(cursorQuery, placeholder) {
 				cursorQuery = strings.ReplaceAll(cursorQuery, placeholder,
 					database.FormatPlaceholder(d.driver, len(cursorArgs)+1))
+				// Always append the current cursor value, which may be nil on the first page.
 				cursorArgs = append(cursorArgs, cursor)
 			}
 		}
