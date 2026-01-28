@@ -239,8 +239,3 @@ func TestGetDBFieldValue(t *testing.T) {
 	}
 }
 
-func TestDefaultValues(t *testing.T) {
-	t.Parallel()
-
-	// batchSize removed - not used in implementation
-}
