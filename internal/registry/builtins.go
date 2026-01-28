@@ -34,6 +34,14 @@ func registerBuiltinInputModules() {
 		}
 		return input.NewWebhookFromConfig(cfg)
 	})
+
+	// database - Database input module for SQL queries
+	RegisterInput("database", func(cfg *connector.ModuleConfig) (input.Module, error) {
+		if cfg == nil {
+			return nil, nil
+		}
+		return input.NewDatabaseInputFromConfig(cfg)
+	})
 }
 
 // registerBuiltinFilterModules registers all built-in filter module types.
@@ -113,6 +121,19 @@ func registerBuiltinFilterModules() {
 		}
 		return module, nil
 	})
+
+	// sql_call - SQL call filter module with database queries and caching
+	RegisterFilter("sql_call", func(cfg connector.ModuleConfig, index int) (filter.Module, error) {
+		sqlCallConfig, err := filter.ParseSQLCallConfig(cfg.Config)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sql_call config at index %d: %w", index, err)
+		}
+		module, err := filter.NewSQLCallFromConfig(sqlCallConfig)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sql_call config at index %d: %w", index, err)
+		}
+		return module, nil
+	})
 }
 
 // registerBuiltinOutputModules registers all built-in output module types.
@@ -123,5 +144,13 @@ func registerBuiltinOutputModules() {
 			return nil, nil
 		}
 		return output.NewHTTPRequestFromConfig(cfg)
+	})
+
+	// database - Database output module for SQL operations
+	RegisterOutput("database", func(cfg *connector.ModuleConfig) (output.Module, error) {
+		if cfg == nil {
+			return nil, nil
+		}
+		return output.NewDatabaseOutputFromConfig(cfg)
 	})
 }

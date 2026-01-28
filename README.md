@@ -827,6 +827,169 @@ filters:
 
 **See also:** `configs/examples/17-filters-enrichment.yaml` for a complete example.
 
+##### SQL Call Filter Module
+
+The SQL call filter module enriches records by executing SQL queries against databases. It supports PostgreSQL, MySQL, and SQLite with parameterized queries for security.
+
+**Configuration:**
+```yaml
+filters:
+  - type: sql_call
+    connectionString: postgres://user:pass@localhost:5432/mydb
+    # Or use environment variable reference:
+    # connectionStringRef: ${DATABASE_URL}
+    query: |
+      SELECT department, manager 
+      FROM user_details 
+      WHERE user_id = {{record.user_id}}
+    # Or load from file:
+    # queryFile: ./queries/get-user-details.sql
+    mergeStrategy: merge       # Optional: merge (default), replace, append
+    dataField: data            # Optional: extract from nested field
+    resultKey: _db_data        # Optional: key for append mode
+    onError: skip              # Optional: fail (default), skip, log
+    cache:                     # Optional: cache configuration
+      enabled: true
+      maxSize: 1000
+      defaultTTL: 300
+      key: "{{record.user_id}}"  # Optional: custom cache key
+```
+
+**Query Templating:**
+- Use `{{record.field}}` syntax to inject record values into queries
+- Nested fields supported: `{{record.customer.id}}`
+- Values are automatically converted to parameterized queries (SQL injection safe)
+
+**Multiple Queries:**
+```yaml
+filters:
+  - type: sql_call
+    connectionString: postgres://localhost/db
+    queries:
+      - SELECT name FROM users WHERE id = {{record.user_id}}
+      - SELECT address FROM addresses WHERE user_id = {{record.user_id}}
+```
+
+**See also:** `configs/examples/29-sql-call-enrichment.yaml` for a complete example.
+
+#### Supported Input Modules
+
+- **HTTP Polling**: Fetch data from REST APIs with pagination support
+- **Webhook**: Receive data via HTTP POST endpoints
+- **Database**: Query data from PostgreSQL, MySQL, or SQLite databases
+
+##### Database Input Module
+
+The database input module fetches records by executing SQL queries against databases.
+
+**Configuration:**
+```yaml
+input:
+  type: database
+  config:
+    connectionString: postgres://user:pass@localhost:5432/mydb
+    # Or use environment variable:
+    # connectionStringRef: ${DATABASE_URL}
+    query: SELECT id, name, email FROM users WHERE status = 'active'
+    # Or load from file:
+    # queryFile: ./queries/get-active-users.sql
+    driver: postgres           # Optional: auto-detected from connection string
+    timeoutMs: 30000           # Optional: query timeout (default: 30000)
+    maxOpenConns: 10           # Optional: connection pool settings
+    maxIdleConns: 5
+```
+
+**Incremental Queries with `{{lastRunTimestamp}}`:**
+
+Use `{{lastRunTimestamp}}` placeholder for incremental data sync:
+```yaml
+input:
+  type: database
+  config:
+    connectionString: postgres://localhost/db
+    query: |
+      SELECT * FROM orders 
+      WHERE updated_at > {{lastRunTimestamp}}
+      ORDER BY updated_at ASC
+      LIMIT 1000
+    incremental:
+      enabled: true
+      timestampField: updated_at
+```
+
+- **First run**: `{{lastRunTimestamp}}` is replaced with epoch time (1970-01-01) to fetch all records
+- **Subsequent runs**: Uses the timestamp from the last successful execution
+- Requires `incremental.enabled: true` to persist state between runs
+
+**Pagination:**
+```yaml
+input:
+  type: database
+  config:
+    connectionString: postgres://localhost/db
+    query: SELECT * FROM large_table
+    pagination:
+      type: limit-offset
+      limit: 1000
+      offsetParam: offset
+```
+
+**See also:** `configs/examples/27-database-input.yaml` and `configs/examples/28-database-incremental.yaml`
+
+#### Supported Output Modules
+
+- **HTTP Request**: Send data to REST APIs
+- **Database**: Write data to PostgreSQL, MySQL, or SQLite databases
+
+##### Database Output Module
+
+The database output module writes records to databases using SQL queries.
+
+**Configuration:** (module fields at output level, no `config:` wrapper — see `configs/examples/30-database-output-insert.yaml`)
+
+```yaml
+output:
+  type: database
+  connectionStringRef: ${DATABASE_URL}
+  # Or direct: connectionString: postgres://user:pass@localhost:5432/mydb
+  query: |
+    INSERT INTO orders (order_id, customer_id, total)
+    VALUES ({{record.order_id}}, {{record.customer_id}}, {{record.total}})
+  # Or load from file:
+  # queryFile: ./queries/insert-order.sql
+  transaction: true          # Optional: wrap all inserts in transaction
+  onError: skip              # Optional: fail (default), skip, log
+  timeoutMs: 30000
+```
+
+**Query Templating:**
+- Use `{{record.field}}` to inject record values
+- Nested fields: `{{record.customer.name}}`
+- All values are parameterized (SQL injection safe)
+
+**Upsert Example (PostgreSQL):**
+```yaml
+output:
+  type: database
+  connectionStringRef: ${DATABASE_URL}
+  query: |
+    INSERT INTO products (sku, name, price)
+    VALUES ({{record.sku}}, {{record.name}}, {{record.price}})
+    ON CONFLICT (sku) DO UPDATE SET
+      name = EXCLUDED.name,
+      price = EXCLUDED.price
+  transaction: true
+```
+
+**Transaction Mode:**
+- When `transaction: true`, all records are processed within a single transaction
+- **onError: fail** (default): On any error, entire transaction is rolled back (no partial writes)
+- **onError: skip**: Individual record failures are skipped, successful records are committed together
+- **onError: log**: Individual record failures are logged, successful records are committed together
+- Note: With `skip` or `log`, partial commits are allowed within the transaction
+
+**See also:** `configs/examples/30-database-output-insert.yaml`, `configs/examples/31-database-output-upsert.yaml`
+
 #### Supported Output Modes
 
 - **Batch mode** (default): Sends all records in a single request as JSON array
@@ -861,6 +1024,14 @@ The `configs/examples/` directory contains comprehensive examples covering all u
 - **10-complete.json / 10-complete.yaml** - Complete example with OAuth2 authentication, pagination, multiple filters, retry, and advanced configurations
 - **12-output-single-record.json / 12-output-single-record.yaml** - Single record mode with path parameters
 - **13-scheduled.json / 13-scheduled.yaml** - CRON scheduled pipeline for periodic data polling
+
+#### Database Examples
+- **27-database-input.yaml** - Database input module with SQL query
+- **28-database-incremental.yaml** - Incremental queries with `{{lastRunTimestamp}}`
+- **29-sql-call-enrichment.yaml** - SQL call filter for record enrichment
+- **30-database-output-insert.yaml** - Database output with INSERT queries
+- **31-database-output-upsert.yaml** - Database output with UPSERT (PostgreSQL/MySQL/SQLite)
+- **32-database-custom-query.yaml** - Database output with queryFile
 
 #### Using Examples
 
