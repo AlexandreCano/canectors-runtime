@@ -5,7 +5,7 @@ documentsIncluded:
   - architecture.md
   - epics.md
   - ux-design-specification.md
-  - product-brief-canectors-2026-01-10.md
+  - product-brief-cannectors-2026-01-10.md
   - project-context.md
   - research/market-api-connector-automation-saas-research-2026-01-10.md
 ---
@@ -13,7 +13,7 @@ documentsIncluded:
 # Implementation Readiness Assessment Report
 
 **Date:** 2026-01-13
-**Project:** Canectors
+**Project:** Cannectors
 
 ## Document Inventory
 
@@ -34,7 +34,7 @@ documentsIncluded:
 ### Additional Context Documents
 
 #### E. Product Brief
-- `product-brief-canectors-2026-01-10.md` (33K, modifié le 13 janvier 00:24)
+- `product-brief-cannectors-2026-01-10.md` (33K, modifié le 13 janvier 00:24)
 
 #### F. Project Context
 - `project-context.md` (dans `_bmad-output/`)
@@ -731,7 +731,7 @@ And The execution is deterministic
 
 ✅ **READY FOR IMPLEMENTATION**
 
-Le projet **Canectors** est prêt pour passer à la phase d'implémentation. Tous les documents requis sont présents, complets et alignés. Les epics couvrent 100% des exigences fonctionnelles avec une qualité excellente.
+Le projet **Cannectors** est prêt pour passer à la phase d'implémentation. Tous les documents requis sont présents, complets et alignés. Les epics couvrent 100% des exigences fonctionnelles avec une qualité excellente.
 
 ### Assessment Summary
 

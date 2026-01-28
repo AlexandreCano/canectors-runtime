@@ -1,4 +1,4 @@
-// Package database provides database utilities for Canectors runtime.
+// Package database provides database utilities for Cannectors runtime.
 // It provides helpers for driver detection, placeholder conversion, and connection string handling.
 // Connection pooling is handled by the standard database/sql package.
 package database
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // Supported database driver types

@@ -1,16 +1,16 @@
 # Module Extensibility
 
-This document explains how to add new module types to the Canectors runtime without modifying the core codebase.
+This document explains how to add new module types to the Cannectors runtime without modifying the core codebase.
 
 ## Overview
 
-The Canectors runtime uses a **module registry** pattern that enables extensibility:
+The Cannectors runtime uses a **module registry** pattern that enables extensibility:
 
 1. **Implement the interface** (`input.Module`, `filter.Module`, or `output.Module`)
 2. **Register your constructor** via `registry.RegisterInput`, `RegisterFilter`, or `RegisterOutput`
 3. **Use your type in config** - the runtime will instantiate it automatically
 
-You do **not** need to edit `internal/factory/modules.go`, `cmd/canectors/main.go`, or any core files.
+You do **not** need to edit `internal/factory/modules.go`, `cmd/cannectors/main.go`, or any core files.
 
 ## Adding a New Input Module
 
@@ -25,9 +25,9 @@ import (
     "context"
     "fmt"
     
-    "github.com/canectors/runtime/internal/modules/input"
-    "github.com/canectors/runtime/internal/registry"
-    "github.com/canectors/runtime/pkg/connector"
+    "github.com/cannectors/runtime/internal/modules/input"
+    "github.com/cannectors/runtime/internal/registry"
+    "github.com/cannectors/runtime/pkg/connector"
 )
 
 // Register at init time so the module is available as soon as the package is imported
@@ -83,7 +83,7 @@ In your application or a dedicated `imports.go` file, import the package so `ini
 
 ```go
 import (
-    _ "github.com/canectors/runtime/internal/modules/input/kafka"
+    _ "github.com/cannectors/runtime/internal/modules/input/kafka"
 )
 ```
 
@@ -108,9 +108,9 @@ package enrich
 import (
     "context"
     
-    "github.com/canectors/runtime/internal/modules/filter"
-    "github.com/canectors/runtime/internal/registry"
-    "github.com/canectors/runtime/pkg/connector"
+    "github.com/cannectors/runtime/internal/modules/filter"
+    "github.com/cannectors/runtime/internal/registry"
+    "github.com/cannectors/runtime/pkg/connector"
 )
 
 func init() {
@@ -163,9 +163,9 @@ package s3
 import (
     "context"
     
-    "github.com/canectors/runtime/internal/modules/output"
-    "github.com/canectors/runtime/internal/registry"
-    "github.com/canectors/runtime/pkg/connector"
+    "github.com/cannectors/runtime/internal/modules/output"
+    "github.com/cannectors/runtime/internal/registry"
+    "github.com/cannectors/runtime/pkg/connector"
 )
 
 func init() {

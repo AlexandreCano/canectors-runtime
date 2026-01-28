@@ -68,7 +68,7 @@ So that I can retrieve data from source REST APIs.
 ### Architecture Requirements
 
 **HTTP Polling Input Module:**
-- **Location:** `canectors-runtime/internal/modules/input/http_polling.go`
+- **Location:** `cannectors-runtime/internal/modules/input/http_polling.go`
 - **Interface:** Implements `input.Module` interface with `Fetch()` method
 - **Return Type:** `Fetch() ([]map[string]interface{}, error)` - Returns slice of records
 - **Configuration:** Reads from `connector.Pipeline.Input` module configuration
@@ -131,7 +131,7 @@ So that I can retrieve data from source REST APIs.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── modules/
 │       └── input/
@@ -213,9 +213,9 @@ canectors-runtime/
 - **Epic 3 Overview:** [Source: _bmad-output/planning-artifacts/epics.md#Epic 3: Module Execution]
 - **Story 3.1 Details:** [Source: _bmad-output/planning-artifacts/epics.md#Story 3.1: Implement Input Module Execution (HTTP Polling)]
 - **Story 2.3 (Previous):** [Source: _bmad-output/implementation-artifacts/2-3-implement-pipeline-orchestration.md]
-- **Input Module Interface:** [Source: canectors-runtime/internal/modules/input/input.go]
-- **Pipeline Types:** [Source: canectors-runtime/pkg/connector/types.go]
-- **Executor Implementation:** [Source: canectors-runtime/internal/runtime/pipeline.go]
+- **Input Module Interface:** [Source: cannectors-runtime/internal/modules/input/input.go]
+- **Pipeline Types:** [Source: cannectors-runtime/pkg/connector/types.go]
+- **Executor Implementation:** [Source: cannectors-runtime/internal/runtime/pipeline.go]
 - **CLI Runtime Architecture:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI (Go) - Separate Project]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 - **PRD Requirements:** [Source: _bmad-output/planning-artifacts/prd.md#Input Modules]
@@ -224,7 +224,7 @@ canectors-runtime/
 
 **From Project Context:**
 - Runtime CLI is separate Go project from Next.js application [Source: _bmad-output/project-context.md#Technology Stack]
-- Go version: 1.23.5 (latest stable) [Source: canectors-runtime/go.mod]
+- Go version: 1.23.5 (latest stable) [Source: cannectors-runtime/go.mod]
 - Follow Go best practices and conventions [Source: _bmad-output/project-context.md#Critical Implementation Rules]
 
 **From Architecture:**
@@ -306,7 +306,7 @@ resp, err := client.Do(req)
 
 **Epic 2 Stories (Completed):**
 - **Story 2.1:** Go CLI project initialized [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
-  - Project structure: `/cmd/canectors/`, `/internal/`, `/pkg/connector/`
+  - Project structure: `/cmd/cannectors/`, `/internal/`, `/pkg/connector/`
   - Module interfaces defined: `input.Module`, `filter.Module`, `output.Module`
   - Stub implementations exist: `HTTPPolling` struct with `ErrNotImplemented` in `Fetch()`
   - **Key learning:** Module interfaces are defined but not implemented (Epic 3)
@@ -348,8 +348,8 @@ resp, err := client.Do(req)
 - Current state: `HTTPPolling` struct exists with `ErrNotImplemented` in `Fetch()` method
 
 **Repository Structure:**
-- Main project: `canectors/` (Next.js T3 Stack)
-- Runtime project: `canectors-runtime/` (Go - separate project)
+- Main project: `cannectors/` (Next.js T3 Stack)
+- Runtime project: `cannectors-runtime/` (Go - separate project)
 - Schema location: `/types/pipeline-schema.json` in main project
 
 **Files from Previous Stories:**
@@ -362,7 +362,7 @@ resp, err := client.Do(req)
 
 **Current HTTPPolling Stub:**
 ```go
-// From canectors-runtime/internal/modules/input/input.go
+// From cannectors-runtime/internal/modules/input/input.go
 type HTTPPolling struct {
     endpoint string
     interval int
@@ -467,13 +467,13 @@ Claude Opus 4.5 (via Cursor)
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/modules/input/http_polling.go` - HTTPPolling implementation (~550 lines)
-- `canectors-runtime/internal/modules/input/http_polling_test.go` - Unit and integration tests (~1300 lines)
+- `cannectors-runtime/internal/modules/input/http_polling.go` - HTTPPolling implementation (~550 lines)
+- `cannectors-runtime/internal/modules/input/http_polling_test.go` - Unit and integration tests (~1300 lines)
 
 **Modified Files:**
-- `canectors-runtime/internal/modules/input/input.go` - Cleaned up stub, kept Module interface
-- `canectors-runtime/internal/runtime/pipeline.go` - Updated to work with HTTPPolling input module
-- `canectors-runtime/internal/runtime/pipeline_test.go` - Updated tests to verify HTTPPolling integration
+- `cannectors-runtime/internal/modules/input/input.go` - Cleaned up stub, kept Module interface
+- `cannectors-runtime/internal/runtime/pipeline.go` - Updated to work with HTTPPolling input module
+- `cannectors-runtime/internal/runtime/pipeline_test.go` - Updated tests to verify HTTPPolling integration
 
 ### Change Log
 

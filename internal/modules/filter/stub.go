@@ -5,7 +5,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // StubModule is a placeholder filter module for testing the pipeline flow.

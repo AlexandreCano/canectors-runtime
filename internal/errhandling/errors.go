@@ -1,6 +1,6 @@
 // Package errhandling provides error types, classification, and retry utilities.
 // This file defines error categories, classification functions, and helper utilities
-// for robust error handling across the Canectors runtime.
+// for robust error handling across the Cannectors runtime.
 package errhandling
 
 import (

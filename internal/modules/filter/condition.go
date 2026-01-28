@@ -12,7 +12,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // Error codes for condition module

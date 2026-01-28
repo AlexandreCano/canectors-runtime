@@ -87,7 +87,7 @@ So that I can execute periodic data polling automatically.
 ### Architecture Requirements
 
 **CRON Scheduler Implementation:**
-- **Location:** `canectors-runtime/internal/scheduler/scheduler.go` (already exists, needs implementation)
+- **Location:** `cannectors-runtime/internal/scheduler/scheduler.go` (already exists, needs implementation)
 - **Library:** `github.com/robfig/cron/v3` (to be added) [Source: _bmad-output/planning-artifacts/architecture.md#CRON Scheduler for Polling]
 - **Purpose:** Schedule periodic execution of connector pipelines based on CRON expressions
 - **Scope:** HTTP Polling Input modules with Schedule field configured
@@ -111,17 +111,17 @@ So that I can execute periodic data polling automatically.
 ### Project Structure Notes
 
 **File Locations:**
-- Scheduler implementation: `canectors-runtime/internal/scheduler/scheduler.go`
-- Scheduler tests: `canectors-runtime/internal/scheduler/scheduler_test.go`
-- Pipeline types: `canectors-runtime/pkg/connector/types.go`
-- Runtime executor: `canectors-runtime/internal/runtime/executor.go`
-- CLI integration: `canectors-runtime/cmd/canectors/main.go`
+- Scheduler implementation: `cannectors-runtime/internal/scheduler/scheduler.go`
+- Scheduler tests: `cannectors-runtime/internal/scheduler/scheduler_test.go`
+- Pipeline types: `cannectors-runtime/pkg/connector/types.go`
+- Runtime executor: `cannectors-runtime/internal/runtime/executor.go`
+- CLI integration: `cannectors-runtime/cmd/cannectors/main.go`
 
 **Dependencies:**
 - Add `github.com/robfig/cron/v3` to go.mod
-- Use existing `github.com/canectors/runtime/pkg/connector` for Pipeline type
-- Use existing `github.com/canectors/runtime/internal/runtime` for Executor
-- Use existing `github.com/canectors/runtime/internal/logger` for logging
+- Use existing `github.com/cannectors/runtime/pkg/connector` for Pipeline type
+- Use existing `github.com/cannectors/runtime/internal/runtime` for Executor
+- Use existing `github.com/cannectors/runtime/internal/logger` for logging
 
 ### Technical Requirements
 
@@ -175,9 +175,9 @@ So that I can execute periodic data polling automatically.
   - Usage: Parse CRON expressions, schedule jobs, manage cron instance
 
 **Existing Dependencies (already in go.mod):**
-- `github.com/canectors/runtime/pkg/connector` - Pipeline types
-- `github.com/canectors/runtime/internal/runtime` - Executor for pipeline execution
-- `github.com/canectors/runtime/internal/logger` - Structured logging
+- `github.com/cannectors/runtime/pkg/connector` - Pipeline types
+- `github.com/cannectors/runtime/internal/runtime` - Executor for pipeline execution
+- `github.com/cannectors/runtime/internal/logger` - Structured logging
 
 ### Previous Story Intelligence
 
@@ -204,7 +204,7 @@ So that I can execute periodic data polling automatically.
 - Project structure follows Go best practices
 - `/internal/scheduler/` directory already exists
 - Scheduler skeleton code already exists with TODO comments
-- CLI structure in `/cmd/canectors/main.go` ready for integration
+- CLI structure in `/cmd/cannectors/main.go` ready for integration
 
 ### Git Intelligence Summary
 
@@ -269,9 +269,9 @@ So that I can execute periodic data polling automatically.
 - **Architecture Decision:** [Source: _bmad-output/planning-artifacts/architecture.md#CRON Scheduler for Polling]
 - **Epic Definition:** [Source: _bmad-output/planning-artifacts/epics.md#Epic 4: Advanced Runtime Features]
 - **Story Requirements:** [Source: _bmad-output/planning-artifacts/epics.md#Story 4.1: Implement CRON Scheduler for Polling]
-- **Pipeline Types:** [Source: canectors-runtime/pkg/connector/types.go]
-- **Scheduler Skeleton:** [Source: canectors-runtime/internal/scheduler/scheduler.go]
-- **Runtime Executor:** [Source: canectors-runtime/internal/runtime/executor.go]
+- **Pipeline Types:** [Source: cannectors-runtime/pkg/connector/types.go]
+- **Scheduler Skeleton:** [Source: cannectors-runtime/internal/scheduler/scheduler.go]
+- **Runtime Executor:** [Source: cannectors-runtime/internal/runtime/executor.go]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 - **robfig/cron Documentation:** https://pkg.go.dev/github.com/robfig/cron/v3
 
@@ -308,17 +308,17 @@ Claude Opus 4.5 (Cursor Agent)
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/scheduler/scheduler_test.go`
-- `canectors-runtime/configs/examples/13-scheduled.json`
-- `canectors-runtime/configs/examples/13-scheduled.yaml`
+- `cannectors-runtime/internal/scheduler/scheduler_test.go`
+- `cannectors-runtime/configs/examples/13-scheduled.json`
+- `cannectors-runtime/configs/examples/13-scheduled.yaml`
 
 **Modified Files:**
-- `canectors-runtime/go.mod` - Added robfig/cron/v3 dependency
-- `canectors-runtime/go.sum` - Updated with new dependency
-- `canectors-runtime/internal/scheduler/scheduler.go` - Complete scheduler implementation
-- `canectors-runtime/cmd/canectors/main.go` - Added schedule command and PipelineExecutorAdapter
-- `canectors-runtime/README.md` - Added scheduler documentation
-- `canectors-runtime/configs/examples/README.md` - Added scheduled example documentation
+- `cannectors-runtime/go.mod` - Added robfig/cron/v3 dependency
+- `cannectors-runtime/go.sum` - Updated with new dependency
+- `cannectors-runtime/internal/scheduler/scheduler.go` - Complete scheduler implementation
+- `cannectors-runtime/cmd/cannectors/main.go` - Added schedule command and PipelineExecutorAdapter
+- `cannectors-runtime/README.md` - Added scheduler documentation
+- `cannectors-runtime/configs/examples/README.md` - Added scheduled example documentation
 
 ## Change Log
 

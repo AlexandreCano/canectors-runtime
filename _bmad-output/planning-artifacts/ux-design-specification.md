@@ -1,15 +1,15 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 inputDocuments:
-  - 'product-brief-canectors-2026-01-10.md'
+  - 'product-brief-cannectors-2026-01-10.md'
   - 'prd.md'
   - 'research/market-api-connector-automation-saas-research-2026-01-10.md'
-project_name: Canectors
+project_name: Cannectors
 user_name: Cano
 date: 2026-01-10
 ---
 
-# UX Design Specification Canectors
+# UX Design Specification Cannectors
 
 **Author:** Cano
 **Date:** 2026-01-10
@@ -22,7 +22,7 @@ date: 2026-01-10
 
 ### Project Vision
 
-**Canectors** est une plateforme SaaS B2B developer-first qui automatise la génération de connecteurs déclaratifs explicites entre systèmes métiers à partir de spécifications OpenAPI, avec IA assistive pour le mapping des données.
+**Cannectors** est une plateforme SaaS B2B developer-first qui automatise la génération de connecteurs déclaratifs explicites entre systèmes métiers à partir de spécifications OpenAPI, avec IA assistive pour le mapping des données.
 
 L'innovation réside dans la combinaison unique de :
 - **Connecteurs déclaratifs explicites** : Format DSL/configuration explicite (YAML/JSON) définissant mappings, transformations et logique de connecteur, lisible, versionnable et éditable par le développeur
@@ -209,7 +209,7 @@ Si ces flux sont fluides, le produit est adopté. S'ils échouent, le reste n'a 
 
 ### Experience Principles
 
-Basé sur cette discussion, voici les principes d'expérience pour Canectors :
+Basé sur cette discussion, voici les principes d'expérience pour Cannectors :
 
 1. **Optimisation autour de l'action unique**
    - Tout est conçu pour rendre la génération de connecteurs à partir d'OpenAPI aussi fluide que possible
@@ -253,7 +253,7 @@ Ces principes guideront toutes nos décisions UX.
 
 **Objectif émotionnel principal : Confiant et en contrôle**
 
-Les utilisateurs de Canectors doivent se sentir confiants et en contrôle tout au long de leur expérience. Ils comprennent ce qui se passe, peuvent valider chaque étape et se sentent maîtres du processus. Cette confiance vient de la transparence totale du système, pas d'une automatisation "magique" qui cache la complexité.
+Les utilisateurs de Cannectors doivent se sentir confiants et en contrôle tout au long de leur expérience. Ils comprennent ce qui se passe, peuvent valider chaque étape et se sentent maîtres du processus. Cette confiance vient de la transparence totale du système, pas d'une automatisation "magique" qui cache la complexité.
 
 **Sentiments secondaires :**
 - **Productif** : Gain de temps mesurable et concret
@@ -269,7 +269,7 @@ Les utilisateurs de Canectors doivent se sentir confiants et en contrôle tout a
 ### Emotional Journey Mapping
 
 **Lors de la découverte du produit :**
-Les utilisateurs découvrent Canectors avec une curiosité mesurée et un espoir prudent. Ils peuvent avoir un scepticisme initial face à l'IA et l'automatisation, mais la transparence et la démonstration du contrôle les rassurent rapidement.
+Les utilisateurs découvrent Cannectors avec une curiosité mesurée et un espoir prudent. Ils peuvent avoir un scepticisme initial face à l'IA et l'automatisation, mais la transparence et la démonstration du contrôle les rassurent rapidement.
 
 **Pendant l'expérience core (génération du connecteur) :**
 La confiance croît progressivement grâce à :
@@ -350,7 +350,7 @@ La confiance s'accroît avec :
 
 ### Emotional Design Principles
 
-Basé sur cette discussion, voici les principes de design émotionnel pour Canectors :
+Basé sur cette discussion, voici les principes de design émotionnel pour Cannectors :
 
 1. **Transparence crée la confiance**
    - Toutes les actions automatiques sont visibles et expliquées
@@ -448,7 +448,7 @@ Ces principes guideront toutes nos décisions de design pour créer l'expérienc
 
 1. **Organisation par cas d'usage** (Stripe/Twilio)
    - Documentation structurée par objectifs utilisateur plutôt que par fonctionnalités techniques
-   - Applicable à : Organisation de la documentation Canectors, guides par cas d'usage
+   - Applicable à : Organisation de la documentation Cannectors, guides par cas d'usage
 
 2. **Code/documentation séparés mais liés** (Stripe/Twilio)
    - API Reference séparée mais liée à la documentation guidée
@@ -545,15 +545,15 @@ Ces principes guideront toutes nos décisions de design pour créer l'expérienc
 
 1. **Plan/diff avant exécution** (Terraform)
    - Adapter : Dry-run avec visualisation des mappings source → cible, suggestions IA explicables
-   - Pour : Spécificité Canectors (mappings de données, suggestions IA)
+   - Pour : Spécificité Cannectors (mappings de données, suggestions IA)
 
 2. **Format déclaratif lisible** (Prisma/Terraform)
    - Adapter : YAML/JSON avec suggestions IA explicables, niveaux de confiance
-   - Pour : Spécificité Canectors (IA assistive transparente)
+   - Pour : Spécificité Cannectors (IA assistive transparente)
 
 3. **CLI moderne** (Vercel/Netlify/GitHub CLI)
    - Adapter : CLI pour exécution + Web pour génération/visualisation
-   - Pour : Spécificité Canectors (double plateforme Web + CLI)
+   - Pour : Spécificité Cannectors (double plateforme Web + CLI)
 
 **Ce qu'il faut éviter :**
 
@@ -569,7 +569,7 @@ Ces principes guideront toutes nos décisions de design pour créer l'expérienc
    - À éviter : Format binaire, non lisible
    - Parce que : Perte de contrôle, confusion
 
-Cette stratégie guidera nos décisions de design pour créer une expérience inspirée des meilleures pratiques, tout en restant unique à Canectors.
+Cette stratégie guidera nos décisions de design pour créer une expérience inspirée des meilleures pratiques, tout en restant unique à Cannectors.
 
 ## Design System Foundation
 
@@ -577,7 +577,7 @@ Cette stratégie guidera nos décisions de design pour créer une expérience in
 
 **Choix retenu : Tailwind CSS + Headless UI (ou Radix UI)**
 
-Canectors utilisera **Tailwind CSS** comme système de styling de base, combiné avec **Headless UI** (ou **Radix UI**) pour les composants interactifs sans styles imposés.
+Cannectors utilisera **Tailwind CSS** comme système de styling de base, combiné avec **Headless UI** (ou **Radix UI**) pour les composants interactifs sans styles imposés.
 
 **Décision technique :**
 - **Tailwind CSS** : Framework CSS utilitaire pour le styling
@@ -590,7 +590,7 @@ Canectors utilisera **Tailwind CSS** comme système de styling de base, combiné
 1. **Flexibilité maximale**
    - Permet de créer une interface épurée, code au centre, alignée avec l'inspiration (Stripe, Twilio, Postman)
    - Contrôle visuel total pour différenciation sans contraintes de styles imposés
-   - Personnalisation fine pour correspondre aux besoins spécifiques de Canectors
+   - Personnalisation fine pour correspondre aux besoins spécifiques de Cannectors
 
 2. **Rapidité de développement**
    - Développement rapide avec classes utilitaires, idéal pour MVP
@@ -625,7 +625,7 @@ Canectors utilisera **Tailwind CSS** comme système de styling de base, combiné
 **2. Architecture de composants :**
 - **Base** : Design tokens (couleurs, typographie, espacements) définis dans Tailwind config
 - **Primitives** : Composants Headless UI non stylés (Dropdown, Dialog, Toggle, etc.)
-- **Composants** : Composants Canectors personnalisés construits avec Tailwind + Headless UI
+- **Composants** : Composants Cannectors personnalisés construits avec Tailwind + Headless UI
 - **Layouts** : Layouts spécifiques pour génération de connecteurs, visualisation de mappings, etc.
 
 **3. Priorités d'implémentation :**
@@ -678,11 +678,11 @@ Cette stratégie garantit une implémentation rapide pour le MVP tout en permett
 
 ### 2.1 Defining Experience
 
-**Expérience core de Canectors :**
+**Expérience core de Cannectors :**
 
 "Générer un connecteur déclaratif à partir de deux OpenAPI avec suggestions IA explicables, validation progressive, et résultat fonctionnel en moins d'1 heure."
 
-C'est l'interaction principale qui définit Canectors : transformer deux spécifications OpenAPI en connecteur déclaratif fonctionnel grâce à des suggestions IA transparentes et une validation progressive, en moins d'1 heure au lieu de plusieurs jours.
+C'est l'interaction principale qui définit Cannectors : transformer deux spécifications OpenAPI en connecteur déclaratif fonctionnel grâce à des suggestions IA transparentes et une validation progressive, en moins d'1 heure au lieu de plusieurs jours.
 
 **Action principale que les utilisateurs décrivent :**
 "Générer un connecteur API en quelques heures au lieu de plusieurs jours" — c'est le cœur de la proposition de valeur.
@@ -772,7 +772,7 @@ Les développeurs apportent une mentalité code/configuration :
 
 **Analyse des patterns :**
 
-Canectors combine des patterns établis avec des innovations :
+Cannectors combine des patterns établis avec des innovations :
 
 **Patterns établis utilisés :**
 
@@ -910,7 +910,7 @@ Canectors combine des patterns établis avec des innovations :
 
 **Thème choisi : "Developer Trust"**
 
-Canectors utilise une palette professionnelle axée sur la confiance et la technologie, avec des bleus profonds et des accents indigo/violet pour créer une identité visuelle cohérente avec les objectifs émotionnels (confiance, contrôle, transparence).
+Cannectors utilise une palette professionnelle axée sur la confiance et la technologie, avec des bleus profonds et des accents indigo/violet pour créer une identité visuelle cohérente avec les objectifs émotionnels (confiance, contrôle, transparence).
 
 **Palette de couleurs principale :**
 
@@ -963,7 +963,7 @@ Canectors utilise une palette professionnelle axée sur la confiance et la techn
 
 **Système typographique :**
 
-Canectors utilise une hiérarchie typographique claire et lisible, avec une police sans-serif moderne pour l'UI et une police monospace pour le code, optimisées pour la lisibilité et l'efficacité pour les développeurs.
+Cannectors utilise une hiérarchie typographique claire et lisible, avec une police sans-serif moderne pour l'UI et une police monospace pour le code, optimisées pour la lisibilité et l'efficacité pour les développeurs.
 
 **Police de caractères :**
 
@@ -1016,7 +1016,7 @@ Canectors utilise une hiérarchie typographique claire et lisible, avec une poli
 
 **Fondation d'espacement et de layout :**
 
-Canectors utilise un layout épuré et aéré, basé sur une grille de 12 colonnes, avec un système d'espacement cohérent (base 4px / multiples de 8px) pour maximiser la lisibilité, la confiance et l'efficacité pour les utilisateurs développeurs.
+Cannectors utilise un layout épuré et aéré, basé sur une grille de 12 colonnes, avec un système d'espacement cohérent (base 4px / multiples de 8px) pour maximiser la lisibilité, la confiance et l'efficacité pour les utilisateurs développeurs.
 
 **Système d'espacement :**
 
@@ -1059,7 +1059,7 @@ Canectors utilise un layout épuré et aéré, basé sur une grille de 12 colonn
 
 **Considérations d'accessibilité :**
 
-Canectors intègre l'accessibilité dès la fondation visuelle pour garantir une expérience inclusive pour tous les utilisateurs.
+Cannectors intègre l'accessibilité dès la fondation visuelle pour garantir une expérience inclusive pour tous les utilisateurs.
 
 **Contraste des couleurs :**
 
@@ -1089,13 +1089,13 @@ Canectors intègre l'accessibilité dès la fondation visuelle pour garantir une
 - **Mode sombre** : À considérer pour l'évolution future (réduction fatigue visuelle)
 - **Couleurs** : Ne pas dépendre uniquement de la couleur pour communiquer l'information
 
-Cette fondation visuelle garantit une expérience cohérente, accessible et efficace pour tous les utilisateurs de Canectors.
+Cette fondation visuelle garantit une expérience cohérente, accessible et efficace pour tous les utilisateurs de Cannectors.
 
 ## Design Direction Decision
 
 ### Design Directions Explored
 
-**Directions de design explorées pour Canectors :**
+**Directions de design explorées pour Cannectors :**
 
 1. **"Code-Centric Minimal"** — Focus sur le format déclaratif
    - Layout : Code/format déclaratif au centre, UI minimale autour
@@ -1121,7 +1121,7 @@ Cette fondation visuelle garantit une expérience cohérente, accessible et effi
 
 **Direction retenue : "Code-Centric avec Guided Flow" (Hybride)**
 
-Canectors utilise une approche hybride combinant **Code-Centric Minimal** avec **Guided Flow** pour créer une expérience qui met le format déclaratif au centre tout en guidant les utilisateurs étape par étape.
+Cannectors utilise une approche hybride combinant **Code-Centric Minimal** avec **Guided Flow** pour créer une expérience qui met le format déclaratif au centre tout en guidant les utilisateurs étape par étape.
 
 **Caractéristiques principales :**
 
@@ -1261,7 +1261,7 @@ Cette approche garantit que la visualisation des mappings source → cible reste
 
 **Description du parcours :**
 
-Marc, consultant ERP sénior, doit livrer une migration ERP critique en 12 jours. Il découvre Canectors via un collègue, lit la documentation en 20 minutes, et décide de tester sur un cas simple. En 15 minutes, il installe le runtime portable via CLI. Il importe les deux OpenAPI (ancien ERP et nouveau ERP SaaS), et l'outil génère automatiquement un connecteur déclaratif initial. Marc examine le fichier YAML généré : c'est lisible, le mapping est explicite, et il peut tout modifier. L'IA assistive a proposé des correspondances probables (customer_id → client_id) avec un niveau de confiance. Marc valide les mappings critiques et ajuste quelques cas edge manuellement. Le lendemain, il exécute un dry-run sur un échantillon de données. Le runtime exécute le connecteur de façon déterministe, avec des logs clairs. Il détecte deux erreurs de mapping qu'il corrige rapidement. Il versionne les déclarations dans Git avec le projet client, génère automatiquement la documentation du mapping, et exécute la migration réelle avec confiance.
+Marc, consultant ERP sénior, doit livrer une migration ERP critique en 12 jours. Il découvre Cannectors via un collègue, lit la documentation en 20 minutes, et décide de tester sur un cas simple. En 15 minutes, il installe le runtime portable via CLI. Il importe les deux OpenAPI (ancien ERP et nouveau ERP SaaS), et l'outil génère automatiquement un connecteur déclaratif initial. Marc examine le fichier YAML généré : c'est lisible, le mapping est explicite, et il peut tout modifier. L'IA assistive a proposé des correspondances probables (customer_id → client_id) avec un niveau de confiance. Marc valide les mappings critiques et ajuste quelques cas edge manuellement. Le lendemain, il exécute un dry-run sur un échantillon de données. Le runtime exécute le connecteur de façon déterministe, avec des logs clairs. Il détecte deux erreurs de mapping qu'il corrige rapidement. Il versionne les déclarations dans Git avec le projet client, génère automatiquement la documentation du mapping, et exécute la migration réelle avec confiance.
 
 **Flow détaillé :**
 
@@ -1436,7 +1436,7 @@ Ces principes garantissent que tous les flows sont optimisés pour l'efficacité
 - **Tables** : Tableaux de données
 - **Forms** : Formulaires avec validation
 
-**Composants nécessaires pour Canectors :**
+**Composants nécessaires pour Cannectors :**
 
 Basé sur les user journeys (notamment le flow de Marc) et la direction design, nous avons besoin de :
 
@@ -1718,7 +1718,7 @@ Cette roadmap priorise les composants critiques pour l'expérience core tout en 
 
 **Hiérarchie des boutons et actions :**
 
-Canectors utilise une hiérarchie claire des boutons pour guider les utilisateurs vers les actions principales tout en préservant l'accès aux actions secondaires.
+Cannectors utilise une hiérarchie claire des boutons pour guider les utilisateurs vers les actions principales tout en préservant l'accès aux actions secondaires.
 
 **Boutons primaires :**
 - **Couleur** : Bleu profond (#2563EB) - couleur primaire
@@ -1752,7 +1752,7 @@ Canectors utilise une hiérarchie claire des boutons pour guider les utilisateur
 
 **Patterns de feedback (succès, erreur, warning, info) :**
 
-Canectors utilise des patterns de feedback cohérents pour communiquer clairement le statut des actions et des opérations, alignés avec les objectifs émotionnels (transparence, confiance).
+Cannectors utilise des patterns de feedback cohérents pour communiquer clairement le statut des actions et des opérations, alignés avec les objectifs émotionnels (transparence, confiance).
 
 **1. Feedback Succès :**
 
@@ -1845,7 +1845,7 @@ Canectors utilise des patterns de feedback cohérents pour communiquer clairemen
 
 **Patterns de formulaires et validation :**
 
-Canectors utilise des patterns de validation cohérents pour les formulaires, les mappings et le format déclaratif, avec feedback immédiat et messages d'erreur explicites.
+Cannectors utilise des patterns de validation cohérents pour les formulaires, les mappings et le format déclaratif, avec feedback immédiat et messages d'erreur explicites.
 
 **1. Validation Temps Réel :**
 
@@ -1935,7 +1935,7 @@ Canectors utilise des patterns de validation cohérents pour les formulaires, le
 
 **Patterns de navigation (étapes du processus, breadcrumbs) :**
 
-Canectors utilise des patterns de navigation cohérents pour guider les utilisateurs à travers le processus de génération de connecteur sans être intrusifs.
+Cannectors utilise des patterns de navigation cohérents pour guider les utilisateurs à travers le processus de génération de connecteur sans être intrusifs.
 
 **1. Breadcrumbs (Navigation entre étapes) :**
 
@@ -2023,7 +2023,7 @@ Canectors utilise des patterns de navigation cohérents pour guider les utilisat
 
 **États de chargement (génération, dry-run, etc.) :**
 
-Canectors utilise des patterns d'états de chargement cohérents pour réduire l'anxiété utilisateur pendant les opérations asynchrones.
+Cannectors utilise des patterns d'états de chargement cohérents pour réduire l'anxiété utilisateur pendant les opérations asynchrones.
 
 **1. Génération Automatique :**
 
@@ -2108,7 +2108,7 @@ Canectors utilise des patterns d'états de chargement cohérents pour réduire l
 - **Non bloquant** : Opérations en arrière-plan quand possible
 - **Disparition automatique** : Fermeture automatique à la fin (succès/erreur)
 
-Ces patterns garantissent une expérience cohérente et prévisible pour tous les utilisateurs de Canectors.
+Ces patterns garantissent une expérience cohérente et prévisible pour tous les utilisateurs de Cannectors.
 
 ## Responsive Design & Accessibility
 
@@ -2116,7 +2116,7 @@ Ces patterns garantissent une expérience cohérente et prévisible pour tous le
 
 **Stratégie responsive :**
 
-Canectors utilise une stratégie **desktop-first** avec support tablet/mobile minimal au MVP, optimisée pour l'usage principal (développeurs sur poste de travail).
+Cannectors utilise une stratégie **desktop-first** avec support tablet/mobile minimal au MVP, optimisée pour l'usage principal (développeurs sur poste de travail).
 
 **1. Desktop Strategy (> 1024px) : Priorité absolue au MVP**
 
@@ -2176,7 +2176,7 @@ Canectors utilise une stratégie **desktop-first** avec support tablet/mobile mi
 
 **Stratégie des breakpoints :**
 
-Canectors utilise les breakpoints standards Tailwind CSS avec une approche **desktop-first**.
+Cannectors utilise les breakpoints standards Tailwind CSS avec une approche **desktop-first**.
 
 **Breakpoints standards Tailwind CSS :**
 
@@ -2205,7 +2205,7 @@ Canectors utilise les breakpoints standards Tailwind CSS avec une approche **des
 
 **Stratégie d'accessibilité :**
 
-Canectors vise la conformité **WCAG AA** au MVP, avec focus sur les standards essentiels pour une bonne UX accessible.
+Cannectors vise la conformité **WCAG AA** au MVP, avec focus sur les standards essentiels pour une bonne UX accessible.
 
 **Niveau de conformité WCAG :**
 
@@ -2253,7 +2253,7 @@ Canectors vise la conformité **WCAG AA** au MVP, avec focus sur les standards e
 
 **Stratégie de test :**
 
-Canectors utilise un **mix de tests automatisés et de tests manuels ciblés** pour garantir la qualité responsive et d'accessibilité.
+Cannectors utilise un **mix de tests automatisés et de tests manuels ciblés** pour garantir la qualité responsive et d'accessibilité.
 
 **1. Tests automatisés prioritaires :**
 
@@ -2320,7 +2320,7 @@ Canectors utilise un **mix de tests automatisés et de tests manuels ciblés** p
 
 **Guidelines d'implémentation :**
 
-Canectors fournit des guidelines claires pour l'implémentation responsive et d'accessibilité.
+Cannectors fournit des guidelines claires pour l'implémentation responsive et d'accessibilité.
 
 **1. Responsive Development :**
 
@@ -2385,4 +2385,4 @@ Canectors fournit des guidelines claires pour l'implémentation responsive et d'
 - **WCAG AA** : Conformité WCAG AA comme objectif MVP
 - **Évolution future** : Amélioration continue responsive et d'accessibilité en post-MVP
 
-Ces guidelines garantissent une implémentation cohérente et accessible pour tous les utilisateurs de Canectors.
+Ces guidelines garantissent une implémentation cohérente et accessible pour tous les utilisateurs de Cannectors.

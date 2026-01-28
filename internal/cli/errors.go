@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/canectors/runtime/internal/config"
+	"github.com/cannectors/runtime/internal/config"
 )
 
 // PrintParseErrors prints parse errors to stderr.

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/canectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/modules/input"
 )
 
 // Example demonstrates a complete implementation of an input module.

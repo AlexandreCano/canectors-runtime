@@ -1,12 +1,12 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
 inputDocuments:
-  - 'product-brief-canectors-2026-01-10.md'
+  - 'product-brief-cannectors-2026-01-10.md'
   - 'prd.md'
   - 'ux-design-specification.md'
   - 'research/market-api-connector-automation-saas-research-2026-01-10.md'
 workflowType: 'architecture'
-project_name: 'Canectors'
+project_name: 'Cannectors'
 user_name: 'Cano'
 date: '2026-01-11'
 lastStep: 8
@@ -195,7 +195,7 @@ T3 Stack est le choix optimal car il fournit une base solide alignée avec votre
 **Initialization Command:**
 
 ```bash
-npx create-t3-app@latest canectors-app \
+npx create-t3-app@latest cannectors-app \
   --nextAuth \
   --prisma \
   --trpc \
@@ -678,19 +678,19 @@ export function ConnectorList() {
 - **OpenAPI Ingestion & Processing (6 FRs)** → `/server/services/openapi/`, `/server/api/routers/openapi/`
 - **Automatic Connector Generation (13 FRs)** → `/server/services/pipeline-generator/`
 - **AI-Assisted Mapping (7 FRs)** → `/server/services/ai-mapping/`
-- **Connector Execution (17 FRs)** → `canectors-runtime/` (Runtime CLI Go - projet séparé)
+- **Connector Execution (17 FRs)** → `cannectors-runtime/` (Runtime CLI Go - projet séparé)
 - **Documentation Generation (8 FRs)** → `/server/services/documentation/`
-- **Input/Filter/Output Modules (28 FRs)** → `canectors-runtime/internal/modules/`
+- **Input/Filter/Output Modules (28 FRs)** → `cannectors-runtime/internal/modules/`
 - **User & Organization Management (14 FRs)** → `/server/api/routers/user/`, `/server/api/routers/organisation/`
 - **Subscription & Billing (8 FRs)** → `/server/api/routers/billing/`
-- **Integration & Workflow (6 FRs)** → `canectors-runtime/` + CI/CD
+- **Integration & Workflow (6 FRs)** → `cannectors-runtime/` + CI/CD
 
 ### Complete Project Directory Structure
 
 **Main Application (T3 Stack - Next.js):**
 
 ```
-canectors/
+cannectors/
 ├── README.md
 ├── package.json
 ├── next.config.js
@@ -830,7 +830,7 @@ canectors/
 **Runtime CLI (Go - Projet séparé):**
 
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── README.md
 ├── go.mod
 ├── go.sum
@@ -839,7 +839,7 @@ canectors-runtime/
 │   └── workflows/
 │       └── ci.yml
 ├── cmd/
-│   └── canectors/
+│   └── cannectors/
 │       └── main.go
 ├── internal/
 │   ├── config/
@@ -1006,7 +1006,7 @@ La structure du projet supporte toutes les décisions :
 - **T3 Stack** : Structure App Router respectée (`/app/`, `/server/`, `/components/`)
 - **Multi-tenant** : Middleware et context définis (`/server/middleware.ts`, tRPC context)
 - **Services** : Organisation par domaine (`/server/services/{domain}/`)
-- **Runtime CLI** : Projet séparé (`canectors-runtime/`) avec structure Go standard
+- **Runtime CLI** : Projet séparé (`cannectors-runtime/`) avec structure Go standard
 - **Tests** : Co-localisation avec fichiers source (`*.test.ts`)
 
 ### Requirements Coverage Validation ✅
@@ -1014,7 +1014,7 @@ La structure du projet supporte toutes les décisions :
 **Epic/Feature Coverage:**
 Tous les epics sont architecturally supported :
 - **Epic 1 (Format Configuration)** : Structure `/types/`, validation Zod, format JSON défini
-- **Epic 2 (CLI Runtime)** : Projet `canectors-runtime/` avec modules Input/Filter/Output, scheduler CRON
+- **Epic 2 (CLI Runtime)** : Projet `cannectors-runtime/` avec modules Input/Filter/Output, scheduler CRON
 - **Epic 3 (Frontend Generator)** : Services `/server/services/pipeline-generator/`, `/server/services/ai-mapping/`
 
 **Functional Requirements Coverage:**
@@ -1023,9 +1023,9 @@ Toutes les 12 catégories FR sont couvertes :
 - ✅ **OpenAPI Ingestion** : Service `/server/services/openapi/`, Router `/server/api/routers/openapi/`
 - ✅ **Automatic Generation** : Service `/server/services/pipeline-generator/`
 - ✅ **AI-Assisted Mapping** : Service `/server/services/ai-mapping/` avec OpenAI
-- ✅ **Connector Execution** : Runtime CLI Go `canectors-runtime/` avec modules
+- ✅ **Connector Execution** : Runtime CLI Go `cannectors-runtime/` avec modules
 - ✅ **Documentation** : Service `/server/services/documentation/`
-- ✅ **Input/Filter/Output Modules** : `canectors-runtime/internal/modules/`
+- ✅ **Input/Filter/Output Modules** : `cannectors-runtime/internal/modules/`
 - ✅ **User & Organization** : Routers `/server/api/routers/user/`, `/server/api/routers/organisation/`
 - ✅ **Subscription & Billing** : Router `/server/api/routers/billing/` avec Stripe
 - ✅ **Integration & Workflow** : Runtime CLI + CI/CD GitHub Actions
@@ -1051,8 +1051,8 @@ Toutes les décisions critiques sont documentées :
 
 **Structure Completeness:**
 Structure de projet complète et spécifique :
-- ✅ Arborescence complète définie pour `canectors/` (Next.js)
-- ✅ Arborescence complète définie pour `canectors-runtime/` (Go)
+- ✅ Arborescence complète définie pour `cannectors/` (Next.js)
+- ✅ Arborescence complète définie pour `cannectors-runtime/` (Go)
 - ✅ Tous les fichiers et répertoires mappés aux exigences
 - ✅ Points d'intégration clairement spécifiés
 - ✅ Boundaries de composants bien définis
@@ -1089,7 +1089,7 @@ Patterns d'implémentation complets :
 
 **Ajustements effectués pendant le workflow :**
 - ✅ Format configuration : JSON principal (au lieu de YAML) pour simplicité déclaration modules
-- ✅ Nom projet : Canectors
+- ✅ Nom projet : Cannectors
 
 ### Architecture Completeness Checklist
 
@@ -1112,7 +1112,7 @@ Patterns d'implémentation complets :
 - [x] Process patterns documented (error handling, loading, validation, auth)
 
 **✅ Project Structure**
-- [x] Complete directory structure defined (canectors/ + canectors-runtime/)
+- [x] Complete directory structure defined (cannectors/ + cannectors-runtime/)
 - [x] Component boundaries established (API, Services, Components, Data)
 - [x] Integration points mapped (Internal, External, Data Flow, Runtime CLI)
 - [x] Requirements to structure mapping complete (12 catégories FR → composants)
@@ -1149,9 +1149,9 @@ Patterns d'implémentation complets :
 **First Implementation Priority:**
 
 1. **Epic 1 - Format Configuration** : Définir schéma JSON complet pour pipelines modulaires avec validation Zod
-2. **Initialize T3 Stack** : `npx create-t3-app@latest canectors --nextAuth --prisma --trpc --tailwind --typescript`
+2. **Initialize T3 Stack** : `npx create-t3-app@latest cannectors --nextAuth --prisma --trpc --tailwind --typescript`
 3. **Setup Multi-tenant** : Configurer middleware Next.js + tRPC context pour isolation `organisationId`
-4. **Epic 2 - CLI Runtime** : Initialiser projet Go `canectors-runtime/` avec structure modules Input/Filter/Output
+4. **Epic 2 - CLI Runtime** : Initialiser projet Go `cannectors-runtime/` avec structure modules Input/Filter/Output
 
 ## Architecture Completion Summary
 
@@ -1184,20 +1184,20 @@ Patterns d'implémentation complets :
 
 - Technology stack with verified versions (T3 Stack, Clerk, Redis Upstash, Go)
 - Consistency rules that prevent implementation conflicts
-- Project structure with clear boundaries (canectors/ + canectors-runtime/)
+- Project structure with clear boundaries (cannectors/ + cannectors-runtime/)
 - Integration patterns and communication standards (tRPC, Prisma, middleware)
 
 ### Implementation Handoff
 
 **For AI Agents:**
-This architecture document is your complete guide for implementing **Canectors**. Follow all decisions, patterns, and structures exactly as documented.
+This architecture document is your complete guide for implementing **Cannectors**. Follow all decisions, patterns, and structures exactly as documented.
 
 **First Implementation Priority:**
 
 1. **Epic 1 - Format Configuration** : Définir schéma JSON complet pour pipelines modulaires avec validation Zod
-2. **Initialize T3 Stack** : `npx create-t3-app@latest canectors --nextAuth --prisma --trpc --tailwind --typescript`
+2. **Initialize T3 Stack** : `npx create-t3-app@latest cannectors --nextAuth --prisma --trpc --tailwind --typescript`
 3. **Setup Multi-tenant** : Configurer middleware Next.js + tRPC context pour isolation `organisationId`
-4. **Epic 2 - CLI Runtime** : Initialiser projet Go `canectors-runtime/` avec structure modules Input/Filter/Output
+4. **Epic 2 - CLI Runtime** : Initialiser projet Go `cannectors-runtime/` avec structure modules Input/Filter/Output
 
 **Development Sequence:**
 
@@ -1227,7 +1227,7 @@ This architecture document is your complete guide for implementing **Canectors**
 
 - [x] Decisions are specific and actionable (20 décisions avec versions)
 - [x] Patterns prevent agent conflicts (15+ patterns avec exemples)
-- [x] Structure is complete and unambiguous (canectors/ + canectors-runtime/)
+- [x] Structure is complete and unambiguous (cannectors/ + cannectors-runtime/)
 - [x] Examples are provided for clarity (Good examples + Anti-patterns)
 
 ### Project Success Factors

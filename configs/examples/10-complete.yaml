@@ -1,38 +1,49 @@
-id: complete-pipeline-example
-name: Complete Pipeline Example
-description: Complete example with authentication, pagination, filters, retry, and advanced configurations
-version: "1.0.0"
-enabled: true
-input:
-  type: http-polling
-  config:
+# Example: Complete Pipeline
+# Full example with OAuth2, pagination, filters, retry, and advanced configurations
+
+connector:
+  name: complete-pipeline-example
+  version: "1.0.0"
+  description: Complete example with authentication, pagination, filters, retry, and advanced configurations
+
+  defaults:
+    onError: fail
+    timeoutMs: 30000
+    retry:
+      maxAttempts: 3
+      delayMs: 1000
+      backoffMultiplier: 2
+
+  input:
+    type: httpPolling
     endpoint: https://api.source.com/orders
-    timeout: 60
+    schedule: "0 */6 * * *"
+    timeoutMs: 60000
     headers:
       Accept: application/json
-      User-Agent: Canectors-Runtime/1.0
+      User-Agent: Cannectors-Runtime/1.0
     dataField: orders
     pagination:
       type: page
       pageParam: page
       totalPagesField: meta.total_pages
-  authentication:
-    type: oauth2
-    credentials:
-      tokenUrl: https://auth.source.com/oauth/token
-      clientId: ${SOURCE_CLIENT_ID}
-      clientSecret: ${SOURCE_CLIENT_SECRET}
-      scopes: orders:read
-filters:
-  - type: condition
-    config:
-      expression: status == 'completed' && total > 0
+    authentication:
+      type: oauth2
+      credentials:
+        tokenUrl: https://auth.source.com/oauth/token
+        clientId: ${SOURCE_CLIENT_ID}
+        clientSecret: ${SOURCE_CLIENT_SECRET}
+        scope: orders:read
+
+  filters:
+    - type: condition
+      expression: "status == 'completed' && total > 0"
       lang: simple
       onTrue: continue
       onFalse: skip
       onError: log
-  - type: mapping
-    config:
+
+    - type: mapping
       mappings:
         - source: id
           target: orderId
@@ -50,41 +61,34 @@ filters:
         - source: created_at
           target: orderDate
           transforms:
-            - op: formatDate
+            - op: dateFormat
               format: "2006-01-02T15:04:05Z07:00"
       onError: skip
-output:
-  type: http-request
-  config:
+
+  output:
+    type: httpRequest
     endpoint: https://api.destination.com/v1/orders/{orderId}
     method: PUT
     timeoutMs: 45000
     headers:
       Content-Type: application/json
-      X-Source: canectors
+      X-Source: cannectors
     request:
       bodyFrom: record
       pathParams:
         orderId: orderId
-      queryParams:
+      query:
         sync: "true"
       queryFromRecord:
         version: orderId
       headersFromRecord:
         X-Customer-ID: customerId
     retry:
-      maxRetries: 3
-      backoffMs: 1000
-      backoffMultiplier: 2.0
-    success:
-      statusCodes: [200, 201, 204]
+      maxAttempts: 3
+      delayMs: 1000
+      backoffMultiplier: 2
     onError: skip
-  authentication:
-    type: bearer
-    credentials:
-      token: ${DEST_API_TOKEN}
-schedule: "0 */6 * * *"
-errorHandling:
-  retryCount: 2
-  retryDelay: 5000
-  onError: continue
+    authentication:
+      type: bearer
+      credentials:
+        token: ${DEST_API_TOKEN}

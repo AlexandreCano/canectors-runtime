@@ -3,8 +3,8 @@
 # The schedule is defined at the input module level (not connector level).
 #
 # Usage:
-#   canectors run ./configs/examples/13-scheduled.yaml
-#   canectors run --dry-run ./configs/examples/13-scheduled.yaml
+#   cannectors run ./configs/examples/13-scheduled.yaml
+#   cannectors run --dry-run ./configs/examples/13-scheduled.yaml
 #
 # CRON Schedule Examples:
 #   "*/5 * * * *"   - Every 5 minutes
@@ -17,11 +17,9 @@
 #       Schedule is NOT ALLOWED for event-driven input types (webhook)
 
 connector:
-  id: hourly-sync
   name: hourly-sync
-  description: Synchronizes data from source API to destination every hour
   version: "1.0.0"
-  enabled: true
+  description: Synchronizes data from source API to destination every hour
 
   input:
     type: httpPolling
@@ -29,7 +27,7 @@ connector:
     schedule: "0 * * * *"
     endpoint: https://api.example.com/data
     method: GET
-    timeout: 30000
+    timeoutMs: 30000
     headers:
       Accept: application/json
     authentication:
@@ -51,7 +49,7 @@ connector:
     type: httpRequest
     endpoint: https://api.destination.com/import
     method: POST
-    timeout: 60000
+    timeoutMs: 60000
     headers:
       Content-Type: application/json
     authentication:
@@ -61,7 +59,8 @@ connector:
         location: header
         headerName: X-API-Key
 
-  errorHandling:
-    retryCount: 3
-    retryDelay: 5000
-    onError: stop
+  defaults:
+    onError: fail
+    retry:
+      maxAttempts: 3
+      delayMs: 5000

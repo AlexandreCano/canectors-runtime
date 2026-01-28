@@ -22,11 +22,12 @@ connector:
     headers:
       Accept: application/json
     authentication:
-      type: oauth2_client_credentials
-      tokenUrl: https://auth.example.com/oauth/token
-      clientIdRef: "${OAUTH_CLIENT_ID}"
-      clientSecretRef: "${OAUTH_CLIENT_SECRET}"
-      scope: "transactions:read"
+      type: oauth2
+      credentials:
+        tokenUrl: https://auth.example.com/oauth/token
+        clientId: "${OAUTH_CLIENT_ID}"
+        clientSecret: "${OAUTH_CLIENT_SECRET}"
+        scope: "transactions:read"
 
     # Combined state persistence configuration
     statePersistence:
@@ -38,14 +39,14 @@ connector:
         # Nested field path for ID extraction
         field: data.transaction_id
         queryParam: after_id
-      # Optional: custom storage path (defaults to ./canectors-data/state)
-      storagePath: /var/lib/canectors/state
+      # Optional: custom storage path (defaults to ./cannectors-data/state)
+      storagePath: /var/lib/cannectors/state
 
     # Pagination for large result sets
     pagination:
       type: cursor
       cursorParam: cursor
-      nextCursorField: next_cursor
+      cursorPath: next_cursor
 
     dataField: transactions
 

@@ -1,4 +1,4 @@
-# Plan de Clean-up — Canectors Runtime
+# Plan de Clean-up — Cannectors Runtime
 
 **Date :** 2026-01-23
 **Auteur :** Revue technique senior

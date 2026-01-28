@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // OutputOptions configures CLI output behavior.

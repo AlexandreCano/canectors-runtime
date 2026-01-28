@@ -96,7 +96,7 @@ afin de distinguer erreurs transitoires et définitives et d’obtenir un retry 
 
 ### Architecture Compliance
 
-- **Runtime CLI Go** : tout le travail dans `canectors-runtime`, pas de changement Next.js/tRPC.
+- **Runtime CLI Go** : tout le travail dans `cannectors-runtime`, pas de changement Next.js/tRPC.
 - **Structure** : conserver `internal/modules/output/`, `internal/errhandling/`, `internal/config/`, `pkg/connector/`.
 - **Interfaces** : `output.Module` et `RetryInfoProvider` inchangés. Pas de nouvelle méthode publique obligatoire.
 - **Config** : extensions dans `retry` (output module config), pas de changement de schéma global.

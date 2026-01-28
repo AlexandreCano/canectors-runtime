@@ -3,7 +3,7 @@
 package output
 
 import (
-	"github.com/canectors/runtime/internal/template"
+	"github.com/cannectors/runtime/internal/template"
 )
 
 // Re-export template types and functions from the shared package for backward compatibility

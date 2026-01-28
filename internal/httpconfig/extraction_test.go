@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 func TestBaseConfig_GetTimeout(t *testing.T) {

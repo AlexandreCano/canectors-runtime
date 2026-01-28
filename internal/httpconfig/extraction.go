@@ -4,7 +4,7 @@ package httpconfig
 import (
 	"time"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // ExtractBaseConfig extracts BaseConfig from a ModuleConfig.

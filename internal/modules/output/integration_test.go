@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // =============================================================================

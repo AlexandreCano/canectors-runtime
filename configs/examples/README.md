@@ -1,6 +1,6 @@
 # Configuration Examples
 
-This directory contains comprehensive configuration examples covering all use cases for Canectors Runtime pipelines. Each example is available in both JSON and YAML formats.
+This directory contains comprehensive configuration examples covering all use cases for Cannectors Runtime pipelines. Each example is available in both JSON and YAML formats.
 
 ## Examples Index
 
@@ -133,10 +133,10 @@ CRON scheduled pipeline for periodic data polling.
 **Usage:**
 ```bash
 # Run on schedule (auto-detected, keeps running until Ctrl+C)
-canectors run ./configs/examples/13-scheduled.yaml
+cannectors run ./configs/examples/13-scheduled.yaml
 
 # Test with dry-run
-canectors run --dry-run ./configs/examples/13-scheduled.yaml
+cannectors run --dry-run ./configs/examples/13-scheduled.yaml
 ```
 
 **Scheduler Behavior:**
@@ -155,8 +155,8 @@ Webhook input example (event-driven, no schedule).
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/14-webhook.yaml
-canectors run --dry-run ./configs/examples/14-webhook.yaml
+cannectors validate ./configs/examples/14-webhook.yaml
+cannectors run --dry-run ./configs/examples/14-webhook.yaml
 ```
 
 #### 15-retry-configuration.json / 15-retry-configuration.yaml
@@ -180,8 +180,8 @@ Advanced retry configuration example (Story 13.3).
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/15-retry-configuration.yaml
-canectors run --dry-run ./configs/examples/15-retry-configuration.yaml
+cannectors validate ./configs/examples/15-retry-configuration.yaml
+cannectors run --dry-run ./configs/examples/15-retry-configuration.yaml
 ```
 
 ### Templating Examples
@@ -205,8 +205,8 @@ Dynamic output templating with record data (Story 14.6).
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/21-output-templating.yaml
-canectors run --dry-run ./configs/examples/21-output-templating.yaml
+cannectors validate ./configs/examples/21-output-templating.yaml
+cannectors run --dry-run ./configs/examples/21-output-templating.yaml
 ```
 
 #### 22-output-templating-batch.json / 22-output-templating-batch.yaml
@@ -221,8 +221,8 @@ Templating in batch mode (`bodyFrom: "records"`).
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/22-output-templating-batch.yaml
-canectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
+cannectors validate ./configs/examples/22-output-templating-batch.yaml
+cannectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
 ```
 
 #### 23-output-templating-soap.json / 23-output-templating-soap.yaml
@@ -250,8 +250,8 @@ SOAP/XML templating for legacy API integration.
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/23-output-templating-soap.yaml
-canectors run --dry-run ./configs/examples/23-output-templating-soap.yaml
+cannectors validate ./configs/examples/23-output-templating-soap.yaml
+cannectors run --dry-run ./configs/examples/23-output-templating-soap.yaml
 ```
 
 #### 24-enrichment-templating.json / 24-enrichment-templating.yaml
@@ -267,8 +267,8 @@ Templating in enrichment filters for dynamic API lookups.
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/24-enrichment-templating.yaml
-canectors run --dry-run ./configs/examples/24-enrichment-templating.yaml
+cannectors validate ./configs/examples/24-enrichment-templating.yaml
+cannectors run --dry-run ./configs/examples/24-enrichment-templating.yaml
 ```
 
 ## Using the Examples
@@ -277,17 +277,17 @@ canectors run --dry-run ./configs/examples/24-enrichment-templating.yaml
 
 ```bash
 # JSON format
-canectors validate ./configs/examples/01-simple.json
+cannectors validate ./configs/examples/01-simple.json
 
 # YAML format
-canectors validate ./configs/examples/01-simple.yaml
+cannectors validate ./configs/examples/01-simple.yaml
 ```
 
 ### Run an Example (Dry-Run)
 
 ```bash
 # Test without executing output module
-canectors run --dry-run ./configs/examples/10-complete.yaml
+cannectors run --dry-run ./configs/examples/10-complete.yaml
 ```
 
 ### Use as Templates
@@ -300,8 +300,8 @@ cp ./configs/examples/05-pagination.json my-pipeline.json
 
 # Edit with your endpoints and credentials
 # Then validate and run
-canectors validate my-pipeline.json
-canectors run my-pipeline.json
+cannectors validate my-pipeline.json
+cannectors run my-pipeline.json
 ```
 
 ## Configuration Features Reference
@@ -377,8 +377,8 @@ Output templating with record data for dynamic endpoints, headers, and bodies.
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/21-output-templating.yaml
-canectors run --dry-run ./configs/examples/21-output-templating.yaml
+cannectors validate ./configs/examples/21-output-templating.yaml
+cannectors run --dry-run ./configs/examples/21-output-templating.yaml
 ```
 
 #### 22-output-templating-batch.yaml
@@ -397,8 +397,8 @@ Output templating in batch mode for multi-tenant or grouped data scenarios.
 
 **Usage:**
 ```bash
-canectors validate ./configs/examples/22-output-templating-batch.yaml
-canectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
+cannectors validate ./configs/examples/22-output-templating-batch.yaml
+cannectors run --dry-run ./configs/examples/22-output-templating-batch.yaml
 ```
 
 ## Notes

@@ -23,7 +23,8 @@ connector:
       Accept: application/json
     authentication:
       type: bearer
-      token: "${API_TOKEN}"
+      credentials:
+        token: "${API_TOKEN}"
 
     # State persistence configuration
     statePersistence:

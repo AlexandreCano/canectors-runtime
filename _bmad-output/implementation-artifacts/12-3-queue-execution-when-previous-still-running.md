@@ -156,13 +156,13 @@ so that executions are serialized per pipeline and executed deterministically wi
 
 **Files to Review (No Changes Expected):**
 - `internal/runtime/pipeline.go` - No changes needed (executor interface unchanged)
-- `cmd/canectors/main.go` - No changes needed (scheduler usage unchanged)
+- `cmd/cannectors/main.go` - No changes needed (scheduler usage unchanged)
 
 ### Project Structure Notes
 
 **Files to Modify:**
 ```
-canectors-runtime/
+cannectors-runtime/
   internal/scheduler/
     scheduler.go                    # Add queue, modify execution logic
     scheduler_test.go             # Add queue tests

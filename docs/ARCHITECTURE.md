@@ -1,4 +1,4 @@
-# ARCHITECTURE — Canectors Runtime
+# ARCHITECTURE — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -8,11 +8,11 @@
 
 ## 1. Rôle Global de l'Application
 
-**Canectors Runtime** est un **moteur d'exécution de pipelines ETL déclaratifs** écrit en Go.
+**Cannectors Runtime** est un **moteur d'exécution de pipelines ETL déclaratifs** écrit en Go.
 
 ### Mental Model (Perspective Java)
 
-Si vous connaissez **Apache Beam**, **Spring Batch**, ou **Talend Open Studio**, Canectors Runtime est l'équivalent Go léger et sans framework.
+Si vous connaissez **Apache Beam**, **Spring Batch**, ou **Talend Open Studio**, Cannectors Runtime est l'équivalent Go léger et sans framework.
 
 **Analogie Spring Boot**:
 ```
@@ -51,7 +51,7 @@ Configuration YAML/JSON → Runtime parsing → Pipeline execution
 
 ### Équivalent Java
 
-| Canectors Concept | Équivalent Java Spring |
+| Cannectors Concept | Équivalent Java Spring |
 |-------------------|------------------------|
 | **Pipeline** | `@Configuration` class avec beans orchestrés |
 | **Input Module** | `@Component` qui fetche data (e.g., `RestTemplate.getForObject()`) |
@@ -67,8 +67,8 @@ Configuration YAML/JSON → Runtime parsing → Pipeline execution
 ### Vue d'ensemble
 
 ```
-canectors-runtime/
-├── cmd/canectors/          → CLI entry point (comme Spring Boot main class)
+cannectors-runtime/
+├── cmd/cannectors/          → CLI entry point (comme Spring Boot main class)
 ├── pkg/connector/          → API publique (types exportés)
 └── internal/               → Implémentation privée
     ├── auth/               → Authentification HTTP
@@ -89,7 +89,7 @@ canectors-runtime/
 
 ```java
 // Équivalent Maven structure
-com.canectors.runtime/
+com.cannectors.runtime/
 ├── cli/                    // Main class
 ├── api/                    // Types publics (comme pkg/)
 └── core/                   // Internal packages
@@ -113,7 +113,7 @@ com.canectors.runtime/
 
 ## 4. Responsabilités Majeures
 
-### Package `cmd/canectors` — Point d'entrée CLI
+### Package `cmd/cannectors` — Point d'entrée CLI
 
 **Rôle**: Main class + CLI commands (équivalent Spring Boot `@SpringBootApplication`)
 
@@ -127,7 +127,7 @@ com.canectors.runtime/
 **Équivalent Java**:
 ```java
 @SpringBootApplication
-public class CanectorsApplication {
+public class CannectorsApplication {
     public static void main(String[] args) {
         // CLI parsing
         // Config loading
@@ -516,7 +516,7 @@ public class PipelineExecutor {
 
 ```mermaid
 graph TD
-    CLI[cmd/canectors]
+    CLI[cmd/cannectors]
     API[pkg/connector]
     CONFIG[internal/config]
     RUNTIME[internal/runtime]
@@ -600,13 +600,13 @@ graph TD
 
 **Niveau 5 - Présentation**:
 - `internal/cli` → dépend API
-- `cmd/canectors` → dépend TOUT (point d'entrée)
+- `cmd/cannectors` → dépend TOUT (point d'entrée)
 
 ---
 
 ## 6. Analogies Java/Spring Explicites
 
-| Concept Canectors | Équivalent Java/Spring | Notes |
+| Concept Cannectors | Équivalent Java/Spring | Notes |
 |-------------------|------------------------|-------|
 | **Pipeline struct** | `@Configuration` class | Configuration déclarative |
 | **Executor.Execute()** | `ApplicationRunner.run()` | Point exécution principal |
@@ -841,7 +841,7 @@ Modifier `internal/modules/filter/mapping.go` → fonction `applyTransforms()`
 
 ## 11. Comparaison avec Frameworks Java
 
-| Aspect | Canectors Runtime | Spring Batch | Apache Beam |
+| Aspect | Cannectors Runtime | Spring Batch | Apache Beam |
 |--------|-------------------|--------------|-------------|
 | **Langage** | Go | Java | Java/Python/Go |
 | **Configuration** | JSON/YAML déclaratif | Java code + annotations | Java code (Pipeline API) |
@@ -858,7 +858,7 @@ Modifier `internal/modules/filter/mapping.go` → fonction `applyTransforms()`
 
 ## 12. Conclusion — Mental Model Final
 
-**Canectors Runtime** = **Micro-ETL orchestrator** en Go, optimisé pour:
+**Cannectors Runtime** = **Micro-ETL orchestrator** en Go, optimisé pour:
 
 1. **Légèreté**: Pas de framework, dépendances minimales
 2. **Déclaratif**: Config → Exécution (pas de code)

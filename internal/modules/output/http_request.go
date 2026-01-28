@@ -20,17 +20,17 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 
-	"github.com/canectors/runtime/internal/auth"
-	"github.com/canectors/runtime/internal/errhandling"
-	"github.com/canectors/runtime/internal/httpconfig"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/auth"
+	"github.com/cannectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/httpconfig"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values for HTTP Request module
 const (
 	defaultHTTPTimeout = 30 * time.Second
-	defaultUserAgent   = "Canectors-Runtime/1.0"
+	defaultUserAgent   = "Cannectors-Runtime/1.0"
 	defaultContentType = "application/json"
 	defaultBodyFrom    = "records" // batch mode by default
 	// MaxRetryHintExpressionLength is the maximum allowed length for retryHintFromBody expressions
@@ -1283,10 +1283,7 @@ func validateHeaderName(name string) error {
 	// RFC 7230: header names are tokens (alphanumeric and specific symbols)
 	// Check for invalid characters: control characters, spaces, and specific invalid chars
 	for _, r := range name {
-		if r < 0x21 || r > 0x7E {
-			return fmt.Errorf("header name contains invalid character: %q", r)
-		}
-		if r == ':' || r == ' ' || r == '\t' || r == '\r' || r == '\n' {
+		if r < 0x21 || r > 0x7E || r == ':' {
 			return fmt.Errorf("header name contains invalid character: %q", r)
 		}
 	}

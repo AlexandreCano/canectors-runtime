@@ -1,4 +1,4 @@
-// Package auth provides shared authentication handling for Canectors modules.
+// Package auth provides shared authentication handling for Cannectors modules.
 // It supports API key, Bearer token, Basic auth, and OAuth2 client credentials.
 package auth
 
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Error types for authentication

@@ -100,7 +100,7 @@ So that I can route or filter data based on conditional logic.
 ### Architecture Requirements
 
 **Filter Module Execution:**
-- **Location:** `canectors-runtime/internal/modules/filter/condition.go`
+- **Location:** `cannectors-runtime/internal/modules/filter/condition.go`
 - **Interface:** Implements `filter.Module` interface with `Process(records []map[string]interface{}) ([]map[string]interface{}, error)`
 - **Configuration:** Reads from `connector.Pipeline.Filters[]` array, filter with `type: "condition"`
 - **Purpose:** Filters or routes data records based on conditional expressions
@@ -250,7 +250,7 @@ So that I can route or filter data based on conditional logic.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── modules/
 │       └── filter/
@@ -394,14 +394,14 @@ canectors-runtime/
 
 ### References
 
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.4` - Story requirements and acceptance criteria
-- **Source:** `canectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, module structure, deterministic execution requirements
-- **Source:** `canectors-runtime/internal/modules/filter/mapping.go` - Reference implementation for filter module pattern (Story 3.3)
-- **Source:** `canectors-runtime/internal/modules/filter/filter.go` - Filter module interface definition
-- **Source:** `canectors-runtime/pkg/connector/types.go` - Pipeline and ModuleConfig type definitions
-- **Source:** `canectors-runtime/internal/config/schema/pipeline-schema.json` - Condition filter schema definition (type, lang, expression, onTrue, onFalse)
-- **Source:** `canectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization
-- **Source:** `canectors-BMAD/_bmad-output/implementation-artifacts/3-3-implement-filter-module-execution-mapping.md` - Previous story learnings and patterns
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/epics.md#Story-3.4` - Story requirements and acceptance criteria
+- **Source:** `cannectors-BMAD/_bmad-output/planning-artifacts/architecture.md` - Architecture patterns, module structure, deterministic execution requirements
+- **Source:** `cannectors-runtime/internal/modules/filter/mapping.go` - Reference implementation for filter module pattern (Story 3.3)
+- **Source:** `cannectors-runtime/internal/modules/filter/filter.go` - Filter module interface definition
+- **Source:** `cannectors-runtime/pkg/connector/types.go` - Pipeline and ModuleConfig type definitions
+- **Source:** `cannectors-runtime/internal/config/schema/pipeline-schema.json` - Condition filter schema definition (type, lang, expression, onTrue, onFalse)
+- **Source:** `cannectors-BMAD/_bmad-output/project-context.md` - Go runtime patterns, testing standards, code organization
+- **Source:** `cannectors-BMAD/_bmad-output/implementation-artifacts/3-3-implement-filter-module-execution-mapping.md` - Previous story learnings and patterns
 
 ## Dev Agent Record
 
@@ -436,15 +436,15 @@ N/A - No debug issues encountered during implementation.
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/modules/filter/condition.go` - Condition module implementation
-- `canectors-runtime/internal/modules/filter/condition_test.go` - Comprehensive test suite (450+ lines)
+- `cannectors-runtime/internal/modules/filter/condition.go` - Condition module implementation
+- `cannectors-runtime/internal/modules/filter/condition_test.go` - Comprehensive test suite (450+ lines)
 
 **Modified Files:**
-- `canectors-runtime/internal/modules/filter/filter.go` - Removed stub Condition struct
-- `canectors-runtime/cmd/canectors/main.go` - Added condition filter support in createFilterModules
-- `canectors-runtime/internal/runtime/pipeline_test.go` - Added condition filter pipeline integration tests
-- `canectors-runtime/go.mod` - Added expr-lang dependency for condition evaluation
-- `canectors-runtime/go.sum` - Added expr-lang dependency checksums
+- `cannectors-runtime/internal/modules/filter/filter.go` - Removed stub Condition struct
+- `cannectors-runtime/cmd/cannectors/main.go` - Added condition filter support in createFilterModules
+- `cannectors-runtime/internal/runtime/pipeline_test.go` - Added condition filter pipeline integration tests
+- `cannectors-runtime/go.mod` - Added expr-lang dependency for condition evaluation
+- `cannectors-runtime/go.sum` - Added expr-lang dependency checksums
 
 ## Change Log
 

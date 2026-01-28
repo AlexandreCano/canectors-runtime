@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/canectors/runtime/internal/modules/output"
+	"github.com/cannectors/runtime/internal/modules/output"
 )
 
 // Example demonstrates a complete implementation of an output module.

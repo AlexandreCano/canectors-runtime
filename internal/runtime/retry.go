@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"github.com/canectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
 // OnErrorStrategy defines what action to take when an error occurs (re-exported from errhandling).

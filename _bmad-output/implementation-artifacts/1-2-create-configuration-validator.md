@@ -83,7 +83,7 @@ so that I can ensure configurations are syntactically correct before use.
 
 **Schema File:**
 - Schema location: `/types/pipeline-schema.json` (created in Story 1.1)
-- Schema URI: `https://canectors.io/schemas/pipeline/v1.0.0/pipeline-schema.json`
+- Schema URI: `https://cannectors.io/schemas/pipeline/v1.0.0/pipeline-schema.json`
 - Must load schema at runtime for validation
 - Schema is JSON Schema Draft 2020-12 with conditional validation (`if/then/else`)
 
@@ -180,7 +180,7 @@ interface ValidationError {
 
 **CLI Integration (Future - Story 2.2):**
 - CLI will call validator before parsing and executing
-- CLI command: `canectors validate <config-file>`
+- CLI command: `cannectors validate <config-file>`
 - This story provides the validation function that CLI will use
 
 **TypeScript Integration:**

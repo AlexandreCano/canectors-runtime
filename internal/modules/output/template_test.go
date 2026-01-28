@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/canectors/runtime/internal/template"
+	"github.com/cannectors/runtime/internal/template"
 )
 
 func TestHasTemplateVariables(t *testing.T) {

@@ -5,15 +5,15 @@ inputDocuments:
   - 'architecture.md'
   - 'ux-design-specification.md'
   - 'project-context.md'
-  - 'product-brief-canectors-2026-01-10.md'
+  - 'product-brief-cannectors-2026-01-10.md'
   - 'research/market-api-connector-automation-saas-research-2026-01-10.md'
 ---
 
-# Canectors - Epic Breakdown
+# Cannectors - Epic Breakdown
 
 ## Overview
 
-This document provides the complete epic and story breakdown for Canectors, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
+This document provides the complete epic and story breakdown for Cannectors, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
 ## Requirements Inventory
 
@@ -411,7 +411,7 @@ So that I can build a portable runtime for executing connector pipelines.
 **Given** I am setting up the CLI runtime project  
 **When** I initialize the Go project structure  
 **Then** The project follows Go best practices with:
-- `/cmd/canectors/` for main entry point
+- `/cmd/cannectors/` for main entry point
 - `/internal/modules/` for Input/Filter/Output modules
 - `/internal/runtime/` for pipeline execution engine
 - `/internal/config/` for configuration parsing and validation

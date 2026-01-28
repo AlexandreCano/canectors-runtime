@@ -130,7 +130,7 @@ So that connector executions are robust and reliable.
 ### Architecture Requirements
 
 **Error Handling and Retry Logic Implementation:**
-- **Location:** `canectors-runtime/internal/runtime/pipeline.go` (Executor), `canectors-runtime/internal/modules/` (modules), `canectors-runtime/pkg/connector/types.go` (types)
+- **Location:** `cannectors-runtime/internal/runtime/pipeline.go` (Executor), `cannectors-runtime/internal/modules/` (modules), `cannectors-runtime/pkg/connector/types.go` (types)
 - **Purpose:** Handle errors robustly and retry failed operations for reliable connector executions
 - **Scope:** All pipeline execution stages (Input, Filter, Output) with configurable retry and error handling
 
@@ -159,20 +159,20 @@ So that connector executions are robust and reliable.
 ### Project Structure Notes
 
 **File Locations:**
-- Error types and classification: `canectors-runtime/internal/runtime/errors.go` (new file)
-- Retry executor: `canectors-runtime/internal/runtime/retry.go` (new file)
-- Executor implementation: `canectors-runtime/internal/runtime/pipeline.go`
-- Executor tests: `canectors-runtime/internal/runtime/pipeline_test.go`
-- Module implementations: `canectors-runtime/internal/modules/{input,filter,output}/`
-- Pipeline types: `canectors-runtime/pkg/connector/types.go`
-- Configuration parser: `canectors-runtime/internal/config/converter.go`
+- Error types and classification: `cannectors-runtime/internal/runtime/errors.go` (new file)
+- Retry executor: `cannectors-runtime/internal/runtime/retry.go` (new file)
+- Executor implementation: `cannectors-runtime/internal/runtime/pipeline.go`
+- Executor tests: `cannectors-runtime/internal/runtime/pipeline_test.go`
+- Module implementations: `cannectors-runtime/internal/modules/{input,filter,output}/`
+- Pipeline types: `cannectors-runtime/pkg/connector/types.go`
+- Configuration parser: `cannectors-runtime/internal/config/converter.go`
 
 **Dependencies:**
-- Use existing `github.com/canectors/runtime/pkg/connector` for types
-- Use existing `github.com/canectors/runtime/internal/runtime` for Executor
-- Use existing `github.com/canectors/runtime/internal/logger` for logging
-- Use existing `github.com/canectors/runtime/internal/modules/*` for modules
-- Use existing `github.com/canectors/runtime/internal/config` for configuration parsing
+- Use existing `github.com/cannectors/runtime/pkg/connector` for types
+- Use existing `github.com/cannectors/runtime/internal/runtime` for Executor
+- Use existing `github.com/cannectors/runtime/internal/logger` for logging
+- Use existing `github.com/cannectors/runtime/internal/modules/*` for modules
+- Use existing `github.com/cannectors/runtime/internal/config` for configuration parsing
 
 ### Technical Requirements
 
@@ -241,11 +241,11 @@ So that connector executions are robust and reliable.
 - `net/http` - HTTP client with timeout support
 
 **Existing Dependencies (already in go.mod):**
-- `github.com/canectors/runtime/pkg/connector` - Pipeline and execution result types
-- `github.com/canectors/runtime/internal/runtime` - Executor
-- `github.com/canectors/runtime/internal/modules/*` - Module interfaces
-- `github.com/canectors/runtime/internal/logger` - Logger package
-- `github.com/canectors/runtime/internal/config` - Configuration parsing
+- `github.com/cannectors/runtime/pkg/connector` - Pipeline and execution result types
+- `github.com/cannectors/runtime/internal/runtime` - Executor
+- `github.com/cannectors/runtime/internal/modules/*` - Module interfaces
+- `github.com/cannectors/runtime/internal/logger` - Logger package
+- `github.com/cannectors/runtime/internal/config` - Configuration parsing
 
 **No New Dependencies Required:**
 - All functionality can be implemented using existing dependencies
@@ -399,12 +399,12 @@ So that connector executions are robust and reliable.
 - **Architecture Decision:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI Architecture]
 - **Epic Definition:** [Source: _bmad-output/planning-artifacts/epics.md#Epic 4: Advanced Runtime Features]
 - **Story Requirements:** [Source: _bmad-output/planning-artifacts/epics.md#Story 4.4: Implement Error Handling and Retry Logic]
-- **Pipeline Schema:** [Source: canectors-runtime/internal/config/schema/pipeline-schema.json#retryConfig]
-- **Pipeline Types:** [Source: canectors-runtime/pkg/connector/types.go#ErrorHandling]
-- **Executor Implementation:** [Source: canectors-runtime/internal/runtime/pipeline.go]
-- **Logger Implementation:** [Source: canectors-runtime/internal/logger/logger.go]
-- **Output Module:** [Source: canectors-runtime/internal/modules/output/http_request.go]
-- **Input Module:** [Source: canectors-runtime/internal/modules/input/http_polling.go]
+- **Pipeline Schema:** [Source: cannectors-runtime/internal/config/schema/pipeline-schema.json#retryConfig]
+- **Pipeline Types:** [Source: cannectors-runtime/pkg/connector/types.go#ErrorHandling]
+- **Executor Implementation:** [Source: cannectors-runtime/internal/runtime/pipeline.go]
+- **Logger Implementation:** [Source: cannectors-runtime/internal/logger/logger.go]
+- **Output Module:** [Source: cannectors-runtime/internal/modules/output/http_request.go]
+- **Input Module:** [Source: cannectors-runtime/internal/modules/input/http_polling.go]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 
 ## Dev Agent Record
@@ -423,19 +423,19 @@ Code review follow-up (fixes applied by Dev Agent).
 
 ### File List
 
-- `canectors-runtime/README.md`
-- `canectors-runtime/internal/config/converter.go`
-- `canectors-runtime/internal/errhandling/errors.go`
-- `canectors-runtime/internal/errhandling/errors_test.go`
-- `canectors-runtime/internal/errhandling/retry.go`
-- `canectors-runtime/internal/errhandling/retry_test.go`
-- `canectors-runtime/internal/modules/input/http_polling.go`
-- `canectors-runtime/internal/modules/output/http_request.go`
-- `canectors-runtime/internal/modules/output/http_request_test.go`
-- `canectors-runtime/internal/runtime/errors.go`
-- `canectors-runtime/internal/runtime/errors_test.go`
-- `canectors-runtime/internal/runtime/retry.go`
-- `canectors-runtime/internal/runtime/retry_test.go`
-- `canectors-runtime/internal/runtime/pipeline.go`
-- `canectors-runtime/pkg/connector/types.go`
+- `cannectors-runtime/README.md`
+- `cannectors-runtime/internal/config/converter.go`
+- `cannectors-runtime/internal/errhandling/errors.go`
+- `cannectors-runtime/internal/errhandling/errors_test.go`
+- `cannectors-runtime/internal/errhandling/retry.go`
+- `cannectors-runtime/internal/errhandling/retry_test.go`
+- `cannectors-runtime/internal/modules/input/http_polling.go`
+- `cannectors-runtime/internal/modules/output/http_request.go`
+- `cannectors-runtime/internal/modules/output/http_request_test.go`
+- `cannectors-runtime/internal/runtime/errors.go`
+- `cannectors-runtime/internal/runtime/errors_test.go`
+- `cannectors-runtime/internal/runtime/retry.go`
+- `cannectors-runtime/internal/runtime/retry_test.go`
+- `cannectors-runtime/internal/runtime/pipeline.go`
+- `cannectors-runtime/pkg/connector/types.go`
 - `_bmad-output/implementation-artifacts/4-4-implement-error-handling-and-retry-logic.md`

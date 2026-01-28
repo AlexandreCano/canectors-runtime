@@ -1,10 +1,8 @@
 {
   "connector": {
-    "id": "webhook-example",
     "name": "webhook-example",
-    "description": "Webhook input example - no schedule (event-driven)",
     "version": "1.0.0",
-    "enabled": true,
+    "description": "Webhook input example - no schedule (event-driven)",
     "input": {
       "type": "webhook",
       "path": "/webhook"

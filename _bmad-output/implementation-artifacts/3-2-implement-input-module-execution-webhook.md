@@ -69,7 +69,7 @@ So that I can receive real-time data via HTTP POST requests.
 ### Architecture Requirements
 
 **Webhook Input Module:**
-- **Location:** `canectors-runtime/internal/modules/input/webhook.go`
+- **Location:** `cannectors-runtime/internal/modules/input/webhook.go`
 - **Interface:** Implements `input.Module` interface with challenge: webhooks are event-driven (push) vs polling (pull)
 - **Pattern:** Two possible approaches:
   1. **Callback-based:** Module starts server, executes pipeline on each webhook via callback
@@ -136,7 +136,7 @@ So that I can receive real-time data via HTTP POST requests.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── modules/
 │       └── input/
@@ -249,9 +249,9 @@ canectors-runtime/
 - **Story 3.2 Details:** [Source: _bmad-output/planning-artifacts/epics.md#Story 3.2: Implement Input Module Execution (Webhook)]
 - **Story 3.1 (Previous):** [Source: _bmad-output/implementation-artifacts/3-1-implement-input-module-execution-http-polling.md]
 - **Story 2.3 (Pipeline Orchestration):** [Source: _bmad-output/implementation-artifacts/2-3-implement-pipeline-orchestration.md]
-- **Input Module Interface:** [Source: canectors-runtime/internal/modules/input/input.go]
-- **Pipeline Types:** [Source: canectors-runtime/pkg/connector/types.go]
-- **Executor Implementation:** [Source: canectors-runtime/internal/runtime/pipeline.go]
+- **Input Module Interface:** [Source: cannectors-runtime/internal/modules/input/input.go]
+- **Pipeline Types:** [Source: cannectors-runtime/pkg/connector/types.go]
+- **Executor Implementation:** [Source: cannectors-runtime/internal/runtime/pipeline.go]
 - **CLI Runtime Architecture:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI (Go) - Separate Project]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 - **PRD Requirements:** [Source: _bmad-output/planning-artifacts/prd.md#Input Modules]
@@ -260,7 +260,7 @@ canectors-runtime/
 
 **From Project Context:**
 - Runtime CLI is separate Go project from Next.js application [Source: _bmad-output/project-context.md#Technology Stack]
-- Go version: 1.23.5 (latest stable) [Source: canectors-runtime/go.mod]
+- Go version: 1.23.5 (latest stable) [Source: cannectors-runtime/go.mod]
 - Follow Go best practices and conventions [Source: _bmad-output/project-context.md#Critical Implementation Rules]
 
 **From Architecture:**
@@ -367,8 +367,8 @@ if !hmac.Equal([]byte(receivedSignature), []byte(expectedSignature)) {
 ### Previous Story Intelligence
 
 **Story 3.1 (HTTP Polling) - Key Learnings:**
-- **Module Interface:** `input.Module` interface with `Fetch() ([]map[string]interface{}, error)` method [Source: canectors-runtime/internal/modules/input/input.go]
-- **HTTP Client Pattern:** Uses `net/http` client with configurable timeout, context support [Source: canectors-runtime/internal/modules/input/http_polling.go]
+- **Module Interface:** `input.Module` interface with `Fetch() ([]map[string]interface{}, error)` method [Source: cannectors-runtime/internal/modules/input/input.go]
+- **HTTP Client Pattern:** Uses `net/http` client with configurable timeout, context support [Source: cannectors-runtime/internal/modules/input/http_polling.go]
 - **Authentication:** API key (header/query), Bearer, Basic, OAuth2 client credentials flow [Source: Story 3.1 completion notes]
 - **JSON Parsing:** Handles array responses and object responses with `dataField` extraction [Source: Story 3.1 completion notes]
 - **Error Handling:** Structured `HTTPError` type with status code, endpoint, message [Source: Story 3.1 completion notes]
@@ -413,13 +413,13 @@ if !hmac.Equal([]byte(receivedSignature), []byte(expectedSignature)) {
 **Recent Work:**
 - Story 3.1 completed: HTTP Polling Input module with authentication, pagination, error handling [Source: Story 3.1 completion notes]
 - Files created in Story 3.1:
-  - `canectors-runtime/internal/modules/input/http_polling.go` (~550 lines)
-  - `canectors-runtime/internal/modules/input/http_polling_test.go` (~1300 lines)
+  - `cannectors-runtime/internal/modules/input/http_polling.go` (~550 lines)
+  - `cannectors-runtime/internal/modules/input/http_polling_test.go` (~1300 lines)
 - Current state: `HTTPPolling` fully implemented and tested, `Webhook` stub does not exist yet
 
 **Repository Structure:**
-- Main project: `canectors/` (Next.js T3 Stack) - not started yet
-- Runtime project: `canectors-runtime/` (Go - separate project) - Epic 2 complete, Epic 3 in progress
+- Main project: `cannectors/` (Next.js T3 Stack) - not started yet
+- Runtime project: `cannectors-runtime/` (Go - separate project) - Epic 2 complete, Epic 3 in progress
 
 **Files from Previous Stories:**
 - `/pkg/connector/types.go` - Pipeline types (Story 2.1)
@@ -621,15 +621,15 @@ Claude Opus 4.5 (via Cursor)
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/modules/input/webhook.go` - Webhook implementation
-- `canectors-runtime/internal/modules/input/webhook_test.go` - Webhook unit/integration tests
-- `canectors-runtime/internal/runtime/webhook_integration_test.go` - Webhook → pipeline integration test
+- `cannectors-runtime/internal/modules/input/webhook.go` - Webhook implementation
+- `cannectors-runtime/internal/modules/input/webhook_test.go` - Webhook unit/integration tests
+- `cannectors-runtime/internal/runtime/webhook_integration_test.go` - Webhook → pipeline integration test
 
 **Modified Files:**
-- `canectors-runtime/internal/runtime/pipeline.go` - Added `ExecuteWithRecords`
-- `canectors-runtime/internal/runtime/pipeline_test.go` - Tests for `ExecuteWithRecords`
-- `canectors-BMAD/_bmad-output/implementation-artifacts/sprint-status.yaml` - Story status updated
-- `canectors-BMAD/_bmad-output/implementation-artifacts/3-2-implement-input-module-execution-webhook.md` - This story file
+- `cannectors-runtime/internal/runtime/pipeline.go` - Added `ExecuteWithRecords`
+- `cannectors-runtime/internal/runtime/pipeline_test.go` - Tests for `ExecuteWithRecords`
+- `cannectors-BMAD/_bmad-output/implementation-artifacts/sprint-status.yaml` - Story status updated
+- `cannectors-BMAD/_bmad-output/implementation-artifacts/3-2-implement-input-module-execution-webhook.md` - This story file
 
 ## Change Log
 

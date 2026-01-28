@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canectors/runtime/internal/cache"
-	"github.com/canectors/runtime/internal/database"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/pathutil"
-	"github.com/canectors/runtime/internal/template"
+	"github.com/cannectors/runtime/internal/cache"
+	"github.com/cannectors/runtime/internal/database"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/pathutil"
+	"github.com/cannectors/runtime/internal/template"
 )
 
 // Default configuration values for sql_call module

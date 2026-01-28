@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://canectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json",
-  "title": "Canectors Pipeline Configuration Schema",
+  "$id": "https://cannectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json",
+  "title": "Cannectors Pipeline Configuration Schema",
   "description": "Schema for defining declarative modular pipeline configurations. Supports Input → Filter → Output pattern with extensible module types.",
   "type": "object",
   "required": ["connector"],

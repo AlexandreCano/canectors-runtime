@@ -15,13 +15,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canectors/runtime/internal/auth"
-	"github.com/canectors/runtime/internal/cache"
-	"github.com/canectors/runtime/internal/errhandling"
-	"github.com/canectors/runtime/internal/httpconfig"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/template"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/auth"
+	"github.com/cannectors/runtime/internal/cache"
+	"github.com/cannectors/runtime/internal/errhandling"
+	"github.com/cannectors/runtime/internal/httpconfig"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/template"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values for http_call module
@@ -826,7 +826,7 @@ func (m *HTTPCallModule) buildHTTPRequest(ctx context.Context, requestURL, keyVa
 	}
 
 	// Set default headers
-	req.Header.Set("User-Agent", "Canectors-Runtime/1.0")
+	req.Header.Set("User-Agent", "Cannectors-Runtime/1.0")
 	req.Header.Set("Accept", "application/json")
 
 	// Set Content-Type for POST/PUT

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 func TestLoggerInitialization(t *testing.T) {

@@ -44,7 +44,7 @@ func getCompiledSchema() (*jsonschema.Schema, error) {
 		compiler := jsonschema.NewCompiler()
 
 		// Add the schema to the compiler
-		schemaURL := "https://canectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json"
+		schemaURL := "https://cannectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json"
 		if err := compiler.AddResource(schemaURL, schemaDoc); err != nil {
 			schemaInitErr = fmt.Errorf("failed to add schema resource: %w", err)
 			return

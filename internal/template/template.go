@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // Template syntax constants

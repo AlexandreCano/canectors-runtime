@@ -1,4 +1,4 @@
-# INVARIANTS AND ASSUMPTIONS — Canectors Runtime
+# INVARIANTS AND ASSUMPTIONS — Cannectors Runtime
 
 **Date**: 2026-01-23
 **Public cible**: Ingénieur Java Senior (10+ ans) apprenant Go
@@ -296,7 +296,7 @@ if !ok || endpoint == "" {
 
 **Code Pattern**:
 ```go
-// cmd/canectors/main.go - runPipelineOnce()
+// cmd/cannectors/main.go - runPipelineOnce()
 func runPipelineOnce(pipeline *Pipeline) error {
     // Create fresh modules for THIS execution
     input := factory.CreateInputModule(pipeline.Input)

@@ -47,7 +47,7 @@ So that I can execute end-to-end connector workflows.
   - [x] Ensure deterministic execution (same input = same output)
   - [x] Add unit tests for execution result tracking
 - [x] Task 4: Integrate with CLI run command (AC: all above, CLI integration)
-  - [x] Update `runPipeline()` in `cmd/canectors/main.go` to use Executor
+  - [x] Update `runPipeline()` in `cmd/cannectors/main.go` to use Executor
   - [x] Convert parsed config to `connector.Pipeline` type
   - [x] Create Executor instance with dry-run flag support
   - [x] Execute pipeline and display results
@@ -103,14 +103,14 @@ So that I can execute end-to-end connector workflows.
 
 **File Organization:**
 ```
-canectors-runtime/
+cannectors-runtime/
 ├── internal/
 │   └── runtime/
 │       ├── pipeline.go          # Executor implementation (to be completed)
 │       ├── pipeline_test.go     # Unit tests for Executor
 │       └── executor.go          # Optional: separate executor logic if needed
 ├── cmd/
-│   └── canectors/
+│   └── cannectors/
 │       └── main.go              # CLI run command integration
 └── pkg/
     └── connector/
@@ -172,8 +172,8 @@ canectors-runtime/
 - **Story 2.3 Details:** [Source: _bmad-output/planning-artifacts/epics.md#Story 2.3: Implement Pipeline Orchestration]
 - **Story 2.2 (Previous):** [Source: _bmad-output/implementation-artifacts/2-2-implement-configuration-parser.md]
 - **Story 2.1 (Previous):** [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
-- **Pipeline Types:** [Source: canectors-runtime/pkg/connector/types.go]
-- **Module Interfaces:** [Source: canectors-runtime/internal/modules/input/input.go, filter/filter.go, output/output.go]
+- **Pipeline Types:** [Source: cannectors-runtime/pkg/connector/types.go]
+- **Module Interfaces:** [Source: cannectors-runtime/internal/modules/input/input.go, filter/filter.go, output/output.go]
 - **CLI Runtime Architecture:** [Source: _bmad-output/planning-artifacts/architecture.md#Runtime CLI (Go) - Separate Project]
 - **Project Context:** [Source: _bmad-output/project-context.md]
 - **PRD Requirements:** [Source: _bmad-output/planning-artifacts/prd.md#Connector Execution]
@@ -228,8 +228,8 @@ canectors-runtime/
 ### Previous Story Intelligence
 
 **Epic 2 Stories (Completed):**
-- **Story 2.1:** Go CLI project initialized at `/home/alexandrecano/Workspace/canectors-runtime/` [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
-  - Project structure: `/cmd/canectors/`, `/internal/`, `/pkg/connector/`
+- **Story 2.1:** Go CLI project initialized at `/home/alexandrecano/Workspace/cannectors-runtime/` [Source: _bmad-output/implementation-artifacts/2-1-initialize-go-cli-project-structure.md]
+  - Project structure: `/cmd/cannectors/`, `/internal/`, `/pkg/connector/`
   - CLI framework: Cobra (v1.10.2) for command-line parsing
   - Types defined: `Pipeline`, `ModuleConfig`, `AuthConfig`, `ErrorHandling`, `ExecutionResult` in `/pkg/connector/types.go`
   - Logger implemented: Structured logging with `log/slog` (Go 1.21+)
@@ -268,15 +268,15 @@ canectors-runtime/
 - Module interfaces defined but not implemented (Epic 3)
 
 **Repository Structure:**
-- Main project: `canectors/` (Next.js T3 Stack)
-- Runtime project: `canectors-runtime/` (Go - separate project)
+- Main project: `cannectors/` (Next.js T3 Stack)
+- Runtime project: `cannectors-runtime/` (Go - separate project)
 - Schema location: `/types/pipeline-schema.json` in main project
 
 **Files from Previous Stories:**
 - `/pkg/connector/types.go` - Pipeline types (Story 2.1)
 - `/internal/config/parser.go` - Configuration parser (Story 2.2)
 - `/internal/config/validator.go` - Schema validator (Story 2.2)
-- `/cmd/canectors/main.go` - CLI entry point (Story 2.1, updated in 2.2)
+- `/cmd/cannectors/main.go` - CLI entry point (Story 2.1, updated in 2.2)
 - `/internal/runtime/pipeline.go` - Pipeline executor stub (Story 2.1, to be completed in 2.3)
 
 ### Latest Technical Information
@@ -351,14 +351,14 @@ Claude Opus 4.5
 ### File List
 
 **New Files:**
-- `canectors-runtime/internal/runtime/pipeline_test.go` - Unit tests for Executor (12 tests)
-- `canectors-runtime/internal/config/converter.go` - Configuration to Pipeline converter
-- `canectors-runtime/internal/config/converter_test.go` - Converter tests (11 tests)
+- `cannectors-runtime/internal/runtime/pipeline_test.go` - Unit tests for Executor (12 tests)
+- `cannectors-runtime/internal/config/converter.go` - Configuration to Pipeline converter
+- `cannectors-runtime/internal/config/converter_test.go` - Converter tests (11 tests)
 
 **Modified Files:**
-- `canectors-runtime/internal/runtime/pipeline.go` - Executor implementation with logging
-- `canectors-runtime/cmd/canectors/main.go` - CLI run command integration with stub modules (committed in prior session)
-- `canectors-runtime/cmd/canectors/main_test.go` - CLI integration tests including dry-run (14 tests)
+- `cannectors-runtime/internal/runtime/pipeline.go` - Executor implementation with logging
+- `cannectors-runtime/cmd/cannectors/main.go` - CLI run command integration with stub modules (committed in prior session)
+- `cannectors-runtime/cmd/cannectors/main_test.go` - CLI integration tests including dry-run (14 tests)
 
 ### Change Log
 

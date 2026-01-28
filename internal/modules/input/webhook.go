@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values for webhook
@@ -123,88 +123,116 @@ func NewWebhookFromConfig(config *connector.ModuleConfig) (*Webhook, error) {
 	if config == nil {
 		return nil, ErrNilConfig
 	}
+	cfg := config.Config
 
-	// Extract endpoint (required)
-	endpoint, ok := config.Config["endpoint"].(string)
+	endpoint, err := extractWebhookEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := extractAndValidateWebhookSignature(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	queueSize, maxConcurrent, err := extractWebhookQueueConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	w := &Webhook{
+		endpoint:      endpoint,
+		listenAddress: extractWebhookListenAddress(cfg),
+		dataField:     extractWebhookDataField(cfg),
+		timeout:       extractWebhookTimeout(cfg),
+		signature:     signature,
+		queueSize:     queueSize,
+		maxConcurrent: maxConcurrent,
+		rateLimit:     extractWebhookRateLimit(cfg),
+	}
+
+	logWebhookModuleCreated(w)
+	return w, nil
+}
+
+func extractWebhookEndpoint(cfg map[string]interface{}) (string, error) {
+	endpoint, ok := cfg["endpoint"].(string)
 	if !ok || endpoint == "" {
-		return nil, ErrMissingEndpoint
+		return "", ErrMissingEndpoint
 	}
+	return endpoint, nil
+}
 
-	// Extract listenAddress (optional, default to 0.0.0.0:8080)
-	listenAddress := defaultListenAddress
-	if addr, ok := config.Config["listenAddress"].(string); ok && addr != "" {
-		listenAddress = addr
+func extractWebhookListenAddress(cfg map[string]interface{}) string {
+	if addr, ok := cfg["listenAddress"].(string); ok && addr != "" {
+		return addr
 	}
+	return defaultListenAddress
+}
 
-	// Extract timeout (optional, default 15s)
-	timeout := defaultReadTimeout
-	if timeoutVal, ok := config.Config["timeout"].(float64); ok {
-		if timeoutVal > 0 {
-			timeout = time.Duration(timeoutVal * float64(time.Second))
-		}
+func extractWebhookTimeout(cfg map[string]interface{}) time.Duration {
+	if timeoutVal, ok := cfg["timeout"].(float64); ok && timeoutVal > 0 {
+		return time.Duration(timeoutVal * float64(time.Second))
 	}
+	return defaultReadTimeout
+}
 
-	// Extract dataField (optional)
-	dataField, _ := config.Config["dataField"].(string)
-
-	// Extract signature configuration (optional)
-	var signature *SignatureConfig
-	if sigConfig, ok := config.Config["signature"].(map[string]interface{}); ok {
-		signature = parseSignatureConfig(sigConfig)
+func extractWebhookDataField(cfg map[string]interface{}) string {
+	if v, ok := cfg["dataField"].(string); ok {
+		return v
 	}
-	if signature != nil {
-		if err := validateSignatureConfig(signature); err != nil {
-			return nil, err
-		}
-	}
+	return ""
+}
 
-	// Extract queue configuration (optional)
-	queueSize := defaultQueueSize
-	if queueVal, ok := config.Config["queueSize"].(float64); ok {
-		queueSize = int(queueVal)
+func extractAndValidateWebhookSignature(cfg map[string]interface{}) (*SignatureConfig, error) {
+	sigConfig, ok := cfg["signature"].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+	signature := parseSignatureConfig(sigConfig)
+	if err := validateSignatureConfig(signature); err != nil {
+		return nil, err
+	}
+	return signature, nil
+}
+
+func extractWebhookQueueConfig(cfg map[string]interface{}) (queueSize, maxConcurrent int, err error) {
+	queueSize = defaultQueueSize
+	if v, ok := cfg["queueSize"].(float64); ok {
+		queueSize = int(v)
 		if queueSize < 0 {
-			return nil, ErrInvalidQueueSize
+			return 0, 0, ErrInvalidQueueSize
 		}
 	}
-
-	maxConcurrent := defaultMaxConcurrent
-	if maxConcurrentVal, ok := config.Config["maxConcurrent"].(float64); ok {
-		maxConcurrent = int(maxConcurrentVal)
+	maxConcurrent = defaultMaxConcurrent
+	if v, ok := cfg["maxConcurrent"].(float64); ok {
+		maxConcurrent = int(v)
 		if maxConcurrent < 0 {
-			return nil, ErrInvalidMaxConcurrent
+			return 0, 0, ErrInvalidMaxConcurrent
 		}
 	}
 	if queueSize > 0 && maxConcurrent == 0 {
 		maxConcurrent = 1
 	}
+	return queueSize, maxConcurrent, nil
+}
 
-	// Extract rate limiting configuration (optional)
-	var rateLimit *RateLimitConfig
-	if rateLimitConfig, ok := config.Config["rateLimit"].(map[string]interface{}); ok {
-		rateLimit = parseRateLimitConfig(rateLimitConfig)
+func extractWebhookRateLimit(cfg map[string]interface{}) *RateLimitConfig {
+	if m, ok := cfg["rateLimit"].(map[string]interface{}); ok {
+		return parseRateLimitConfig(m)
 	}
+	return nil
+}
 
-	w := &Webhook{
-		endpoint:      endpoint,
-		listenAddress: listenAddress,
-		dataField:     dataField,
-		timeout:       timeout,
-		signature:     signature,
-		queueSize:     queueSize,
-		maxConcurrent: maxConcurrent,
-		rateLimit:     rateLimit,
-	}
-
+func logWebhookModuleCreated(w *Webhook) {
 	logger.Debug("webhook module created",
-		"endpoint", endpoint,
-		"listenAddress", listenAddress,
-		"has_signature", signature != nil,
-		"queueSize", queueSize,
-		"maxConcurrent", maxConcurrent,
-		"rateLimit", rateLimit != nil,
+		"endpoint", w.endpoint,
+		"listenAddress", w.listenAddress,
+		"has_signature", w.signature != nil,
+		"queueSize", w.queueSize,
+		"maxConcurrent", w.maxConcurrent,
+		"rateLimit", w.rateLimit != nil,
 	)
-
-	return w, nil
 }
 
 // parseSignatureConfig extracts signature configuration from map
@@ -535,136 +563,142 @@ func (w *Webhook) IsRunning() bool {
 	return w.running
 }
 
-// createHandler creates the HTTP handler for webhook requests
+// createHandler creates the HTTP handler for webhook requests.
 func (w *Webhook) createHandler(handler WebhookHandler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 
-		// Check HTTP method - only POST allowed
-		if r.Method != http.MethodPost {
-			logger.Warn("webhook received non-POST request",
-				"method", r.Method,
-				"endpoint", w.endpoint,
-			)
-			http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
+		if !w.checkMethodAndPath(rw, r) {
+			return
+		}
+		if !w.checkRateLimit(rw) {
+			return
+		}
+		body, ok := w.readRequestBody(rw, r)
+		if !ok {
+			return
+		}
+		if !w.checkSignature(rw, r, body) {
+			return
+		}
+		data, ok := w.parsePayloadAndLog(rw, body)
+		if !ok {
+			return
+		}
+		if !w.dispatchToHandler(rw, data, handler) {
 			return
 		}
 
-		// Check endpoint path
-		if r.URL.Path != w.endpoint {
-			logger.Warn("webhook received request on wrong endpoint",
-				"expected", w.endpoint,
-				"received", r.URL.Path,
-			)
-			http.Error(rw, "Not found", http.StatusNotFound)
-			return
-		}
-
-		// Rate limit if configured
-		if w.limiter != nil && !w.limiter.Allow() {
-			logger.Warn("webhook rate limit exceeded",
-				"endpoint", w.endpoint,
-			)
-			http.Error(rw, "Rate limit exceeded", http.StatusTooManyRequests)
-			return
-		}
-
-		// Read request body (defer close immediately to ensure cleanup)
-		defer func() {
-			if closeErr := r.Body.Close(); closeErr != nil {
-				logger.Error("failed to close request body",
-					"endpoint", w.endpoint,
-					"error", closeErr.Error(),
-				)
-			}
-		}()
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			logger.Error("failed to read webhook request body",
-				"endpoint", w.endpoint,
-				"error", err.Error(),
-			)
-			http.Error(rw, "Failed to read request body", http.StatusBadRequest)
-			return
-		}
-
-		// Check for empty body
-		if len(body) == 0 {
-			logger.Warn("webhook received empty body",
-				"endpoint", w.endpoint,
-			)
-			http.Error(rw, "Request body is empty", http.StatusBadRequest)
-			return
-		}
-
-		// Validate signature if configured
-		if w.signature != nil && w.signature.Type == "hmac-sha256" {
-			if sigErr := w.validateSignature(r, body); sigErr != nil {
-				logger.Warn("webhook signature validation failed",
-					"endpoint", w.endpoint,
-					"error", sigErr.Error(),
-				)
-				http.Error(rw, "Invalid signature", http.StatusUnauthorized)
-				return
-			}
-		}
-
-		// Parse JSON payload
-		data, err := w.parsePayload(body)
-		if err != nil {
-			logger.Error("failed to parse webhook payload",
-				"endpoint", w.endpoint,
-				"error", err.Error(),
-				"bodySize", len(body),
-			)
-			http.Error(rw, "Invalid JSON payload", http.StatusBadRequest)
-			return
-		}
-
-		// Call handler if provided
-		if handler != nil {
-			if w.queue != nil {
-				if !w.enqueue(data) {
-					logger.Warn("webhook queue full",
-						"endpoint", w.endpoint,
-						"queueSize", w.queueSize,
-					)
-					http.Error(rw, "Queue full", http.StatusTooManyRequests)
-					return
-				}
-			} else {
-				if err := handler(data); err != nil {
-					logger.Error("webhook handler returned error",
-						"endpoint", w.endpoint,
-						"error", err.Error(),
-						"recordCount", len(data),
-					)
-					http.Error(rw, "Internal server error", http.StatusInternalServerError)
-					return
-				}
-			}
-		}
-
-		duration := time.Since(startTime)
 		logger.Debug("webhook request processed",
 			"endpoint", w.endpoint,
 			"recordCount", len(data),
-			"duration", duration.String(),
+			"duration", time.Since(startTime).String(),
 		)
-
-		// Return success
-		if w.queue != nil {
-			rw.WriteHeader(http.StatusAccepted)
-		} else {
-			rw.WriteHeader(http.StatusOK)
-		}
-		if _, writeErr := rw.Write([]byte(`{"status":"ok"}`)); writeErr != nil {
-			logger.Warn("failed to write response",
-				"endpoint", w.endpoint,
-				"error", writeErr.Error(),
-			)
-		}
+		w.writeSuccessResponse(rw)
 	})
+}
+
+// checkMethodAndPath validates HTTP method (POST only) and URL path. Returns false if invalid (response already written).
+func (w *Webhook) checkMethodAndPath(rw http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		logger.Warn("webhook received non-POST request", "method", r.Method, "endpoint", w.endpoint)
+		http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+	if r.URL.Path != w.endpoint {
+		logger.Warn("webhook received request on wrong endpoint", "expected", w.endpoint, "received", r.URL.Path)
+		http.Error(rw, "Not found", http.StatusNotFound)
+		return false
+	}
+	return true
+}
+
+// checkRateLimit applies rate limiting if configured. Returns false if rate limited (response already written).
+func (w *Webhook) checkRateLimit(rw http.ResponseWriter) bool {
+	if w.limiter != nil && !w.limiter.Allow() {
+		logger.Warn("webhook rate limit exceeded", "endpoint", w.endpoint)
+		http.Error(rw, "Rate limit exceeded", http.StatusTooManyRequests)
+		return false
+	}
+	return true
+}
+
+// readRequestBody reads and returns the request body. Returns (nil, false) on error (response already written).
+func (w *Webhook) readRequestBody(rw http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	defer func() {
+		if closeErr := r.Body.Close(); closeErr != nil {
+			logger.Error("failed to close request body", "endpoint", w.endpoint, "error", closeErr.Error())
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Error("failed to read webhook request body", "endpoint", w.endpoint, "error", err.Error())
+		http.Error(rw, "Failed to read request body", http.StatusBadRequest)
+		return nil, false
+	}
+	if len(body) == 0 {
+		logger.Warn("webhook received empty body", "endpoint", w.endpoint)
+		http.Error(rw, "Request body is empty", http.StatusBadRequest)
+		return nil, false
+	}
+	return body, true
+}
+
+// checkSignature validates HMAC signature if configured. Returns false if invalid (response already written).
+func (w *Webhook) checkSignature(rw http.ResponseWriter, r *http.Request, body []byte) bool {
+	if w.signature == nil || w.signature.Type != "hmac-sha256" {
+		return true
+	}
+	if sigErr := w.validateSignature(r, body); sigErr != nil {
+		logger.Warn("webhook signature validation failed", "endpoint", w.endpoint, "error", sigErr.Error())
+		http.Error(rw, "Invalid signature", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+// parsePayloadAndLog parses the JSON body into records. Returns (nil, false) on error (response already written).
+func (w *Webhook) parsePayloadAndLog(rw http.ResponseWriter, body []byte) ([]map[string]interface{}, bool) {
+	data, err := w.parsePayload(body)
+	if err != nil {
+		logger.Error("failed to parse webhook payload", "endpoint", w.endpoint, "error", err.Error(), "bodySize", len(body))
+		http.Error(rw, "Invalid JSON payload", http.StatusBadRequest)
+		return nil, false
+	}
+	return data, true
+}
+
+// dispatchToHandler invokes the handler or enqueues data. Returns false on error (response already written).
+func (w *Webhook) dispatchToHandler(rw http.ResponseWriter, data []map[string]interface{}, handler WebhookHandler) bool {
+	if handler == nil {
+		return true
+	}
+	if w.queue != nil {
+		if !w.enqueue(data) {
+			logger.Warn("webhook queue full", "endpoint", w.endpoint, "queueSize", w.queueSize)
+			http.Error(rw, "Queue full", http.StatusTooManyRequests)
+			return false
+		}
+		return true
+	}
+	if err := handler(data); err != nil {
+		logger.Error("webhook handler returned error", "endpoint", w.endpoint, "error", err.Error(), "recordCount", len(data))
+		http.Error(rw, "Internal server error", http.StatusInternalServerError)
+		return false
+	}
+	return true
+}
+
+// writeSuccessResponse writes 200 OK or 202 Accepted and JSON body.
+func (w *Webhook) writeSuccessResponse(rw http.ResponseWriter) {
+	if w.queue != nil {
+		rw.WriteHeader(http.StatusAccepted)
+	} else {
+		rw.WriteHeader(http.StatusOK)
+	}
+	if _, writeErr := rw.Write([]byte(`{"status":"ok"}`)); writeErr != nil {
+		logger.Warn("failed to write response", "endpoint", w.endpoint, "error", writeErr.Error())
+	}
 }
 
 // validateSignature validates the HMAC-SHA256 signature of the request

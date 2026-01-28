@@ -24,9 +24,9 @@ func TestModuleBoundaryCompliance(t *testing.T) {
 
 	// Forbidden imports - modules should NOT import these
 	forbiddenImports := []string{
-		"github.com/canectors/runtime/internal/runtime",
-		"github.com/canectors/runtime/internal/factory",
-		"github.com/canectors/runtime/internal/scheduler",
+		"github.com/cannectors/runtime/internal/runtime",
+		"github.com/cannectors/runtime/internal/factory",
+		"github.com/cannectors/runtime/internal/scheduler",
 	}
 
 	for _, pkgPath := range modulePackages {

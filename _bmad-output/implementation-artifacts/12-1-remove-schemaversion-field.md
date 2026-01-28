@@ -42,7 +42,7 @@ so that the configuration format is simpler and doesn't expose versioning withou
 - [x] Task 1: Update JSON Schema (AC: #3)
   - [x] Remove `schemaVersion` from `required` array in `pipeline-schema.json`
   - [x] Keep `schemaVersion` as optional property (for backward compatibility)
-  - [x] Update schema in both locations: `types/pipeline-schema.json` and `canectors-runtime/internal/config/schema/pipeline-schema.json`
+  - [x] Update schema in both locations: `types/pipeline-schema.json` and `cannectors-runtime/internal/config/schema/pipeline-schema.json`
   - [x] Verify schema validation still works correctly
 
 - [x] Task 2: Update Parser and Validator (AC: #2, #4)
@@ -99,19 +99,19 @@ so that the configuration format is simpler and doesn't expose versioning withou
 - Remove `schemaVersion` from `required` array in JSON Schema
 - Keep `schemaVersion` as optional property (type: string, pattern: semver)
 - Update schema in both locations:
-  - `canectors-BMAD/types/pipeline-schema.json` (TypeScript project)
-  - `canectors-runtime/internal/config/schema/pipeline-schema.json` (Go runtime)
+  - `cannectors-BMAD/types/pipeline-schema.json` (TypeScript project)
+  - `cannectors-runtime/internal/config/schema/pipeline-schema.json` (Go runtime)
 
 **Files to Modify:**
-1. `canectors-runtime/internal/config/schema/pipeline-schema.json` - Remove from required
-2. `canectors-BMAD/types/pipeline-schema.json` - Remove from required
-3. `canectors-runtime/internal/config/parser.go` - No changes needed (already flexible)
-4. `canectors-runtime/internal/config/validator.go` - No changes needed (uses schema)
-5. `canectors-runtime/internal/config/converter.go` - Remove `schemaVersion` from comments
-6. `canectors-runtime/internal/config/testdata/*` - Update test configs
-7. `canectors-runtime/internal/config/parser_test.go` - Remove `schemaVersion` checks
-8. `canectors-runtime/internal/config/converter_test.go` - Update test data
-9. `canectors-BMAD/docs/pipeline-configuration-schema.md` - Update documentation
+1. `cannectors-runtime/internal/config/schema/pipeline-schema.json` - Remove from required
+2. `cannectors-BMAD/types/pipeline-schema.json` - Remove from required
+3. `cannectors-runtime/internal/config/parser.go` - No changes needed (already flexible)
+4. `cannectors-runtime/internal/config/validator.go` - No changes needed (uses schema)
+5. `cannectors-runtime/internal/config/converter.go` - Remove `schemaVersion` from comments
+6. `cannectors-runtime/internal/config/testdata/*` - Update test configs
+7. `cannectors-runtime/internal/config/parser_test.go` - Remove `schemaVersion` checks
+8. `cannectors-runtime/internal/config/converter_test.go` - Update test data
+9. `cannectors-BMAD/docs/pipeline-configuration-schema.md` - Update documentation
 
 **Testing Strategy:**
 - Unit tests: Parser, validator, converter with/without `schemaVersion`
@@ -122,7 +122,7 @@ so that the configuration format is simpler and doesn't expose versioning withou
 
 **Files to Modify:**
 ```
-canectors-runtime/
+cannectors-runtime/
   internal/config/
     schema/pipeline-schema.json          # Remove from required
     parser.go                            # No changes (already flexible)
@@ -137,7 +137,7 @@ canectors-runtime/
       invalid-schema-missing-required.json  # Update (schemaVersion no longer required)
       # ... other test files
 
-canectors-BMAD/
+cannectors-BMAD/
   types/pipeline-schema.json            # Remove from required
   docs/pipeline-configuration-schema.md # Update documentation
 ```
@@ -172,12 +172,12 @@ canectors-BMAD/
 ### File Structure Requirements
 
 **Schema Location:**
-- Runtime schema: `canectors-runtime/internal/config/schema/pipeline-schema.json`
-- TypeScript schema: `canectors-BMAD/types/pipeline-schema.json`
+- Runtime schema: `cannectors-runtime/internal/config/schema/pipeline-schema.json`
+- TypeScript schema: `cannectors-BMAD/types/pipeline-schema.json`
 - Both must be updated to maintain consistency
 
 **Test Data:**
-- Test files in `canectors-runtime/internal/config/testdata/`
+- Test files in `cannectors-runtime/internal/config/testdata/`
 - Update all test configs to reflect new format
 - Keep some backward compatibility test cases
 
@@ -222,10 +222,10 @@ canectors-BMAD/
 
 - [Source: sprint-change-proposal-2026-01-24.md#epic-12] - Epic 12 rationale and story definition
 - [Source: types/pipeline-schema.json] - Current schema definition
-- [Source: canectors-runtime/internal/config/schema/pipeline-schema.json] - Runtime schema definition
-- [Source: canectors-runtime/internal/config/parser.go] - Parser implementation
-- [Source: canectors-runtime/internal/config/validator.go] - Validator implementation
-- [Source: canectors-runtime/internal/config/converter.go] - Converter implementation
+- [Source: cannectors-runtime/internal/config/schema/pipeline-schema.json] - Runtime schema definition
+- [Source: cannectors-runtime/internal/config/parser.go] - Parser implementation
+- [Source: cannectors-runtime/internal/config/validator.go] - Validator implementation
+- [Source: cannectors-runtime/internal/config/converter.go] - Converter implementation
 - [Source: docs/pipeline-configuration-schema.md] - Schema documentation
 
 ## Dev Agent Record
@@ -258,21 +258,21 @@ None required.
 ### File List
 
 **Modified Files:**
-- `canectors-BMAD/types/pipeline-schema.json` - Removed schemaVersion from required
-- `canectors-runtime/internal/config/schema/pipeline-schema.json` - Removed schemaVersion from required
-- `canectors-runtime/internal/config/converter.go` - Updated comments
-- `canectors-runtime/internal/config/converter_test.go` - Added TestConvertToPipeline_WithAndWithoutSchemaVersion
-- `canectors-runtime/internal/config/validator_test.go` - Added TestValidateConfig_ValidConfigWithoutSchemaVersion
-- `canectors-runtime/internal/config/parser_test.go` - Removed schemaVersion from test data and performance test generators
-- `canectors-runtime/internal/config/testdata/valid-config.json` - Removed schemaVersion
-- `canectors-runtime/internal/config/testdata/valid-config.yaml` - Removed schemaVersion
-- `canectors-runtime/internal/config/testdata/invalid-schema-wrong-type.json` - Removed schemaVersion
-- `canectors-runtime/internal/config/testdata/invalid-schema-missing-required.json` - Removed schemaVersion
-- `canectors-BMAD/docs/pipeline-configuration-schema.md` - Updated documentation to reflect schemaVersion is optional
-- `canectors-BMAD/utils/__tests__/yaml-parser.test.ts` - Updated tests to reflect schemaVersion is optional
+- `cannectors-BMAD/types/pipeline-schema.json` - Removed schemaVersion from required
+- `cannectors-runtime/internal/config/schema/pipeline-schema.json` - Removed schemaVersion from required
+- `cannectors-runtime/internal/config/converter.go` - Updated comments
+- `cannectors-runtime/internal/config/converter_test.go` - Added TestConvertToPipeline_WithAndWithoutSchemaVersion
+- `cannectors-runtime/internal/config/validator_test.go` - Added TestValidateConfig_ValidConfigWithoutSchemaVersion
+- `cannectors-runtime/internal/config/parser_test.go` - Removed schemaVersion from test data and performance test generators
+- `cannectors-runtime/internal/config/testdata/valid-config.json` - Removed schemaVersion
+- `cannectors-runtime/internal/config/testdata/valid-config.yaml` - Removed schemaVersion
+- `cannectors-runtime/internal/config/testdata/invalid-schema-wrong-type.json` - Removed schemaVersion
+- `cannectors-runtime/internal/config/testdata/invalid-schema-missing-required.json` - Removed schemaVersion
+- `cannectors-BMAD/docs/pipeline-configuration-schema.md` - Updated documentation to reflect schemaVersion is optional
+- `cannectors-BMAD/utils/__tests__/yaml-parser.test.ts` - Updated tests to reflect schemaVersion is optional
 
 **New Files:**
-- `canectors-runtime/internal/config/testdata/valid-config-no-schemaversion.json` - Test config without schemaVersion
+- `cannectors-runtime/internal/config/testdata/valid-config-no-schemaversion.json` - Test config without schemaVersion
 
 ## Change Log
 

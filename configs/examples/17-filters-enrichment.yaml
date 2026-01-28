@@ -82,7 +82,7 @@ connector:
       # Custom headers for the enrichment request
       headers:
         Accept: application/json
-        X-Request-Source: canectors
+        X-Request-Source: cannectors
 
     # Alternative: Query parameter example
     # - type: http_call

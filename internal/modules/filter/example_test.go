@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/canectors/runtime/internal/modules/filter"
+	"github.com/cannectors/runtime/internal/modules/filter"
 )
 
 // Example demonstrates a complete implementation of a filter module.

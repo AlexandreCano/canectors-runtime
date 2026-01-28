@@ -19,12 +19,12 @@ func runCLI(t *testing.T, args ...string) (stdout, stderr string, exitCode int) 
 	t.Helper()
 
 	// Build the CLI binary if it doesn't exist
-	binaryPath := filepath.Join(t.TempDir(), "canectors")
+	binaryPath := filepath.Join(t.TempDir(), "cannectors")
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
-	buildCmd.Dir = filepath.Join("..", "..", "cmd", "canectors")
+	buildCmd.Dir = filepath.Join("..", "..", "cmd", "cannectors")
 	if err := buildCmd.Run(); err != nil {
 		// Try from current directory
-		buildCmd = exec.Command("go", "build", "-o", binaryPath, "./cmd/canectors")
+		buildCmd = exec.Command("go", "build", "-o", binaryPath, "./cmd/cannectors")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("failed to build CLI: %v", err)
@@ -59,8 +59,8 @@ func TestCLI_Help(t *testing.T) {
 		t.Errorf("expected exit code 0, got %d", exitCode)
 	}
 
-	if !strings.Contains(stdout, "canectors") {
-		t.Error("expected help to contain 'canectors'")
+	if !strings.Contains(stdout, "cannectors") {
+		t.Error("expected help to contain 'cannectors'")
 	}
 
 	if !strings.Contains(stdout, "validate") {
@@ -270,7 +270,7 @@ func TestMainFunction(t *testing.T) {
 	defer func() { os.Args = oldArgs }()
 
 	// Set args to show help (doesn't exit)
-	os.Args = []string{"canectors", "--help"}
+	os.Args = []string{"cannectors", "--help"}
 
 	// Run should not panic
 	// Note: This will print help to stdout

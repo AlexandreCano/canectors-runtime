@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canectors/runtime/internal/modules/input"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // TestExecutor_StatePersistence_Timestamp tests end-to-end state persistence with timestamp.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // StubModule is a placeholder output module for testing the pipeline flow.
@@ -56,7 +56,7 @@ func (m *StubModule) PreviewRequest(records []map[string]interface{}, _ PreviewO
 			Method:   m.Method,
 			Headers: map[string]string{
 				"Content-Type": "application/json",
-				"User-Agent":   "Canectors-Runtime/1.0 (stub)",
+				"User-Agent":   "Cannectors-Runtime/1.0 (stub)",
 			},
 			BodyPreview: bodyPreview,
 			RecordCount: len(records),

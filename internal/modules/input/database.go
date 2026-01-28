@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canectors/runtime/internal/database"
-	"github.com/canectors/runtime/internal/logger"
-	"github.com/canectors/runtime/internal/pathutil"
-	"github.com/canectors/runtime/internal/persistence"
-	"github.com/canectors/runtime/pkg/connector"
+	"github.com/cannectors/runtime/internal/database"
+	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/pathutil"
+	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values for database input

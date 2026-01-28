@@ -9,7 +9,7 @@ En Go, la visibilité est déterminée par la **première lettre** du nom :
 - **Majuscule (exporté/public)** : `NewHTTPPolling`, `ConvertToPipeline`, `DefaultMaxAttempts`
   - Accessible depuis d'autres packages
   - Utilisé pour l'API publique du package
-  - Exemple : `runtime.NewExecutor()` peut être appelé depuis `cmd/canectors`
+  - Exemple : `runtime.NewExecutor()` peut être appelé depuis `cmd/cannectors`
 
 - **Minuscule (non-exporté/privé)** : `doRequest`, `convertErrorHandling`, `resolveOnError`
   - Accessible uniquement dans le même package
@@ -64,7 +64,7 @@ const (
 
 **Vérification effectuée :**
 ```bash
-grep -r "runtime\.Default" canectors-runtime/
+grep -r "runtime\.Default" cannectors-runtime/
 # Résultat : Aucune utilisation trouvée
 ```
 

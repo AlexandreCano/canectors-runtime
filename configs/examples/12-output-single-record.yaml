@@ -1,31 +1,36 @@
-id: output-single-record-example
-name: Output Single Record Mode Example
-description: "Example with single record mode (bodyFrom: record)"
-version: "1.0.0"
-enabled: true
-input:
-  type: http-polling
-  config:
+# Example: Single Record Output Mode
+# Demonstrates sending one HTTP request per record with path parameters
+
+connector:
+  name: output-single-record-example
+  version: "1.0.0"
+  description: "Example with single record mode (bodyFrom: record)"
+
+  input:
+    type: httpPolling
     endpoint: https://api.example.com/users
-    timeout: 30
-output:
-  type: http-request
-  config:
+    schedule: "*/5 * * * *"
+    timeoutMs: 30000
+
+  filters: []
+
+  output:
+    type: httpRequest
     endpoint: https://api.destination.com/users/{userId}
     method: PATCH
     request:
       bodyFrom: record
       pathParams:
         userId: id
-      queryParams:
-        updateSource: canectors
+      query:
+        updateSource: cannectors
     retry:
-      maxRetries: 2
-      backoffMs: 500
+      maxAttempts: 2
+      delayMs: 500
     onError: skip
-  authentication:
-    type: api-key
-    credentials:
-      key: ${API_KEY}
-      location: header
-      headerName: X-API-Key
+    authentication:
+      type: api-key
+      credentials:
+        key: ${API_KEY}
+        location: header
+        headerName: X-API-Key

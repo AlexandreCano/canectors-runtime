@@ -243,7 +243,7 @@ so that I can ensure reliable resumption of data polling after restarts, avoidin
 
 **Storage Location:**
 - Default: `{runtime-data-dir}/state/` (create directory if doesn't exist)
-- Runtime data directory: `~/.canectors/` or `./canectors-data/` (configurable)
+- Runtime data directory: `~/.cannectors/` or `./cannectors-data/` (configurable)
 - File naming: `{pipeline-id}.json` (one file per pipeline)
 
 ### References

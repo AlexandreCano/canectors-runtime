@@ -67,7 +67,7 @@ so that the configuration is more coherent since not all input types support sch
   - [x] Update `GetNextRun()` and other methods that reference `pipeline.Schedule`
 
 - [x] Task 4: Update CLI to Read Schedule from Input Module (AC: #1, #5)
-  - [x] Update `runScheduledPipeline()` in `cmd/canectors/main.go` to read schedule from `pipeline.Input.Config["schedule"]`
+  - [x] Update `runScheduledPipeline()` in `cmd/cannectors/main.go` to read schedule from `pipeline.Input.Config["schedule"]`
   - [x] Update validation logic to check input module config
   - [x] Update output messages to reference input module schedule
 
@@ -173,7 +173,7 @@ so that the configuration is more coherent since not all input types support sch
    - Update error messages to reference input module and input type
    - Update validation logic to distinguish polling vs event-driven types
 
-4. **`cmd/canectors/main.go` - `runScheduledPipeline()` function:**
+4. **`cmd/cannectors/main.go` - `runScheduledPipeline()` function:**
    - Current: Reads `pipeline.Schedule` (line 279, 291, 314)
    - New: Read `pipeline.Input.Config["schedule"]`
    - Add validation: Check input type - only allow scheduled execution for polling types
@@ -191,7 +191,7 @@ so that the configuration is more coherent since not all input types support sch
 1. `pkg/connector/types.go` - Remove `Schedule` field from `Pipeline` struct
 2. `internal/config/converter.go` - Update schedule extraction logic
 3. `internal/scheduler/scheduler.go` - Update schedule reading logic
-4. `cmd/canectors/main.go` - Update schedule reading logic
+4. `cmd/cannectors/main.go` - Update schedule reading logic
 5. `configs/examples/13-scheduled.json` - Move schedule to input module
 6. `configs/examples/13-scheduled.yaml` - Move schedule to input module
 
@@ -204,14 +204,14 @@ so that the configuration is more coherent since not all input types support sch
 
 **Files to Modify:**
 ```
-canectors-runtime/
+cannectors-runtime/
   pkg/connector/
     types.go                    # Remove Schedule field from Pipeline
   internal/config/
     converter.go                # Update schedule extraction
   internal/scheduler/
     scheduler.go                # Update schedule reading
-  cmd/canectors/
+  cmd/cannectors/
     main.go                     # Update schedule reading
   configs/examples/
     13-scheduled.json          # Move schedule to input
@@ -378,7 +378,7 @@ canectors-runtime/
 - [Source: pkg/connector/types.go] - Current Pipeline struct with Schedule field
 - [Source: internal/config/converter.go] - Current schedule extraction logic
 - [Source: internal/scheduler/scheduler.go] - Current schedule reading logic
-- [Source: cmd/canectors/main.go] - Current CLI schedule reading logic
+- [Source: cmd/cannectors/main.go] - Current CLI schedule reading logic
 - [Source: internal/config/schema/pipeline-schema.json] - Schema with schedule in inputModule
 - [Source: _bmad-output/implementation-artifacts/12-1-remove-schemaversion-field.md] - Previous story showing backward compatibility pattern
 - [Source: _bmad-output/implementation-artifacts/4-1-implement-cron-scheduler-for-polling.md] - Story 4.1 that implemented scheduler
@@ -412,7 +412,7 @@ Claude 3.5 Sonnet (claude-sonnet-4-20250514)
 - internal/config/schema/pipeline-schema.json (modified) - Webhook schedule rejection; connector `schedule: false`
 - internal/scheduler/scheduler.go (modified) - GetScheduleFromInput(), Register() reads from input config
 - internal/scheduler/scheduler_test.go (modified) - Input config tests, schedule tests
-- cmd/canectors/main.go (modified) - CLI reads schedule from input config, run help mentions input-level schedule
+- cmd/cannectors/main.go (modified) - CLI reads schedule from input config, run help mentions input-level schedule
 - configs/examples/13-scheduled.json (modified) - Schedule in input module
 - configs/examples/13-scheduled.yaml (modified) - Schedule in input module
 - configs/examples/14-webhook.json (added) - Webhook input without schedule example

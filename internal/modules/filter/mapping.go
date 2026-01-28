@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/logger"
 )
 
 // Error codes for mapping module

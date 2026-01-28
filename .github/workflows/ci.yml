@@ -96,13 +96,13 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -X main.commit=${{ steps.version.outputs.COMMIT }} -X main.buildDate=${{ steps.version.outputs.BUILD_DATE }}" -o dist/canectors-${{ matrix.suffix }} ./cmd/canectors
+          go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -X main.commit=${{ steps.version.outputs.COMMIT }} -X main.buildDate=${{ steps.version.outputs.BUILD_DATE }}" -o dist/cannectors-${{ matrix.suffix }} ./cmd/cannectors
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: canectors-${{ matrix.suffix }}
-          path: dist/canectors-${{ matrix.suffix }}
+          name: cannectors-${{ matrix.suffix }}
+          path: dist/cannectors-${{ matrix.suffix }}
 
   verify-build:
     name: Verify Build
@@ -112,13 +112,13 @@ jobs:
       - name: Download Linux binary
         uses: actions/download-artifact@v4
         with:
-          name: canectors-linux-amd64
+          name: cannectors-linux-amd64
           path: ./dist
 
       - name: Make executable
-        run: chmod +x ./dist/canectors-linux-amd64
+        run: chmod +x ./dist/cannectors-linux-amd64
 
       - name: Test binary
         run: |
-          ./dist/canectors-linux-amd64 version
-          ./dist/canectors-linux-amd64 --help
+          ./dist/cannectors-linux-amd64 version
+          ./dist/cannectors-linux-amd64 --help
