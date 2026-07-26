@@ -35,5 +35,9 @@ output:
   driver: postgres
   query: |
     insert into leads (lead_id, email, source)
-    values ({{record.lead_id}}, {{record.email}}, {{record.source}})
+    values ($1, $2, $3)
+  parameters:
+    - record.lead_id
+    - record.email
+    - record.source
   transaction: true

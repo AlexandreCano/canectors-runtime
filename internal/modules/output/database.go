@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cannectors/runtime/internal/database"
@@ -17,19 +16,13 @@ import (
 	"github.com/cannectors/runtime/internal/logger"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/pathutil"
-	"github.com/cannectors/runtime/internal/template"
+	"github.com/cannectors/runtime/internal/sqltemplate"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Default configuration values for database output
 const (
 	defaultDatabaseOutputTimeout = 30 * time.Second
-)
-
-// Template prefix constants
-const (
-	// RecordFieldPrefix is the prefix for record field access in templates
-	RecordFieldPrefix = "record."
 )
 
 // Error types for database output module
@@ -48,10 +41,11 @@ type DatabaseOutputConfig struct {
 
 // DatabaseOutput implements a database output module.
 type DatabaseOutput struct {
-	db      *sql.DB
-	driver  string
-	config  DatabaseOutputConfig
-	timeout time.Duration
+	db       *sql.DB
+	driver   string
+	config   DatabaseOutputConfig
+	sqlQuery *sqltemplate.Query
+	timeout  time.Duration
 }
 
 // NewDatabaseOutputFromConfig creates a new database output module from configuration.
@@ -84,11 +78,6 @@ func NewDatabaseOutputFromConfig(cfg *connector.ModuleConfig) (*DatabaseOutput, 
 		}
 	}
 
-	// Validate template syntax in query
-	if syntaxErr := template.ValidateSyntax(config.Query); syntaxErr != nil {
-		return nil, fmt.Errorf("invalid template syntax in database output query: %w", syntaxErr)
-	}
-
 	// Set defaults
 	timeout := connector.GetTimeoutDuration(config.TimeoutMs, defaultDatabaseOutputTimeout)
 
@@ -116,11 +105,18 @@ func NewDatabaseOutputFromConfig(cfg *connector.ModuleConfig) (*DatabaseOutput, 
 		return nil, fmt.Errorf("creating database output connection: %w", err)
 	}
 
+	sqlQuery, err := sqltemplate.Compile(templateEngine, config.Query, config.Parameters, driver)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("database output query: %w", err)
+	}
+
 	module := &DatabaseOutput{
-		db:      db,
-		driver:  driver,
-		config:  config,
-		timeout: timeout,
+		db:       db,
+		driver:   driver,
+		config:   config,
+		sqlQuery: sqlQuery,
+		timeout:  timeout,
 	}
 
 	logger.Debug("database output module created",
@@ -214,7 +210,7 @@ func (d *DatabaseOutput) sendWithTransaction(ctx context.Context, records []map[
 // processRecordInTransaction processes a single record within a transaction.
 // Returns true if the record was successfully processed, false if skipped, and an error if processing should stop.
 func (d *DatabaseOutput) processRecordInTransaction(ctx context.Context, tx *sql.Tx, record map[string]any, recordIndex int) (bool, error) {
-	query, args, err := d.buildParameterizedQuery(d.config.Query, record)
+	query, args, err := d.sqlQuery.Build(recordRenderContext(record))
 	if err != nil {
 		return d.handleQueryBuildError(err, recordIndex)
 	}
@@ -294,7 +290,7 @@ func (d *DatabaseOutput) sendWithoutTransaction(ctx context.Context, records []m
 // processRecordWithoutTransaction processes a single record without a transaction.
 // Returns true if the record was successfully processed, false if skipped, and an error if processing should stop.
 func (d *DatabaseOutput) processRecordWithoutTransaction(ctx context.Context, record map[string]any, recordIndex int) (bool, error) {
-	query, args, err := d.buildParameterizedQuery(d.config.Query, record)
+	query, args, err := d.sqlQuery.Build(recordRenderContext(record))
 	if err != nil {
 		return d.handleQueryBuildError(err, recordIndex)
 	}
@@ -308,62 +304,6 @@ func (d *DatabaseOutput) processRecordWithoutTransaction(ctx context.Context, re
 	}
 
 	return true, nil
-}
-
-// buildParameterizedQuery builds a parameterized query from a template.
-// Replaces {{record.field}} placeholders with parameterized values.
-// Validates that all template placeholders are replaced to prevent SQL injection.
-func (d *DatabaseOutput) buildParameterizedQuery(queryTemplate string, record map[string]any) (string, []any, error) {
-	query := queryTemplate
-	var args []any
-
-	paramIndex := 1
-	for {
-		start := strings.Index(query, "{{")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(query[start:], "}}")
-		if end == -1 {
-			// Unmatched opening brace - potential SQL injection risk
-			return "", nil, fmt.Errorf("unmatched template placeholder in query: missing closing }}")
-		}
-		end += start + 2
-
-		placeholder := query[start:end]
-		fieldPath := strings.TrimSpace(placeholder[2 : len(placeholder)-2])
-		fieldPath = strings.TrimPrefix(fieldPath, RecordFieldPrefix)
-
-		value := getDBFieldValue(record, fieldPath)
-
-		paramPlaceholder := database.FormatPlaceholder(d.driver, paramIndex)
-		query = query[:start] + paramPlaceholder + query[end:]
-		args = append(args, value)
-		paramIndex++
-	}
-
-	// Validate no unmatched braces remain (security check)
-	if strings.Contains(query, "{{") || strings.Contains(query, "}}") {
-		return "", nil, fmt.Errorf("unmatched template placeholders remain in query after processing")
-	}
-
-	return query, args, nil
-}
-
-// getDBFieldValue extracts a field value from a record using dot notation.
-func getDBFieldValue(record map[string]any, field string) any {
-	parts := strings.Split(field, ".")
-	current := any(record)
-
-	for _, part := range parts {
-		if m, ok := current.(map[string]any); ok {
-			current = m[part]
-		} else {
-			return nil
-		}
-	}
-
-	return current
 }
 
 // Close releases resources.

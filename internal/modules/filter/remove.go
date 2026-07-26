@@ -175,22 +175,5 @@ func (m *RemoveModule) processRecord(record map[string]any) map[string]any {
 	return record
 }
 
-// ParseRemoveConfig parses a raw configuration map into RemoveConfig.
-func ParseRemoveConfig(config map[string]any) (RemoveConfig, error) {
-	var cfg RemoveConfig
-
-	raw, ok := config["target"]
-	if !ok {
-		return cfg, errors.New("'target' is required")
-	}
-	targets, err := normalizeRemoveTarget(raw)
-	if err != nil {
-		return cfg, err
-	}
-	cfg.Target = raw
-	cfg.targetList = targets
-	return cfg, nil
-}
-
 // Verify interface compliance at compile time
 var _ Module = (*RemoveModule)(nil)

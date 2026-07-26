@@ -15,6 +15,7 @@ import (
 	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/recordpath"
+	"github.com/cannectors/runtime/internal/sqltemplate"
 	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 
@@ -344,19 +345,25 @@ func newSQLCallTestModule(t *testing.T, db *sql.DB, cfg SQLCallConfig) *SQLCallM
 	if err != nil {
 		t.Fatalf("resolving mergeStrategy: %v", err)
 	}
+	engine := template.NewEngine()
+	sqlQuery, err := sqltemplate.Compile(engine, cfg.Query, cfg.Parameters, "sqlite")
+	if err != nil {
+		t.Fatalf("compiling query: %v", err)
+	}
 	return &SQLCallModule{
-		db:                db,
-		driver:            "sqlite",
-		query:             cfg.Query,
-		mergeStrategy:     mergeStrategy,
-		resultKey:         cfg.ResultKey,
-		onError:           onError,
-		cache:             cacheStore,
-		cacheEnabled:      cacheEnabled,
-		cacheTTL:          cacheTTL,
-		cacheKey:          cfg.Cache.Key,
-		timeout:           200 * time.Millisecond,
-		templateEvaluator: template.NewEvaluator(),
+		db:            db,
+		driver:        "sqlite",
+		query:         cfg.Query,
+		sqlQuery:      sqlQuery,
+		mergeStrategy: mergeStrategy,
+		resultKey:     cfg.ResultKey,
+		onError:       onError,
+		cache:         cacheStore,
+		cacheEnabled:  cacheEnabled,
+		cacheTTL:      cacheTTL,
+		cacheKey:      cfg.Cache.Key,
+		timeout:       200 * time.Millisecond,
+		engine:        engine,
 	}
 }
 
@@ -371,7 +378,8 @@ func TestSQLCall_QueryTemplating(t *testing.T) {
 	db := setupSQLCallSQLiteDB(t)
 	module := newSQLCallTestModule(t, db, SQLCallConfig{
 		SQLRequestBase: moduleconfig.SQLRequestBase{
-			Query: "SELECT name, tier, score FROM users WHERE id = {{record.user.id}} AND region = {{record.region}}",
+			Query:      "SELECT name, tier, score FROM users WHERE id = $1 AND region = $2",
+			Parameters: []string{"record.user.id", "record.region"},
 		},
 	})
 
@@ -396,7 +404,7 @@ func TestSQLCall_CacheHitMissTTLAndEviction(t *testing.T) {
 	t.Run("hit and miss", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 			Cache:          moduleconfig.CacheConfig{Enabled: true, MaxSize: 4, TTLSeconds: 60},
 		})
 
@@ -424,7 +432,7 @@ func TestSQLCall_CacheHitMissTTLAndEviction(t *testing.T) {
 	t.Run("ttl expiration", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 			Cache:          moduleconfig.CacheConfig{Enabled: true, MaxSize: 4, TTLSeconds: 1},
 		})
 		module.cacheTTL = time.Nanosecond
@@ -449,7 +457,7 @@ func TestSQLCall_CacheHitMissTTLAndEviction(t *testing.T) {
 	t.Run("eviction", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 			Cache:          moduleconfig.CacheConfig{Enabled: true, MaxSize: 1, TTLSeconds: 60},
 		})
 
@@ -532,7 +540,7 @@ func TestSQLCall_OnErrorStrategies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupSQLCallSQLiteDB(t)
 			module := newSQLCallTestModule(t, db, SQLCallConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT missing_column FROM missing_table WHERE id = {{record.id}}"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT missing_column FROM missing_table WHERE id = $1", Parameters: []string{"record.id"}},
 				ModuleBase:     connector.ModuleBase{OnError: tt.onError},
 			})
 
@@ -572,7 +580,7 @@ func TestSQLCall_QueryFileAndEnvConnectionString(t *testing.T) {
 	}
 
 	queryPath := filepath.Join(tmpDir, "lookup.sql")
-	if writeErr := os.WriteFile(queryPath, []byte("SELECT name FROM users WHERE id = {{record.id}}"), 0600); writeErr != nil {
+	if writeErr := os.WriteFile(queryPath, []byte("SELECT name FROM users WHERE id = $1"), 0600); writeErr != nil {
 		t.Fatalf("writing query file: %v", writeErr)
 	}
 	t.Setenv("SQL_CALL_TEST_DSN", "file:"+dbPath)
@@ -582,6 +590,7 @@ func TestSQLCall_QueryFileAndEnvConnectionString(t *testing.T) {
 			ConnectionStringRef: "${SQL_CALL_TEST_DSN}",
 			Driver:              "sqlite",
 			QueryFile:           queryPath,
+			Parameters:          []string{"record.id"},
 		},
 	})
 	if err != nil {
@@ -606,7 +615,7 @@ func TestSQLCall_ContextCancellationAndEmptyResult(t *testing.T) {
 	t.Run("canceled context", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -620,7 +629,7 @@ func TestSQLCall_ContextCancellationAndEmptyResult(t *testing.T) {
 	t.Run("module timeout expires during query", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 		})
 		// The module derives a per-query context via context.WithTimeout(ctx, m.timeout)
 		// in executeQuery. Setting it to a nanosecond guarantees the deadline has
@@ -639,7 +648,7 @@ func TestSQLCall_ContextCancellationAndEmptyResult(t *testing.T) {
 	t.Run("empty result", func(t *testing.T) {
 		db := setupSQLCallSQLiteDB(t)
 		module := newSQLCallTestModule(t, db, SQLCallConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 			MergeStrategy:  "append",
 			ResultKey:      "enrichment",
 		})
@@ -655,7 +664,7 @@ func TestSQLCall_ContextCancellationAndEmptyResult(t *testing.T) {
 func TestSQLCall_ConcurrentProcess(t *testing.T) {
 	db := setupSQLCallSQLiteDB(t)
 	module := newSQLCallTestModule(t, db, SQLCallConfig{
-		SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = {{record.id}}"},
+		SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT name FROM users WHERE id = $1", Parameters: []string{"record.id"}},
 		Cache:          moduleconfig.CacheConfig{Enabled: true, MaxSize: 16, TTLSeconds: 60},
 	})
 

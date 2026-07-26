@@ -19,4 +19,10 @@ output:
   connectionString: postgres://cannectors_test:cannectors_test@localhost:15432/cannectors_test?sslmode=disable
   transaction: false
   onError: log
-  query: "INSERT INTO dest_customers (external_id, email, full_name, segment, source_updated_at, synced_at) VALUES ({{record.externalId}}, {{record.email}}, {{record.fullName}}, {{record.segment}}, {{record.sourceUpdatedAt}}, NOW())"
+  query: "INSERT INTO dest_customers (external_id, email, full_name, segment, source_updated_at, synced_at) VALUES ($1, $2, $3, $4, $5, NOW())"
+  parameters:
+    - record.externalId
+    - record.email
+    - record.fullName
+    - record.segment
+    - record.sourceUpdatedAt

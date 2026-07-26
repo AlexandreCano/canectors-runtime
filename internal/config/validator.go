@@ -42,11 +42,6 @@ var compiledSchema *jsonschema.Schema
 // schemaInitErr stores any error from schema initialization.
 var schemaInitErr error
 
-// GetEmbeddedSchema returns the embedded pipeline schema.
-func GetEmbeddedSchema() []byte {
-	return embeddedSchema
-}
-
 // schemaFiles maps schema URLs to their embedded content.
 var schemaFiles = map[string]*[]byte{
 	"https://cannectors.io/schemas/pipeline/v1.1.0/pipeline-schema.json": &embeddedSchema,

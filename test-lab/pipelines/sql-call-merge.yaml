@@ -16,8 +16,10 @@ filters:
     query: |
       SELECT segment, region, active
       FROM customer_reference
-      WHERE external_id = {{record.customer.id}}
+      WHERE external_id = $1
       LIMIT 1
+    parameters:
+      - record.customer.id
     mergeStrategy: merge
     cache:
       enabled: true

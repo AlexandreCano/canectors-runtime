@@ -11,21 +11,22 @@ input:
   query: |
     select id, customer_id, total, updated_at
     from orders
-    where updated_at > {{lastRunTimestamp}}
-      and id > :last_id
+    where updated_at > $1
+      and id > $2
     order by id asc
-    limit :limit
+    limit $3
+  parameters:
+    - state.lastRunTimestamp
+    - pagination.cursor ?? state.lastRunId ?? 0
+    - pagination.limit
   pagination:
     type: cursor
     limit: 200
     cursorField: id
-    param: last_id
   incremental:
     enabled: true
     timestampField: updated_at
-    timestampParam: lastRunTimestamp
     idField: id
-    idParam: last_id
 filters:
   - type: mapping
     mappings:

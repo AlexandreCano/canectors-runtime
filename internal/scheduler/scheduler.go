@@ -118,8 +118,8 @@ type Scheduler struct {
 	stopChan chan struct{}
 }
 
-// New creates a new scheduler instance with a stub executor.
-// Use NewWithExecutor for production use with a real executor.
+// New creates a new scheduler instance without an executor. Executions require
+// an executor to be supplied via NewWithExecutor.
 func New() *Scheduler {
 	return NewWithExecutor(nil)
 }
@@ -267,8 +267,8 @@ func (s *Scheduler) Register(pipeline *connector.Pipeline) error {
 	return nil
 }
 
-// Unregister removes a pipeline from the scheduler.
-// Returns ErrPipelineNotFound if the pipeline is not registered.
+// Unregister removes a registered pipeline from the scheduler, stopping its
+// CRON entry. Returns ErrPipelineNotFound if the pipeline is not registered.
 func (s *Scheduler) Unregister(pipelineID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -285,7 +285,6 @@ func (s *Scheduler) Unregister(pipelineID string) error {
 	logger.Info("pipeline unregistered from scheduler",
 		slog.String("pipeline_id", pipelineID),
 	)
-
 	return nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cannectors/runtime/internal/recordpath"
 	recordtemplate "github.com/cannectors/runtime/internal/template"
 )
 
@@ -77,34 +76,22 @@ func BuildEnvelope(opts EnvelopeOptions) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// EvaluateXMLTemplate evaluates record templates and XML-escapes substituted values.
+// xmlTemplateEngine renders SOAP XML fragments. Substituted values are
+// XML-escaped (TargetXML) and missing variables without a default are an error
+// (strict): SOAP bodies must not silently drop required fields.
+var xmlTemplateEngine = recordtemplate.NewEngine()
+
+// EvaluateXMLTemplate evaluates record templates in an XML fragment, XML-escaping
+// substituted values. A missing variable without a default is an error.
 func EvaluateXMLTemplate(raw string, record map[string]any) (string, error) {
 	if !recordtemplate.HasVariables(raw) {
 		return raw, nil
 	}
-	evaluator := recordtemplate.NewEvaluator()
-	variables := evaluator.ParseVariables(raw)
-	result := raw
-	for _, variable := range variables {
-		value, err := resolveTemplateVariable(variable, record)
-		if err != nil {
-			return "", err
-		}
-		result = strings.Replace(result, variable.FullMatch, escapeXMLText(value), 1)
+	compiled, err := xmlTemplateEngine.Compile(raw, recordtemplate.TargetXML, true)
+	if err != nil {
+		return "", err
 	}
-	return result, nil
-}
-
-func resolveTemplateVariable(variable recordtemplate.Variable, record map[string]any) (string, error) {
-	path := strings.TrimPrefix(variable.Path, "record.")
-	value, found := recordpath.Get(record, path)
-	if !found || value == nil {
-		if variable.HasDefault {
-			return variable.DefaultValue, nil
-		}
-		return "", fmt.Errorf("template variable %q is missing and has no default", variable.Path)
-	}
-	return recordtemplate.ValueToString(value), nil
+	return compiled.Render(recordtemplate.RenderContext{Record: record})
 }
 
 func escapeXMLText(value string) string {

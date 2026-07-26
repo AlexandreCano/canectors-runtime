@@ -393,6 +393,7 @@
 				"defaultValue": {},
 				"onMissing": {
 					"type": "string",
+					"description": "Behavior when the source field is missing or resolves to null.",
 					"enum": [
 						"setNull",
 						"skipField",

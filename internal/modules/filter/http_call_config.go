@@ -73,8 +73,9 @@ func buildHTTPCallCache(cfg moduleconfig.CacheConfig) (cache.Cache, time.Duratio
 }
 
 // loadHTTPCallBodyTemplate loads a POST/PUT body template from disk and
-// validates its syntax. Returns ("", nil) when path is empty.
-func loadHTTPCallBodyTemplate(path string) (string, error) {
+// validates its syntax (compiling it for the JSON target). Returns ("", nil)
+// when path is empty.
+func loadHTTPCallBodyTemplate(engine *template.Engine, path string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
@@ -83,7 +84,7 @@ func loadHTTPCallBodyTemplate(path string) (string, error) {
 		return "", fmt.Errorf("loading http_call body template file %q: %w", path, err)
 	}
 	raw := string(content)
-	if err := template.ValidateSyntax(raw); err != nil {
+	if err := engine.Validate(raw, template.TargetJSON, false); err != nil {
 		return "", fmt.Errorf("invalid template syntax in %q: %w", path, err)
 	}
 	logger.Debug("loaded http_call body template file",
@@ -93,14 +94,14 @@ func loadHTTPCallBodyTemplate(path string) (string, error) {
 	return raw, nil
 }
 
-// validateHTTPCallTemplates validates template syntax in endpoint and
-// headers up-front.
-func validateHTTPCallTemplates(endpoint string, headers map[string]string) error {
-	if err := template.ValidateSyntax(endpoint); err != nil {
+// validateHTTPCallTemplates compiles the endpoint and header templates for
+// their targets up-front, surfacing syntax errors at construction time.
+func validateHTTPCallTemplates(engine *template.Engine, endpoint string, headers map[string]string) error {
+	if err := engine.Validate(endpoint, template.TargetURL, false); err != nil {
 		return fmt.Errorf("invalid template syntax in endpoint: %w", err)
 	}
 	for name, v := range headers {
-		if err := template.ValidateSyntax(v); err != nil {
+		if err := engine.Validate(v, template.TargetText, false); err != nil {
 			return fmt.Errorf("invalid template syntax in header %q: %w", name, err)
 		}
 	}

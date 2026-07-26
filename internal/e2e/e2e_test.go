@@ -368,7 +368,8 @@ func TestExampleHTTPPollingToDatabaseOutput(t *testing.T) {
 	outputModule, err := output.NewDatabaseOutputFromConfig(rawModuleConfig(t, "database", map[string]any{
 		"connectionString": "file:" + dbPath,
 		"driver":           "sqlite",
-		"query":            "INSERT INTO products (id, name) VALUES ({{record.id}}, {{record.name}})",
+		"query":            "INSERT INTO products (id, name) VALUES ($1, $2)",
+		"parameters":       []any{"record.id", "record.name"},
 		"timeoutMs":        1000,
 	}))
 	if err != nil {

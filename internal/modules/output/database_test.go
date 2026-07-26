@@ -39,7 +39,7 @@ func TestParseDatabaseOutputConfig(t *testing.T) {
 			name: "basic query config",
 			cfg: map[string]any{
 				"connectionString": "postgres://localhost/db",
-				"query":            "INSERT INTO users (name, email) VALUES ({{record.name}}, {{record.email}})",
+				"query":            "INSERT INTO users (name, email) VALUES ($1, $2)",
 			},
 			check: func(t *testing.T, config DatabaseOutputConfig) {
 				if config.ConnectionString != "postgres://localhost/db" {
@@ -55,7 +55,7 @@ func TestParseDatabaseOutputConfig(t *testing.T) {
 			cfg: map[string]any{
 				"connectionStringRef": "${DATABASE_URL}",
 				"driver":              "mysql",
-				"query":               "INSERT INTO orders (id, total) VALUES ({{record.id}}, {{record.total}})",
+				"query":               "INSERT INTO orders (id, total) VALUES ($1, $2)",
 			},
 			check: func(t *testing.T, config DatabaseOutputConfig) {
 				if config.ConnectionStringRef != "${DATABASE_URL}" {
@@ -82,7 +82,7 @@ func TestParseDatabaseOutputConfig(t *testing.T) {
 			name: "transaction config",
 			cfg: map[string]any{
 				"connectionString": "postgres://localhost/db",
-				"query":            "INSERT INTO events (data) VALUES ({{record.data}})",
+				"query":            "INSERT INTO events (data) VALUES ($1)",
 				"transaction":      true,
 			},
 			check: func(t *testing.T, config DatabaseOutputConfig) {
@@ -95,7 +95,7 @@ func TestParseDatabaseOutputConfig(t *testing.T) {
 			name: "pool and timeout config",
 			cfg: map[string]any{
 				"connectionString":       "postgres://localhost/db",
-				"query":                  "INSERT INTO data (value) VALUES ({{record.value}})",
+				"query":                  "INSERT INTO data (value) VALUES ($1)",
 				"maxOpenConns":           float64(30),
 				"maxIdleConns":           float64(15),
 				"connMaxLifetimeSeconds": float64(1800),
@@ -124,7 +124,7 @@ func TestParseDatabaseOutputConfig(t *testing.T) {
 			name: "error handling config",
 			cfg: map[string]any{
 				"connectionString": "postgres://localhost/db",
-				"query":            "INSERT INTO data (value) VALUES ({{record.value}})",
+				"query":            "INSERT INTO data (value) VALUES ($1)",
 				"onError":          "skip",
 			},
 			check: func(t *testing.T, config DatabaseOutputConfig) {
@@ -168,7 +168,7 @@ func TestNewDatabaseOutputFromConfig_Validation(t *testing.T) {
 			cfg: &connector.ModuleConfig{
 				Type: "database",
 				Raw: mustJSON(map[string]any{
-					"query": "INSERT INTO users (name) VALUES ({{record.name}})",
+					"query": "INSERT INTO users (name) VALUES ($1)",
 				}),
 			},
 			wantErrSub: "connectionString or connectionStringRef is required",
@@ -220,67 +220,6 @@ func TestNewDatabaseOutputFromConfig_Validation(t *testing.T) {
 			}
 			if tt.wantErrSub != "" && !strings.Contains(err.Error(), tt.wantErrSub) {
 				t.Errorf("error = %v, want substring %q", err, tt.wantErrSub)
-			}
-		})
-	}
-}
-
-func TestGetDBFieldValue(t *testing.T) {
-	t.Parallel()
-
-	record := map[string]any{
-		"id":   1,
-		"name": "test",
-		"data": map[string]any{
-			"nested": "value",
-			"deep": map[string]any{
-				"key": 42,
-			},
-		},
-	}
-
-	tests := []struct {
-		name  string
-		field string
-		want  any
-	}{
-		{
-			name:  "top-level int",
-			field: "id",
-			want:  1,
-		},
-		{
-			name:  "top-level string",
-			field: "name",
-			want:  "test",
-		},
-		{
-			name:  "nested field",
-			field: "data.nested",
-			want:  "value",
-		},
-		{
-			name:  "deeply nested field",
-			field: "data.deep.key",
-			want:  42,
-		},
-		{
-			name:  "non-existent",
-			field: "nonexistent",
-			want:  nil,
-		},
-		{
-			name:  "non-existent nested",
-			field: "data.nonexistent",
-			want:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := getDBFieldValue(record, tt.field)
-			if got != tt.want {
-				t.Errorf("getDBFieldValue(%q) = %v, want %v", tt.field, got, tt.want)
 			}
 		})
 	}

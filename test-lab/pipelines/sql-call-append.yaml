@@ -16,8 +16,10 @@ filters:
     query: |
       SELECT product_name, category, unit_price, active
       FROM product_reference
-      WHERE sku = {{record.sku}}
+      WHERE sku = $1
       LIMIT 1
+    parameters:
+      - record.sku
     mergeStrategy: append
     resultKey: reference
     cache:

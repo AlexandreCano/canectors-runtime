@@ -12,6 +12,8 @@ import (
 
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/internal/sqltemplate"
+	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 
 	_ "modernc.org/sqlite"
@@ -50,11 +52,17 @@ func setupDatabaseInputSQLiteDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func newDatabaseInputForTest(db *sql.DB, cfg DatabaseInputConfig, state *persistence.State) *DatabaseInput {
+func newDatabaseInputForTest(t *testing.T, db *sql.DB, cfg DatabaseInputConfig, state *persistence.State) *DatabaseInput {
+	t.Helper()
+	sqlQuery, err := sqltemplate.Compile(template.NewEngine(), cfg.Query, cfg.Parameters, "sqlite")
+	if err != nil {
+		t.Fatalf("compiling query: %v", err)
+	}
 	return &DatabaseInput{
 		config:    cfg,
 		db:        db,
 		driver:    "sqlite",
+		sqlQuery:  sqlQuery,
 		timeout:   200 * time.Millisecond,
 		lastState: state,
 	}
@@ -91,8 +99,11 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 		{
 			name: "timestamp incremental",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE updated_at > :since ORDER BY id"},
-				Incremental:    &IncrementalConfig{Enabled: true, TimestampField: "updated_at", TimestampParam: "since"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records WHERE updated_at > $1 ORDER BY id",
+					Parameters: []string{"state.lastRunTimestamp"},
+				},
+				Incremental: &IncrementalConfig{Enabled: true, TimestampField: "updated_at"},
 			},
 			state: databaseInputState(&since, ""),
 			want:  []string{"new", "newer"},
@@ -100,8 +111,11 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 		{
 			name: "id incremental",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE id > :after_id ORDER BY id"},
-				Incremental:    &IncrementalConfig{Enabled: true, IDField: "id", IDParam: "after_id"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records WHERE id > $1 ORDER BY id",
+					Parameters: []string{"state.lastRunId ?? 0"},
+				},
+				Incremental: &IncrementalConfig{Enabled: true, IDField: "id"},
 			},
 			state: databaseInputState(nil, "2"),
 			want:  []string{"new", "newer"},
@@ -109,8 +123,11 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 		{
 			name: "timestamp and id incremental",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE updated_at > :since AND id > :after_id ORDER BY id"},
-				Incremental:    &IncrementalConfig{Enabled: true, TimestampField: "updated_at", TimestampParam: "since", IDField: "id", IDParam: "after_id"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records WHERE updated_at > $1 AND id > $2 ORDER BY id",
+					Parameters: []string{"state.lastRunTimestamp", "state.lastRunId ?? 0"},
+				},
+				Incremental: &IncrementalConfig{Enabled: true, TimestampField: "updated_at", IDField: "id"},
 			},
 			state: databaseInputState(&since, "2"),
 			want:  []string{"new", "newer"},
@@ -118,7 +135,10 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 		{
 			name: "first run uses epoch timestamp",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE updated_at > {{lastRunTimestamp}} ORDER BY id"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records WHERE updated_at > $1 ORDER BY id",
+					Parameters: []string{"state.lastRunTimestamp"},
+				},
 			},
 			want: []string{"old", "middle", "new", "newer"},
 		},
@@ -127,7 +147,7 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDatabaseInputSQLiteDB(t)
-			input := newDatabaseInputForTest(db, tt.cfg, tt.state)
+			input := newDatabaseInputForTest(t, db, tt.cfg, tt.state)
 
 			got, err := input.Fetch(context.Background())
 			if err != nil {
@@ -145,7 +165,8 @@ func TestDatabaseInput_Pagination(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "limit offset",
+			// No pagination parameter: the module appends LIMIT/OFFSET literally.
+			name: "limit offset literal",
 			cfg: DatabaseInputConfig{
 				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records ORDER BY id"},
 				Pagination:     &moduleconfig.DatabasePaginationConfig{Type: "limit-offset", Limit: 2},
@@ -153,18 +174,26 @@ func TestDatabaseInput_Pagination(t *testing.T) {
 			want: []string{"old", "middle", "new", "newer"},
 		},
 		{
-			name: "cursor",
+			// Pagination-aware parameters: the author owns LIMIT/OFFSET via $N.
+			name: "limit offset with placeholders",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE id > COALESCE(:after_id, 0) ORDER BY id"},
-				Pagination:     &moduleconfig.DatabasePaginationConfig{Type: "cursor", Limit: 2, CursorField: "id", Param: "after_id"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records ORDER BY id LIMIT $2 OFFSET $1",
+					Parameters: []string{"pagination.offset", "pagination.limit"},
+				},
+				Pagination: &moduleconfig.DatabasePaginationConfig{Type: "limit-offset", Limit: 2},
 			},
 			want: []string{"old", "middle", "new", "newer"},
 		},
 		{
-			name: "limit offset with param",
+			// Cursor pagination: pagination.cursor is nil on the first page.
+			name: "cursor with placeholders",
 			cfg: DatabaseInputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT id, name FROM records WHERE id > :offset ORDER BY id"},
-				Pagination:     &moduleconfig.DatabasePaginationConfig{Type: "limit-offset", Limit: 2, Param: "offset"},
+				SQLRequestBase: moduleconfig.SQLRequestBase{
+					Query:      "SELECT id, name FROM records WHERE id > $1 ORDER BY id LIMIT $2",
+					Parameters: []string{"pagination.cursor ?? 0", "pagination.limit"},
+				},
+				Pagination: &moduleconfig.DatabasePaginationConfig{Type: "cursor", Limit: 2, CursorField: "id"},
 			},
 			want: []string{"old", "middle", "new", "newer"},
 		},
@@ -173,7 +202,7 @@ func TestDatabaseInput_Pagination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDatabaseInputSQLiteDB(t)
-			input := newDatabaseInputForTest(db, tt.cfg, nil)
+			input := newDatabaseInputForTest(t, db, tt.cfg, nil)
 
 			got, err := input.Fetch(context.Background())
 			if err != nil {
@@ -241,19 +270,26 @@ func TestDatabaseInput_NewFromConfig_QueryFileAndEnvConnectionString(t *testing.
 	}
 }
 
-func TestDatabaseInput_BuildQueryDriverSpecificPlaceholders(t *testing.T) {
+func TestDatabaseInput_BuildDriverSpecificPlaceholders(t *testing.T) {
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	input := &DatabaseInput{
-		config: DatabaseInputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "SELECT * FROM records WHERE updated_at > {{lastRunTimestamp}} AND id > :after_id AND name = :name"},
-			Parameters:     map[string]any{"name": "Alice"},
-			Incremental:    &IncrementalConfig{Enabled: true, IDField: "id", IDParam: "after_id"},
-		},
-		driver:    "postgres",
-		lastState: databaseInputState(&ts, "42"),
+	querySrc := "SELECT * FROM records WHERE updated_at > $1 AND id > $2 AND name = $3"
+	params := []string{"state.lastRunTimestamp", "state.lastRunId", `"Alice"`}
+
+	build := func(driver string) (string, []any) {
+		t.Helper()
+		sqlQuery, err := sqltemplate.Compile(template.NewEngine(), querySrc, params, driver)
+		if err != nil {
+			t.Fatalf("compiling query: %v", err)
+		}
+		input := &DatabaseInput{driver: driver, sqlQuery: sqlQuery, lastState: databaseInputState(&ts, "42")}
+		query, args, buildErr := input.buildForPage(nil)
+		if buildErr != nil {
+			t.Fatalf("buildForPage: %v", buildErr)
+		}
+		return query, args
 	}
 
-	query, args := input.buildQuery()
+	query, args := build("postgres")
 	if query != "SELECT * FROM records WHERE updated_at > $1 AND id > $2 AND name = $3" {
 		t.Fatalf("query = %q", query)
 	}
@@ -261,8 +297,7 @@ func TestDatabaseInput_BuildQueryDriverSpecificPlaceholders(t *testing.T) {
 		t.Fatalf("args = %#v", args)
 	}
 
-	input.driver = "mysql"
-	query, args = input.buildQuery()
+	query, args = build("mysql")
 	if strings.Count(query, "?") != 3 {
 		t.Fatalf("mysql query = %q, want three ? placeholders", query)
 	}

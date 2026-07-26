@@ -21,6 +21,21 @@ import (
 // ErrInvalidDataField is returned when a SOAP response dataField cannot be resolved.
 var ErrInvalidDataField = errors.New("invalid SOAP dataField")
 
+// templateEngine renders SOAP endpoint URLs, HTTP headers and MTOM content IDs.
+// XML body/header rendering lives in soapclient (TargetXML, strict); these
+// fields use lenient undefined handling like REST.
+var templateEngine = template.NewEngine()
+
+// renderTemplate compiles (cached) and renders a SOAP config field against a
+// record, escaping substituted values for the target.
+func renderTemplate(src string, target template.Target, record map[string]any) (string, error) {
+	compiled, err := templateEngine.Compile(src, target, false)
+	if err != nil {
+		return "", err
+	}
+	return compiled.Render(template.RenderContext{Record: record})
+}
+
 // ValidateBase validates static SOAP request configuration shared by modules.
 func ValidateBase(base moduleconfig.SOAPRequestBase) error {
 	if strings.TrimSpace(base.Endpoint) == "" {
@@ -35,14 +50,14 @@ func ValidateBase(base moduleconfig.SOAPRequestBase) error {
 	if _, err := soapclient.NormalizeSOAPVersion(soapclient.SOAPVersion(base.SOAPVersion)); err != nil {
 		return err
 	}
-	if err := template.ValidateSyntax(base.Endpoint); err != nil {
+	if err := templateEngine.Validate(base.Endpoint, template.TargetURL, false); err != nil {
 		return fmt.Errorf("invalid SOAP endpoint template: %w", err)
 	}
-	if err := template.ValidateSyntax(base.Body); err != nil {
+	if err := templateEngine.Validate(base.Body, template.TargetXML, false); err != nil {
 		return fmt.Errorf("invalid SOAP body template: %w", err)
 	}
 	for i, header := range base.Headers {
-		if err := template.ValidateSyntax(header.XML); err != nil {
+		if err := templateEngine.Validate(header.XML, template.TargetXML, false); err != nil {
 			return fmt.Errorf("invalid SOAP header template %d: %w", i, err)
 		}
 	}
@@ -50,7 +65,7 @@ func ValidateBase(base moduleconfig.SOAPRequestBase) error {
 		if err := httpclient.ValidateHeaderName(name); err != nil {
 			return fmt.Errorf("invalid SOAP HTTP header: %w", err)
 		}
-		if err := template.ValidateSyntax(value); err != nil {
+		if err := templateEngine.Validate(value, template.TargetText, false); err != nil {
 			return fmt.Errorf("invalid SOAP HTTP header template %q: %w", name, err)
 		}
 	}
@@ -68,7 +83,7 @@ func ValidateBase(base moduleconfig.SOAPRequestBase) error {
 			if attachment.Encoding != "" && attachment.Encoding != "binary" && attachment.Encoding != "base64" {
 				return fmt.Errorf("SOAP MTOM attachment %d encoding must be 'binary' or 'base64'", i)
 			}
-			if err := template.ValidateSyntax(attachment.ContentID); err != nil {
+			if err := templateEngine.Validate(attachment.ContentID, template.TargetText, false); err != nil {
 				return fmt.Errorf("invalid SOAP MTOM attachment %d contentId template: %w", i, err)
 			}
 		}
@@ -104,10 +119,13 @@ func BuildOperation(opts OperationOptions) (soapclient.SOAPOperation, error) {
 		record = map[string]any{}
 	}
 
-	evaluator := template.NewEvaluator()
 	endpoint := opts.Endpoint
 	if endpoint == "" {
-		endpoint = evaluator.EvaluateForURL(opts.Base.Endpoint, record)
+		rendered, err := renderTemplate(opts.Base.Endpoint, template.TargetURL, record)
+		if err != nil {
+			return soapclient.SOAPOperation{}, fmt.Errorf("evaluating SOAP endpoint template: %w", err)
+		}
+		endpoint = rendered
 	}
 	if err := httpclient.ValidateAbsoluteURL(endpoint); err != nil {
 		return soapclient.SOAPOperation{}, fmt.Errorf("invalid SOAP endpoint: %w", err)
@@ -118,7 +136,10 @@ func BuildOperation(opts OperationOptions) (soapclient.SOAPOperation, error) {
 		if err := httpclient.ValidateHeaderName(name); err != nil {
 			return soapclient.SOAPOperation{}, fmt.Errorf("invalid SOAP HTTP header: %w", err)
 		}
-		evaluated := evaluator.Evaluate(value, record)
+		evaluated, err := renderTemplate(value, template.TargetText, record)
+		if err != nil {
+			return soapclient.SOAPOperation{}, fmt.Errorf("evaluating SOAP HTTP header %q: %w", name, err)
+		}
 		if err := httpclient.ValidateHeaderValue(evaluated); err != nil {
 			return soapclient.SOAPOperation{}, fmt.Errorf("invalid SOAP HTTP header %q: %w", name, err)
 		}
@@ -183,7 +204,6 @@ func BuildMTOMConfig(cfg moduleconfig.MTOMTemplateConfig, record map[string]any)
 	if !cfg.Enabled {
 		return soapclient.MTOMConfig{}, nil
 	}
-	evaluator := template.NewEvaluator()
 	attachments := make([]soapclient.MTOMAttachment, 0, len(cfg.Attachments))
 	for i, attachment := range cfg.Attachments {
 		value, found := recordpath.Get(record, attachment.SourceField)
@@ -194,8 +214,12 @@ func BuildMTOMConfig(cfg moduleconfig.MTOMTemplateConfig, record map[string]any)
 		if err != nil {
 			return soapclient.MTOMConfig{}, fmt.Errorf("SOAP MTOM attachment %d sourceField %q: %w", i, attachment.SourceField, err)
 		}
+		contentID, err := renderTemplate(attachment.ContentID, template.TargetText, record)
+		if err != nil {
+			return soapclient.MTOMConfig{}, fmt.Errorf("SOAP MTOM attachment %d contentId template: %w", i, err)
+		}
 		attachments = append(attachments, soapclient.MTOMAttachment{
-			ContentID:   evaluator.Evaluate(attachment.ContentID, record),
+			ContentID:   contentID,
 			ContentType: attachment.ContentType,
 			Data:        data,
 		})
@@ -327,8 +351,10 @@ func ValueAsRecords(value any) ([]map[string]any, error) {
 
 // BuildEndpointWithKeys applies http_call-style path and query key values.
 func BuildEndpointWithKeys(endpoint string, record map[string]any, keys []moduleconfig.KeyConfig, values map[string]string) (string, error) {
-	evaluator := template.NewEvaluator()
-	resolved := evaluator.EvaluateForURL(endpoint, record)
+	resolved, err := renderTemplate(endpoint, template.TargetURL, record)
+	if err != nil {
+		return "", fmt.Errorf("evaluating SOAP endpoint template: %w", err)
+	}
 	for _, key := range keys {
 		if key.ParamType == "path" {
 			resolved = strings.Replace(resolved, "{"+key.ParamName+"}", url.PathEscape(values[key.ParamName]), 1)

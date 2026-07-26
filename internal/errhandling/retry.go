@@ -52,15 +52,6 @@ func DefaultRetryConfig() RetryConfig {
 	return connector.DefaultRetryConfig()
 }
 
-// DefaultErrorHandlingConfig returns the default error handling configuration.
-func DefaultErrorHandlingConfig() ErrorHandlingConfig {
-	return ErrorHandlingConfig{
-		OnError:   string(OnErrorFail),
-		TimeoutMs: DefaultTimeoutMs,
-		Retry:     DefaultRetryConfig(),
-	}
-}
-
 // ShouldRetry determines if a retry should be attempted based on the config, attempt number and error.
 func ShouldRetry(c RetryConfig, attempt int, err error) bool {
 	if err == nil {
@@ -73,93 +64,6 @@ func ShouldRetry(c RetryConfig, attempt int, err error) bool {
 		return false
 	}
 	return IsRetryable(err)
-}
-
-// ResolveRetryConfig resolves the effective retry configuration with granular merge.
-// Precedence: module config fields > defaults config fields > default values.
-func ResolveRetryConfig(moduleRetry, defaultsRetry *RetryConfig) RetryConfig {
-	base := DefaultRetryConfig()
-
-	// Apply defaults first
-	if defaultsRetry != nil {
-		if defaultsRetry.MaxAttempts != 0 {
-			base.MaxAttempts = defaultsRetry.MaxAttempts
-		}
-		if defaultsRetry.DelayMs != 0 {
-			base.DelayMs = defaultsRetry.DelayMs
-		}
-		if defaultsRetry.BackoffMultiplier != 0 {
-			base.BackoffMultiplier = defaultsRetry.BackoffMultiplier
-		}
-		if defaultsRetry.MaxDelayMs != 0 {
-			base.MaxDelayMs = defaultsRetry.MaxDelayMs
-		}
-		if len(defaultsRetry.RetryableStatusCodes) > 0 {
-			base.RetryableStatusCodes = defaultsRetry.RetryableStatusCodes
-		}
-		base.UseRetryAfterHeader = defaultsRetry.UseRetryAfterHeader
-		if defaultsRetry.RetryHintFromBody != "" {
-			base.RetryHintFromBody = defaultsRetry.RetryHintFromBody
-		}
-	}
-
-	// Apply module config (overrides defaults per field)
-	if moduleRetry != nil {
-		if moduleRetry.MaxAttempts != 0 {
-			base.MaxAttempts = moduleRetry.MaxAttempts
-		}
-		if moduleRetry.DelayMs != 0 {
-			base.DelayMs = moduleRetry.DelayMs
-		}
-		if moduleRetry.BackoffMultiplier != 0 {
-			base.BackoffMultiplier = moduleRetry.BackoffMultiplier
-		}
-		if moduleRetry.MaxDelayMs != 0 {
-			base.MaxDelayMs = moduleRetry.MaxDelayMs
-		}
-		if len(moduleRetry.RetryableStatusCodes) > 0 {
-			base.RetryableStatusCodes = moduleRetry.RetryableStatusCodes
-		}
-		if moduleRetry.UseRetryAfterHeader {
-			base.UseRetryAfterHeader = true
-		}
-		if moduleRetry.RetryHintFromBody != "" {
-			base.RetryHintFromBody = moduleRetry.RetryHintFromBody
-		}
-	}
-
-	return base
-}
-
-// ResolveErrorHandlingConfig resolves the effective error handling configuration.
-// Precedence: module config > defaults config > default values.
-func ResolveErrorHandlingConfig(moduleConfig, defaultsConfig *ErrorHandlingConfig) ErrorHandlingConfig {
-	result := DefaultErrorHandlingConfig()
-
-	// Apply defaults first
-	if defaultsConfig != nil {
-		if defaultsConfig.OnError != "" {
-			result.OnError = defaultsConfig.OnError
-		}
-		if defaultsConfig.TimeoutMs > 0 {
-			result.TimeoutMs = defaultsConfig.TimeoutMs
-		}
-		result.Retry = defaultsConfig.Retry
-	}
-
-	// Apply module config (overrides defaults per field)
-	if moduleConfig != nil {
-		if moduleConfig.OnError != "" {
-			result.OnError = moduleConfig.OnError
-		}
-		if moduleConfig.TimeoutMs > 0 {
-			result.TimeoutMs = moduleConfig.TimeoutMs
-		}
-		// Granular merge for retry
-		result.Retry = ResolveRetryConfig(&moduleConfig.Retry, &result.Retry)
-	}
-
-	return result
 }
 
 // ParseOnErrorStrategy parses an error strategy string and returns the matching
@@ -291,13 +195,6 @@ func (e *RetryExecutor) GetRetryInfo() *connector.RetryInfo {
 		info.RetryDelaysMs = append([]int64(nil), info.RetryDelaysMs...)
 	}
 	return &info
-}
-
-// LastErrors returns the errors collected during the last Execute/ExecuteWithHooks
-// invocation. Intended for internal diagnostics; intermediate errors do not
-// leak through the public RetryInfo type because they may carry sensitive data.
-func (e *RetryExecutor) LastErrors() []error {
-	return e.errors
 }
 
 // SuccessfulAttempt returns the 1-indexed attempt number that succeeded, or 0

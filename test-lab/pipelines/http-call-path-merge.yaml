@@ -24,7 +24,7 @@ filters:
       enabled: true
       maxSize: 100
       ttlSeconds: 60
-      key: customer.id
+      key: "{{record.customer.id}}"
 output:
   type: httpRequest
   endpoint: http://localhost:18080/destination/enrichment/http-merge

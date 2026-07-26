@@ -4,7 +4,14 @@ package filter
 
 import (
 	"context"
+
+	"github.com/cannectors/runtime/internal/template"
 )
+
+// templateEngine is shared by every filter module so the compiled-template cache
+// is reused across module instances (compiled templates are safe for concurrent
+// renders).
+var templateEngine = template.NewEngine()
 
 // Module represents a filter module that transforms data between input and output stages.
 //

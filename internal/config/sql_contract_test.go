@@ -109,7 +109,7 @@ func TestSchemaRejectsZeroNumericFields(t *testing.T) {
 // TestSchemaRejectsZeroPaginationLimit locks Story 24.4 AC15.
 func TestSchemaRejectsZeroPaginationLimit(t *testing.T) {
 	raw := `{"name":"x","version":"1.0.0",
-		"input":{"type":"database","connectionString":"sqlite::memory:","query":"SELECT 1","pagination":{"type":"limit-offset","param":"offset","limit":0}},
+		"input":{"type":"database","connectionString":"sqlite::memory:","query":"SELECT 1","pagination":{"type":"limit-offset","limit":0}},
 		"output":{"type":"httpRequest","endpoint":"https://e.com","method":"POST"}}`
 	res := validateSQLPipeline(t, raw)
 	if res.Valid {
@@ -121,7 +121,7 @@ func TestSchemaRejectsZeroPaginationLimit(t *testing.T) {
 // optional; runtime applies its default.
 func TestSchemaAcceptsPaginationWithoutLimit(t *testing.T) {
 	raw := `{"name":"x","version":"1.0.0",
-		"input":{"type":"database","connectionString":"sqlite::memory:","query":"SELECT 1","pagination":{"type":"limit-offset","param":"offset"}},
+		"input":{"type":"database","connectionString":"sqlite::memory:","query":"SELECT 1","pagination":{"type":"limit-offset"}},
 		"output":{"type":"httpRequest","endpoint":"https://e.com","method":"POST"}}`
 	res := validateSQLPipeline(t, raw)
 	if !res.Valid {
@@ -137,11 +137,11 @@ func TestSchemaPaginationCanonicalParam(t *testing.T) {
 		body      string
 		wantValid bool
 	}{
-		{"limit-offset with param", `{"type":"limit-offset","param":"offset"}`, true},
-		{"cursor with param + cursorField", `{"type":"cursor","param":"after","cursorField":"id"}`, true},
-		{"limit-offset with legacy offsetParam", `{"type":"limit-offset","offsetParam":"offset"}`, false},
-		{"cursor with legacy cursorParam", `{"type":"cursor","cursorParam":"after","cursorField":"id"}`, false},
-		{"cursor missing cursorField", `{"type":"cursor","param":"after"}`, false},
+		{"limit-offset", `{"type":"limit-offset","limit":100}`, true},
+		{"cursor with cursorField", `{"type":"cursor","cursorField":"id"}`, true},
+		{"legacy param field rejected", `{"type":"limit-offset","param":"offset"}`, false},
+		{"legacy cursorParam rejected", `{"type":"cursor","cursorParam":"after","cursorField":"id"}`, false},
+		{"cursor missing cursorField", `{"type":"cursor"}`, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

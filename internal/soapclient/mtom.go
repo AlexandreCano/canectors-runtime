@@ -1,12 +1,10 @@
 package soapclient
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
-	"net/textproto"
 	"strings"
 )
 
@@ -21,62 +19,6 @@ type MTOMAttachment struct {
 	ContentID   string
 	ContentType string
 	Data        []byte
-}
-
-// BuildMTOMRequest serializes a SOAP envelope and attachments as multipart/related.
-// Client.Call delegates request emission to hooklift; this helper remains for
-// low-level tests and callers that need a standalone multipart payload.
-func BuildMTOMRequest(envelope []byte, version SOAPVersion, attachments []MTOMAttachment) ([]byte, string, error) {
-	var b bytes.Buffer
-	writer := multipart.NewWriter(&b)
-
-	rootHeader := make(textproto.MIMEHeader)
-	rootHeader.Set("Content-Type", `application/xop+xml; charset=utf-8; type="application/soap+xml"`)
-	rootHeader.Set("Content-Transfer-Encoding", "8bit")
-	rootHeader.Set("Content-ID", "<root.message@cannectors>")
-	root, err := writer.CreatePart(rootHeader)
-	if err != nil {
-		return nil, "", err
-	}
-	if _, err := root.Write(envelope); err != nil {
-		return nil, "", err
-	}
-
-	for _, attachment := range attachments {
-		if attachment.ContentID == "" {
-			return nil, "", fmt.Errorf("MTOM attachment content ID is required")
-		}
-		contentType := attachment.ContentType
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-		header := make(textproto.MIMEHeader)
-		header.Set("Content-Type", contentType)
-		header.Set("Content-Transfer-Encoding", "binary")
-		header.Set("Content-ID", "<"+strings.Trim(attachment.ContentID, "<>")+">")
-		part, err := writer.CreatePart(header)
-		if err != nil {
-			return nil, "", err
-		}
-		if _, err := part.Write(attachment.Data); err != nil {
-			return nil, "", err
-		}
-	}
-
-	if err := writer.Close(); err != nil {
-		return nil, "", err
-	}
-	startInfo := "text/xml"
-	if version == SOAPVersion12 {
-		startInfo = "application/soap+xml"
-	}
-	contentType := mime.FormatMediaType("multipart/related", map[string]string{
-		"type":       "application/xop+xml",
-		"start":      "<root.message@cannectors>",
-		"start-info": startInfo,
-		"boundary":   writer.Boundary(),
-	})
-	return b.Bytes(), contentType, nil
 }
 
 // ParseMTOMResponse separates a multipart SOAP response into envelope XML and attachments.

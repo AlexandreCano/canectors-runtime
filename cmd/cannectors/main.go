@@ -195,6 +195,13 @@ func runValidate(_ *cobra.Command, args []string) {
 		os.Exit(ExitValidationError)
 	}
 
+	// Schema passed: statically compile every template (Jinja syntax, SQL
+	// $N/parameters consistency) without instantiating modules.
+	if templateErrors := config.ValidateTemplates(result.Data); len(templateErrors) > 0 {
+		cli.PrintValidationErrors(templateErrors, verbose, quiet)
+		os.Exit(ExitValidationError)
+	}
+
 	if !quiet {
 		fmt.Printf("✓ Configuration is valid (format: %s)\n", result.Format)
 		if verbose {

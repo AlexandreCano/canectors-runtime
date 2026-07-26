@@ -69,22 +69,24 @@ type RequestConfig struct {
 // HTTPRequestModule implements HTTP-based data sending.
 // It sends transformed records to a target REST API via HTTP requests.
 type HTTPRequestModule struct {
-	endpoint            string
-	method              string
-	headers             map[string]string
-	timeout             time.Duration
-	request             RequestConfig
-	retry               connector.RetryConfig
-	authHandler         auth.Handler
-	client              *httpclient.Client
-	onError             errhandling.OnErrorStrategy // "fail", "skip", "log"
-	successCodes        []int                       // HTTP status codes considered success (nil = expression-only)
-	successProgram      *vm.Program                 // Compiled success.expression (nil = no expression)
-	successExpression   string                      // Raw expression for diagnostics
-	lastRetryInfo       *connector.RetryInfo
-	retryHintProgram    *vm.Program         // Compiled expr program for retryHintFromBody
-	templateEvaluator   *template.Evaluator // Template evaluator for dynamic content
-	defaultBodyDisabled bool                // True when method has no default JSON body and no body is configured
+	endpoint             string
+	method               string
+	headers              map[string]string
+	timeout              time.Duration
+	request              RequestConfig
+	retry                connector.RetryConfig
+	authHandler          auth.Handler
+	client               *httpclient.Client
+	onError              errhandling.OnErrorStrategy // "fail", "skip", "log"
+	successCodes         []int                       // HTTP status codes considered success (nil = expression-only)
+	successProgram       *vm.Program                 // Compiled success.expression (nil = no expression)
+	successExpression    string                      // Raw expression for diagnostics
+	lastRetryInfo        *connector.RetryInfo
+	retryHintProgram     *vm.Program      // Compiled expr program for retryHintFromBody
+	engine               *template.Engine // Jinja templating engine (shared compile cache)
+	bodyTarget           template.Target  // escaping target for body templates (JSON vs raw text)
+	contentTypeTemplated bool             // True when the Content-Type header is itself a template
+	defaultBodyDisabled  bool             // True when method has no default JSON body and no body is configured
 }
 
 // HTTPRequestOutputConfig holds typed configuration for the HTTP request output module.
@@ -208,13 +210,25 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 		return nil, err
 	}
 
-	// Validate template syntax in endpoint and headers
-	if err := validateTemplateConfig(cfg.Endpoint, headers); err != nil {
+	engine := templateEngine
+
+	// Body templates escape substituted values for JSON when the Content-Type is
+	// JSON, keeping the payload valid; otherwise values pass through as raw text.
+	// A templated Content-Type is only known per record, so it is resolved at
+	// send time (bodyTargetFor) and JSON escaping is assumed here.
+	contentTypeTemplated := template.HasVariables(headers[headerContentType])
+	bodyTarget := template.TargetText
+	if contentTypeTemplated || jsonContentTypeFromHeaders(headers) {
+		bodyTarget = template.TargetJSON
+	}
+
+	// Validate (= compile) endpoint and header templates for their targets.
+	if err := validateTemplateConfig(engine, cfg.Endpoint, headers); err != nil {
 		return nil, fmt.Errorf("validating template configuration: %w", err)
 	}
 
 	if reqConfig.bodyTemplateRaw != "" {
-		if err := template.ValidateSyntax(reqConfig.bodyTemplateRaw); err != nil {
+		if err := engine.Validate(reqConfig.bodyTemplateRaw, bodyTarget, false); err != nil {
 			return nil, fmt.Errorf("invalid template syntax in body: %w", err)
 		}
 	} else if reqConfig.BodyTemplateFile != "" {
@@ -224,7 +238,7 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 		}
 		reqConfig.bodyTemplateRaw = string(templateContent)
 
-		if err := template.ValidateSyntax(reqConfig.bodyTemplateRaw); err != nil {
+		if err := engine.Validate(reqConfig.bodyTemplateRaw, bodyTarget, false); err != nil {
 			return nil, fmt.Errorf("invalid template syntax in %q: %w", reqConfig.BodyTemplateFile, err)
 		}
 
@@ -235,21 +249,23 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 	}
 
 	module := &HTTPRequestModule{
-		endpoint:            cfg.Endpoint,
-		method:              method,
-		headers:             headers,
-		timeout:             timeout,
-		request:             reqConfig,
-		retry:               retryConfig,
-		authHandler:         authHandler,
-		client:              client,
-		onError:             onError,
-		successCodes:        successCodes,
-		successProgram:      successProgram,
-		successExpression:   successExpression,
-		retryHintProgram:    retryHintProgram,
-		templateEvaluator:   template.NewEvaluator(),
-		defaultBodyDisabled: reqConfig.bodyTemplateRaw == "" && !methodHasDefaultJSONBody(method),
+		endpoint:             cfg.Endpoint,
+		method:               method,
+		headers:              headers,
+		timeout:              timeout,
+		request:              reqConfig,
+		retry:                retryConfig,
+		authHandler:          authHandler,
+		client:               client,
+		onError:              onError,
+		successCodes:         successCodes,
+		successProgram:       successProgram,
+		successExpression:    successExpression,
+		retryHintProgram:     retryHintProgram,
+		engine:               engine,
+		bodyTarget:           bodyTarget,
+		contentTypeTemplated: contentTypeTemplated,
+		defaultBodyDisabled:  reqConfig.bodyTemplateRaw == "" && !methodHasDefaultJSONBody(method),
 	}
 
 	// Check if endpoint/headers use templating
@@ -274,20 +290,17 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 	return module, nil
 }
 
-// validateTemplateConfig validates template syntax in configuration.
-func validateTemplateConfig(endpoint string, headers map[string]string) error {
-	// Validate endpoint template syntax
-	if err := template.ValidateSyntax(endpoint); err != nil {
+// validateTemplateConfig compiles the endpoint and header templates for their
+// respective targets, surfacing any syntax error at construction time.
+func validateTemplateConfig(engine *template.Engine, endpoint string, headers map[string]string) error {
+	if err := engine.Validate(endpoint, template.TargetURL, false); err != nil {
 		return fmt.Errorf("invalid endpoint template: %w", err)
 	}
-
-	// Validate header template syntax
 	for name, value := range headers {
-		if err := template.ValidateSyntax(value); err != nil {
+		if err := engine.Validate(value, template.TargetText, false); err != nil {
 			return fmt.Errorf("invalid template in header %q: %w", name, err)
 		}
 	}
-
 	return nil
 }
 
@@ -378,12 +391,16 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 		// For batch mode with template, we can only use first record's data
 		// The template should be designed accordingly
 		if len(records) > 0 {
-			bodyStr := h.templateEvaluator.Evaluate(h.request.bodyTemplateRaw, records[0])
+			target := h.bodyTargetFor(records[0])
+			bodyStr, renderErr := h.renderField(h.request.bodyTemplateRaw, target, records[0])
+			if renderErr != nil {
+				return 0, fmt.Errorf("evaluating body template: %w", renderErr)
+			}
 			body = []byte(bodyStr)
 
 			// Validate resulting JSON is well-formed (AC #4)
 			// Only validate if Content-Type indicates JSON
-			if h.isJSONContentType() {
+			if target == template.TargetJSON {
 				if validationErr := validateJSON(body); validationErr != nil {
 					logger.Warn("body template produced invalid JSON, continuing anyway",
 						slog.String("error", validationErr.Error()),

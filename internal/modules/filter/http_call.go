@@ -22,6 +22,7 @@ import (
 	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/metadata"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/recordpath"
 	"github.com/cannectors/runtime/internal/template"
@@ -81,23 +82,23 @@ type HTTPCallConfig struct {
 //   - HTTP errors are not cached (only successful responses are cached)
 //   - onError mode controls behavior: fail (stop pipeline), skip (drop record), log (continue)
 type HTTPCallModule struct {
-	endpoint          string
-	method            string                   // HTTP method (any RFC 7230 token)
-	keys              []moduleconfig.KeyConfig // key configurations for request building
-	authHandler       auth.Handler
-	httpClient        *httpclient.Client
-	retry             connector.RetryConfig
-	retryHintProgram  *vm.Program // Compiled retryHintFromBody expression (may be nil).
-	cache             cache.Cache
-	cacheEnabled      bool
-	mergeStrategy     string
-	dataField         string
-	onError           errhandling.OnErrorStrategy
-	headers           map[string]string
-	cacheTTL          time.Duration
-	cacheKey          string              // Cache key configuration (optional)
-	bodyTemplateRaw   string              // Loaded body template content
-	templateEvaluator *template.Evaluator // Template evaluator for dynamic content
+	endpoint         string
+	method           string                   // HTTP method (any RFC 7230 token)
+	keys             []moduleconfig.KeyConfig // key configurations for request building
+	authHandler      auth.Handler
+	httpClient       *httpclient.Client
+	retry            connector.RetryConfig
+	retryHintProgram *vm.Program // Compiled retryHintFromBody expression (may be nil).
+	cache            cache.Cache
+	cacheEnabled     bool
+	mergeStrategy    string
+	dataField        string
+	onError          errhandling.OnErrorStrategy
+	headers          map[string]string
+	cacheTTL         time.Duration
+	cacheKey         string           // Cache key configuration (optional)
+	bodyTemplateRaw  string           // Loaded body template content
+	engine           *template.Engine // Jinja templating engine (shared compile cache)
 }
 
 // HTTPCallError carries structured context for http_call failures.
@@ -231,22 +232,24 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 
 	lruCache, cacheTTL, cacheEnabled := buildHTTPCallCache(config.Cache)
 
+	engine := templateEngine
+
 	bodyTemplateRaw := config.Body
 	if bodyTemplateRaw == "" {
 		var bodyErr error
-		bodyTemplateRaw, bodyErr = loadHTTPCallBodyTemplate(config.BodyTemplateFile)
+		bodyTemplateRaw, bodyErr = loadHTTPCallBodyTemplate(engine, config.BodyTemplateFile)
 		if bodyErr != nil {
 			return nil, bodyErr
 		}
-	} else if tplErr := template.ValidateSyntax(bodyTemplateRaw); tplErr != nil {
+	} else if tplErr := engine.Validate(bodyTemplateRaw, template.TargetJSON, false); tplErr != nil {
 		return nil, fmt.Errorf("invalid template syntax in http_call body: %w", tplErr)
 	}
 
-	if err := validateHTTPCallTemplates(config.Endpoint, config.Headers); err != nil {
+	if err := validateHTTPCallTemplates(engine, config.Endpoint, config.Headers); err != nil {
 		return nil, err
 	}
 	if config.Cache.Key != "" {
-		if cacheKeyErr := template.ValidateSyntax(config.Cache.Key); cacheKeyErr != nil {
+		if cacheKeyErr := engine.Validate(config.Cache.Key, template.TargetText, false); cacheKeyErr != nil {
 			return nil, fmt.Errorf("invalid template syntax in http_call cache key: %w", cacheKeyErr)
 		}
 	}
@@ -269,23 +272,23 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 	copy(keyEntries, config.Keys)
 
 	return &HTTPCallModule{
-		endpoint:          config.Endpoint,
-		method:            method,
-		keys:              keyEntries,
-		authHandler:       authHandler,
-		httpClient:        httpClient,
-		retry:             retryConfig,
-		retryHintProgram:  retryHintProgram,
-		cache:             lruCache,
-		cacheEnabled:      cacheEnabled,
-		mergeStrategy:     mergeStrategy,
-		dataField:         config.DataField,
-		onError:           onError,
-		headers:           config.Headers,
-		cacheTTL:          cacheTTL,
-		cacheKey:          config.Cache.Key,
-		bodyTemplateRaw:   bodyTemplateRaw,
-		templateEvaluator: template.NewEvaluator(),
+		endpoint:         config.Endpoint,
+		method:           method,
+		keys:             keyEntries,
+		authHandler:      authHandler,
+		httpClient:       httpClient,
+		retry:            retryConfig,
+		retryHintProgram: retryHintProgram,
+		cache:            lruCache,
+		cacheEnabled:     cacheEnabled,
+		mergeStrategy:    mergeStrategy,
+		dataField:        config.DataField,
+		onError:          onError,
+		headers:          config.Headers,
+		cacheTTL:         cacheTTL,
+		cacheKey:         config.Cache.Key,
+		bodyTemplateRaw:  bodyTemplateRaw,
+		engine:           engine,
 	}, nil
 }
 
@@ -478,10 +481,37 @@ func (m *HTTPCallModule) extractKeyValues(record map[string]any, recordIdx int) 
 // If cacheKey is not configured, uses default: endpoint + "::" + joined key values (in config order)
 func (m *HTTPCallModule) buildCacheKey(keyValues map[string]string, record map[string]any) string {
 	if m.cacheKey != "" {
-		return m.templateEvaluator.Evaluate(m.cacheKey, record)
+		key, err := m.renderField(m.cacheKey, template.TargetText, record)
+		if err != nil {
+			logger.Warn("http_call cache key template render failed, using composite key",
+				slog.String("error", err.Error()),
+			)
+			return m.endpoint + "::" + m.compositeKeyString(keyValues)
+		}
+		return key
 	}
 
 	return m.endpoint + "::" + m.compositeKeyString(keyValues)
+}
+
+// renderField compiles (cached) and renders a template field for record,
+// escaping substituted values for the target. http_call fields use lenient
+// undefined handling (missing fields render empty).
+func (m *HTTPCallModule) renderField(src string, target template.Target, record map[string]any) (string, error) {
+	compiled, err := m.engine.Compile(src, target, false)
+	if err != nil {
+		return "", err
+	}
+	return compiled.Render(recordRenderContext(record))
+}
+
+// recordRenderContext exposes the record and its metadata sub-map (`meta`).
+func recordRenderContext(record map[string]any) template.RenderContext {
+	var meta map[string]any
+	if m, ok := record[metadata.DefaultFieldName].(map[string]any); ok {
+		meta = m
+	}
+	return template.RenderContext{Record: record, Meta: meta}
 }
 
 // compositeKeyString joins key values in config order for cache key.
@@ -607,7 +637,14 @@ func (m *HTTPCallModule) buildHTTPRequest(ctx context.Context, requestURL string
 
 	var bodyReader io.Reader
 	if m.bodyTemplateRaw != "" {
-		bodyContent := m.templateEvaluator.Evaluate(m.bodyTemplateRaw, record)
+		bodyContent, renderErr := m.renderField(m.bodyTemplateRaw, template.TargetJSON, record)
+		if renderErr != nil {
+			return nil, newHTTPCallError(
+				ErrCodeHTTPCallHTTPError,
+				fmt.Sprintf("http_call body template render failed: %v", renderErr),
+				recordIdx, m.endpoint, 0, m.compositeKeyString(keyValues),
+			)
+		}
 		bodyReader = bytes.NewReader([]byte(bodyContent))
 	}
 
@@ -630,7 +667,15 @@ func (m *HTTPCallModule) buildHTTPRequest(ctx context.Context, requestURL string
 	for key, value := range m.headers {
 		evaluatedValue := value
 		if template.HasVariables(value) {
-			evaluatedValue = m.templateEvaluator.Evaluate(value, record)
+			rendered, renderErr := m.renderField(value, template.TargetText, record)
+			if renderErr != nil {
+				return nil, newHTTPCallError(
+					ErrCodeHTTPCallHTTPError,
+					fmt.Sprintf("http_call header template render failed: %v", renderErr),
+					recordIdx, m.endpoint, 0, m.compositeKeyString(keyValues),
+				)
+			}
+			evaluatedValue = rendered
 		}
 		if hErr := httpclient.AddValidatedHeader(validated, key, evaluatedValue); hErr != nil {
 			return nil, newHTTPCallError(
@@ -726,9 +771,13 @@ func (m *HTTPCallModule) extractDataField(responseData map[string]any, recordIdx
 func (m *HTTPCallModule) buildRequestURL(keyValues map[string]string, record map[string]any) (string, error) {
 	endpoint := m.endpoint
 
-	// Evaluate template variables in endpoint ({{record.field}} syntax)
+	// Evaluate template variables in endpoint ({{ record.field }} syntax)
 	if template.HasVariables(endpoint) {
-		endpoint = m.templateEvaluator.EvaluateForURL(endpoint, record)
+		rendered, err := m.renderField(endpoint, template.TargetURL, record)
+		if err != nil {
+			return "", fmt.Errorf("evaluating endpoint template: %w", err)
+		}
+		endpoint = rendered
 	}
 
 	// If no key configuration, return the templated endpoint as-is

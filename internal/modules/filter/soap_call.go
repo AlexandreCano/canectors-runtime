@@ -33,21 +33,21 @@ type SOAPCallConfig struct {
 
 // SOAPCallModule enriches records with data returned by a SOAP operation.
 type SOAPCallModule struct {
-	base              moduleconfig.SOAPRequestBase
-	keys              []moduleconfig.KeyConfig
-	dataField         string
-	mergeStrategy     string
-	resultKey         string
-	onError           errhandling.OnErrorStrategy
-	httpClient        *httpclient.Client
-	soapClient        soapclient.SOAPClient
-	authHandler       auth.Handler
-	retry             connector.RetryConfig
-	cache             cache.Cache
-	cacheEnabled      bool
-	cacheTTL          time.Duration
-	cacheKey          string
-	templateEvaluator *template.Evaluator
+	base          moduleconfig.SOAPRequestBase
+	keys          []moduleconfig.KeyConfig
+	dataField     string
+	mergeStrategy string
+	resultKey     string
+	onError       errhandling.OnErrorStrategy
+	httpClient    *httpclient.Client
+	soapClient    soapclient.SOAPClient
+	authHandler   auth.Handler
+	retry         connector.RetryConfig
+	cache         cache.Cache
+	cacheEnabled  bool
+	cacheTTL      time.Duration
+	cacheKey      string
+	engine        *template.Engine
 }
 
 // NewSOAPCallFromConfig creates a SOAP enrichment filter.
@@ -69,8 +69,9 @@ func NewSOAPCallFromConfig(config SOAPCallConfig) (*SOAPCallModule, error) {
 	if err != nil {
 		return nil, err
 	}
+	engine := templateEngine
 	if config.Cache.Key != "" {
-		if cacheKeyErr := template.ValidateSyntax(config.Cache.Key); cacheKeyErr != nil {
+		if cacheKeyErr := engine.Validate(config.Cache.Key, template.TargetText, false); cacheKeyErr != nil {
 			return nil, fmt.Errorf("invalid template syntax in soap_call cache key: %w", cacheKeyErr)
 		}
 	}
@@ -103,21 +104,21 @@ func NewSOAPCallFromConfig(config SOAPCallConfig) (*SOAPCallModule, error) {
 	keys := make([]moduleconfig.KeyConfig, len(config.Keys))
 	copy(keys, config.Keys)
 	return &SOAPCallModule{
-		base:              config.SOAPRequestBase,
-		keys:              keys,
-		dataField:         config.DataField,
-		mergeStrategy:     mergeStrategy,
-		resultKey:         config.ResultKey,
-		onError:           onError,
-		httpClient:        httpClient,
-		soapClient:        soapclient.NewClient(httpClient),
-		authHandler:       authHandler,
-		retry:             retryConfig,
-		cache:             lruCache,
-		cacheEnabled:      cacheEnabled,
-		cacheTTL:          cacheTTL,
-		cacheKey:          config.Cache.Key,
-		templateEvaluator: template.NewEvaluator(),
+		base:          config.SOAPRequestBase,
+		keys:          keys,
+		dataField:     config.DataField,
+		mergeStrategy: mergeStrategy,
+		resultKey:     config.ResultKey,
+		onError:       onError,
+		httpClient:    httpClient,
+		soapClient:    soapclient.NewClient(httpClient),
+		authHandler:   authHandler,
+		retry:         retryConfig,
+		cache:         lruCache,
+		cacheEnabled:  cacheEnabled,
+		cacheTTL:      cacheTTL,
+		cacheKey:      config.Cache.Key,
+		engine:        engine,
 	}, nil
 }
 
@@ -223,7 +224,13 @@ func (m *SOAPCallModule) fetchResponseData(ctx context.Context, record map[strin
 
 func (m *SOAPCallModule) buildCacheKey(keyValues map[string]string, record map[string]any) string {
 	if m.cacheKey != "" {
-		return m.templateEvaluator.Evaluate(m.cacheKey, record)
+		compiled, err := m.engine.Compile(m.cacheKey, template.TargetText, false)
+		if err == nil {
+			if key, renderErr := compiled.Render(template.RenderContext{Record: record}); renderErr == nil {
+				return key
+			}
+		}
+		logger.Warn("soap_call cache key template render failed, using composite key")
 	}
 	parts := make([]string, 0, len(m.keys))
 	for _, key := range m.keys {
