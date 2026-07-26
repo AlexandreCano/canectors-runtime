@@ -1,0 +1,15 @@
+name: db-output-upsert-update-arm
+description: The ON CONFLICT DO UPDATE arm overwrites a pre-existing stale row instead of inserting a duplicate.
+pipeline: test-lab/pipelines/db-output-upsert-query-file.yaml
+expect_status: success
+setup:
+  reset_db: true
+  commands:
+    - "docker compose -f test-lab/docker-compose.yml exec -T postgres psql -U cannectors_test -d cannectors_test -c \"INSERT INTO dest_customers (external_id,email,full_name,segment,synced_at) VALUES ('DBOUT-001','stale@example.test','Stale Name','legacy',NOW())\""
+assertions:
+  # Still 3 DBOUT rows: DBOUT-001 was updated in place, 002/003 inserted.
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'DBOUT-%'", expected: "3" }
+  # The stale segment/email were overwritten by the feed values.
+  - sql_eq: { query: "SELECT segment FROM dest_customers WHERE external_id='DBOUT-001'", expected: "premium" }
+  - sql_eq: { query: "SELECT email FROM dest_customers WHERE external_id='DBOUT-001'", expected: "alpha@example.test" }
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE email='stale@example.test'", expected: "0" }

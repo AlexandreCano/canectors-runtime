@@ -1,0 +1,14 @@
+name: db-input-query-file
+description: Database input from an external queryFile selects only the 4 paid orders.
+pipeline: test-lab/pipelines/db-input-query-file.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/db-input/paid-orders, status: 202, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-1001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-1002", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-DUPLICATE", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-1005", expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-1003" }
+  - http_count_eq_zero: { method: POST, path: /destination/db-input/paid-orders, body_contains: "ORD-1006" }

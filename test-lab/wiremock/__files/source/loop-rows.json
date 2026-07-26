@@ -1,0 +1,14 @@
+{
+  "data": [
+    { "rowId": "R1", "cells": [
+      { "columnId": 1, "displayValue": "EVT-1" },
+      { "columnId": 2, "displayValue": "48.85,2.35" },
+      { "columnId": 3, "displayValue": "Alice" }
+    ]},
+    { "rowId": "R2", "cells": [
+      { "columnId": 1, "displayValue": "EVT-2" },
+      { "columnId": 2, "displayValue": "51.50,-0.12" },
+      { "columnId": 3, "displayValue": "Bob" }
+    ]}
+  ]
+}

@@ -1,0 +1,8 @@
+name: sql-call-on-error-skip
+description: sql_call on a missing table with onError=skip drops the affected records instead of failing.
+pipeline: test-lab/pipelines/sql-call-on-error-skip.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

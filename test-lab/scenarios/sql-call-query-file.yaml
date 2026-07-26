@@ -1,0 +1,11 @@
+name: sql-call-query-file
+description: Same customer lookup as sql-call-merge but the query is loaded from customer-lookup.sql.
+pipeline: test-lab/pipelines/sql-call-query-file.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/enrichment/query-file, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/query-file, body_contains: "premium", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/query-file, body_contains: "enterprise", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/query-file, body_contains: "north-america", expected: 1 }

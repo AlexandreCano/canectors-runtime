@@ -1,0 +1,14 @@
+{
+  "name": "source-paginated-nested-cursor-2",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/paginated/nested-cursor",
+    "queryParameters": { "cursor": { "equalTo": "nested-2" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/paginated/nested-cursor-2.json"
+  }
+}

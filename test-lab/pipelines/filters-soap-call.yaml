@@ -1,0 +1,34 @@
+name: filters-soap-call
+version: 1.0.0
+description: soap_call filter — enrich each order with a SOAP customer lookup, append under resultKey, cached per customerId.
+tags:
+  - test-lab
+  - filters
+  - soap_call
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/soap-call/orders
+  dataField: orders
+filters:
+  - type: soap_call
+    endpoint: http://localhost:18080/soap/enrich/customer
+    soapAction: urn:GetCustomer
+    operation: GetCustomer
+    body: |
+      <m:GetCustomer xmlns:m="urn:customers">
+        <m:CustomerId>{{record.customerId}}</m:CustomerId>
+      </m:GetCustomer>
+    dataField: Envelope.Body.GetCustomerResponse.Customer
+    mergeStrategy: append
+    resultKey: customer
+    cache:
+      enabled: true
+      key: "{{record.customerId}}"
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  requestMode: batch
+  headers:
+    Content-Type: application/json

@@ -1,0 +1,9 @@
+name: success-expression-headers
+description: success.expression can read statusCode and response headers together.
+pipeline: test-lab/pipelines/success-expression-headers.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/teapot, status: 418, expected: 1 }
+  - log_not_contains: "panic:"

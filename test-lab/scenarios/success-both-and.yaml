@@ -1,0 +1,9 @@
+name: success-both-and
+description: expression AND statusCodes — status matches but the expression is false, so the send fails.
+pipeline: test-lab/pipelines/success-both-and.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/failed-body, status: 200, expected: 1 }
+  - log_not_contains: "panic:"

@@ -1,0 +1,12 @@
+name: filters-condition
+description: condition routes REC-1 (paid, amount>100) to then-branch and REC-2 to else-branch (which strips its card).
+pipeline: test-lab/pipelines/filters-condition.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/filters/condition, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/condition, body_contains: "billable", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/condition, body_contains: "review", expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /destination/filters/condition, body_contains: "4222222222222222" }
+  - http_count_ge: { method: POST, path: /destination/filters/condition, body_contains: "4111111111111111", expected: 1 }

@@ -1,0 +1,13 @@
+name: pagination-cursor-limit-param
+description: >
+  The pagination-cursor pipeline declares limitParam=page_size, limit=2. Cursor
+  requests should carry that page-size param, exactly like offset does with limit.
+pipeline: test-lab/pipelines/pagination-cursor.yaml
+expect_status: success
+assertions:
+  # limitParam/limit must be emitted on cursor requests (offset already does this).
+  - http_count_ge:
+      method: GET
+      path: /source/paginated/inventory
+      query: { page_size: "2" }
+      expected: 1

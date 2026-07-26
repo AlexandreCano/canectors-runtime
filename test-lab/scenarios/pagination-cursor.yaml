@@ -1,0 +1,31 @@
+name: pagination-cursor
+description: Cursor pagination — 3 string-cursor iterations of 2 inventory rows, all 6 forwarded.
+pipeline: test-lab/pipelines/pagination-cursor.yaml
+expect_status: success
+assertions:
+  # Three source iterations: initial (no cursor) + two follow-up cursors.
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/inventory
+      expected: 3
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/inventory
+      query: { cursor: "cursor-page-2" }
+      expected: 1
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/inventory
+      query: { cursor: "cursor-page-3" }
+      expected: 1
+  # All six records reach the destination (first and last id present).
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "INV-001"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "INV-006"
+      expected: 1

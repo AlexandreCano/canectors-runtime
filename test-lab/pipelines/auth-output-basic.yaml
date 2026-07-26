@@ -1,0 +1,23 @@
+name: auth-output-basic
+version: 1.0.0
+description: Output authenticated with HTTP basic.
+tags:
+  - test-lab
+  - auth
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/orders
+  dataField: orders
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/basic
+  method: POST
+  headers:
+    Content-Type: application/json
+  authentication:
+    type: basic
+    credentials:
+      username: lab-user
+      password: lab-pass

@@ -1,0 +1,23 @@
+name: pagination-cursor-nested
+version: 1.0.0
+description: Cursor pagination where next_cursor is nested under meta (dot-notation field). Should paginate 2 pages.
+tags:
+  - test-lab
+  - pagination
+  - pagination-cursor
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/paginated/nested-cursor
+  dataField: data
+  pagination:
+    type: cursor
+    param: cursor
+    nextCursorField: meta.next_cursor
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/pagination/inventory
+  method: POST
+  headers:
+    Content-Type: application/json

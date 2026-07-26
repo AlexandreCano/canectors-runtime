@@ -1,0 +1,13 @@
+name: http-call-post-template
+description: http_call POST /enrichment/geocode with a body template (one call per address), replaces overlapping fields with geocode result.
+pipeline: test-lab/pipelines/http-call-post-template.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /enrichment/geocode, expected: 2 }
+  - http_count_ge: { method: POST, path: /enrichment/geocode, body_contains: "1 rue Test", expected: 1 }
+  - http_count_ge: { method: POST, path: /enrichment/geocode, body_contains: "2 av Lab", expected: 1 }
+  - http_count_eq: { method: POST, path: /destination/enrichment/http-post, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-post, body_contains: "FR-IDF", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-post, body_contains: "ADDR-1", expected: 1 }

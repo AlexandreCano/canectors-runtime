@@ -1,0 +1,9 @@
+name: filters-transform-object-error
+description: toObject on a scalar fails; the default onError=fail surfaces a pipeline error.
+pipeline: test-lab/pipelines/filters-transform-object-error.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "cannot convert"
+  - log_not_contains: "panic:"

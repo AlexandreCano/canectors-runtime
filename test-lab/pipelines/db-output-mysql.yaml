@@ -1,0 +1,21 @@
+name: db-output-mysql
+version: 1.0.0
+description: Database output against the mysql driver — canonical $N placeholders are translated to ? by the runtime.
+tags:
+  - test-lab
+  - database
+  - mysql
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/db-feed/customers
+filters: []
+output:
+  type: database
+  driver: mysql
+  connectionString: "cannectors_test:cannectors_test@tcp(localhost:13306)/cannectors_test"
+  query: "INSERT INTO mysql_dest_customers (external_id, email, segment) VALUES ($1, $2, $3)"
+  parameters:
+    - record.externalId
+    - record.email
+    - record.segment

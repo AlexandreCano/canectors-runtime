@@ -1,0 +1,24 @@
+name: retry-input-503-then-200
+version: 1.0.0
+description: Input retry — the source returns 503 once, the retry succeeds and records flow through.
+tags:
+  - test-lab
+  - retry
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/reliability/source/503-then-200
+  dataField: records
+  retry:
+    maxAttempts: 3
+    delayMs: 50
+    backoffMultiplier: 1
+    maxDelayMs: 100
+    retryableStatusCodes: [500, 502, 503, 504]
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/reliability/destination/500-then-200
+  method: POST
+  headers:
+    Content-Type: application/json

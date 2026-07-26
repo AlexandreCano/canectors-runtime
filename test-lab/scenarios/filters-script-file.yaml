@@ -1,0 +1,12 @@
+name: filters-script-file
+description: script filter loaded from disk (normalize.js) adds normalizedEmail, tagCount and weightDoubled.
+pipeline: test-lab/pipelines/filters-script-file.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/filters/script-file, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-file, body_contains: "alice@example.com", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-file, body_contains: "normalizedEmail", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-file, body_contains: "weightDoubled", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-file, body_contains: "tagCount", expected: 1 }

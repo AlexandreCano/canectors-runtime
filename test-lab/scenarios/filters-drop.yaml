@@ -1,0 +1,24 @@
+name: filters-drop
+description: drop inside a condition removes the cancelled order; the two paid orders pass through.
+pipeline: test-lab/pipelines/filters-drop.yaml
+expect_status: success
+assertions:
+  - http_count_eq:
+      method: POST
+      path: /destination/filter/sink
+      expected: 2
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "ORD-A"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "ORD-C"
+      expected: 1
+  # the cancelled order was dropped, never forwarded.
+  - http_count_eq_zero:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "ORD-B"

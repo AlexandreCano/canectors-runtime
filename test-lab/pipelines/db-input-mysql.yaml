@@ -1,0 +1,20 @@
+name: db-input-mysql
+version: 1.0.0
+description: Database input against the mysql driver, reading the seeded lab table.
+tags:
+  - test-lab
+  - database
+  - mysql
+input:
+  type: database
+  schedule: "* * * * * *"
+  driver: mysql
+  connectionString: "cannectors_test:cannectors_test@tcp(localhost:13306)/cannectors_test"
+  query: "SELECT external_id, email, segment FROM mysql_customers ORDER BY external_id"
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/mysql/customers
+  method: POST
+  headers:
+    Content-Type: application/json

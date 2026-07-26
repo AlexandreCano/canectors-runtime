@@ -1,0 +1,11 @@
+name: sql-call-replace
+description: sql_call replaces overlapping fields with the customer_reference row while preserving the original order_id.
+pipeline: test-lab/pipelines/sql-call-replace.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/enrichment/replace, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/replace, body_contains: "CUST-001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/replace, body_contains: "north-america", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/replace, body_contains: "ORD-A1", expected: 1 }

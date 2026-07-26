@@ -1,0 +1,11 @@
+name: env-subst-endpoint
+description: A ${VAR} reference is expanded inside a larger string (endpoint prefix + path).
+pipeline: test-lab/pipelines/env-subst-endpoint.yaml
+expect_status: success
+setup:
+  reset_db: false
+env:
+  LAB_BASE_URL: http://localhost:18080
+assertions:
+  - http_count_ge: { method: GET, path: /auth/source/orders, status: 200, expected: 1 }
+  - http_count_ge: { method: POST, path: /auth/destination/public, expected: 1 }

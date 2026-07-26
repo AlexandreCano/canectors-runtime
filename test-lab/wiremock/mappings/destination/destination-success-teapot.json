@@ -1,0 +1,10 @@
+{
+  "name": "destination-success-teapot",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/destination/success/teapot" },
+  "response": {
+    "status": 418,
+    "headers": { "Content-Type": "application/json", "X-Sync-Result": "queued" },
+    "jsonBody": { "result": { "status": "ACCEPTED" } }
+  }
+}

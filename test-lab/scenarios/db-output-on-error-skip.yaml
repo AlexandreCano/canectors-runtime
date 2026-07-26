@@ -1,0 +1,12 @@
+name: db-output-on-error-skip
+description: onError=skip (no transaction) — the email-conflict row is skipped; the two non-conflicting rows land in dest_customers.
+pipeline: test-lab/pipelines/db-output-on-error-skip.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id='DBOUT-100'", expected: "1" }
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id='DBOUT-101'", expected: "0" }
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id='DBOUT-102'", expected: "1" }
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'DBOUT-%'", expected: "2" }
+  - log_not_contains: "panic:"

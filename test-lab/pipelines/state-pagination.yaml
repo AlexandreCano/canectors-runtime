@@ -1,0 +1,29 @@
+name: state-pagination
+version: 1.0.0
+description: State persistence combined with page pagination — the state query param must be kept on every page request.
+tags:
+  - test-lab
+  - state
+  - pagination
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/state-paginated/events
+  dataField: events
+  pagination:
+    type: page
+    param: page
+    totalPagesField: total_pages
+  statePersistence:
+    id:
+      enabled: true
+      field: event.id
+      queryParam: after_id
+    storagePath: ./test-lab/state
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/state-paginated/events
+  method: POST
+  headers:
+    Content-Type: application/json

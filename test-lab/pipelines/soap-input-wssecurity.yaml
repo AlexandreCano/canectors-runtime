@@ -1,0 +1,28 @@
+name: soap-input-wssecurity
+version: 1.0.0
+description: soapPolling authenticated with a WS-Security UsernameToken on the input side.
+tags:
+  - test-lab
+  - soap
+  - auth
+input:
+  type: soapPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/soap/secure/source/orders
+  soapAction: urn:ListOrders
+  operation: ListOrders
+  body: <ListOrders/>
+  dataField: Envelope.Body.ListOrdersResponse.Orders.Order
+  wsSecurity:
+    username: lab-soap-user
+    password: lab-soap-pass
+    passwordType: PasswordText
+    mustUnderstand: true
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/soap/destination/orders
+  method: POST
+  requestMode: batch
+  headers:
+    Content-Type: application/json

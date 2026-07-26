@@ -1,0 +1,9 @@
+name: auth-negative-basic-wrong
+description: Negative — wrong basic password on the source; 401, pipeline error, destination never called.
+pipeline: test-lab/pipelines/auth-negative-basic-wrong.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: GET, path: /auth/source/basic, status: 401, expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /auth/destination/public }

@@ -1,0 +1,11 @@
+name: db-input-mysql
+description: The mysql driver reads the seeded lab table and forwards the 3 rows.
+pipeline: test-lab/pipelines/db-input-mysql.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/mysql/customers, status: 202, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/mysql/customers, body_contains: "MY-001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/mysql/customers, body_contains: "MY-003", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/mysql/customers, body_contains: "mysql.one@example.test", expected: 1 }

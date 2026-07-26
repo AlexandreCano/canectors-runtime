@@ -1,0 +1,34 @@
+name: soap-polling-cursor
+description: SOAP cursor pagination walks 3 iterations via a nested NextCursor path and forwards all 5 orders.
+pipeline: test-lab/pipelines/soap-polling-cursor.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  # iteration 2 and 3 carry the cursor returned by the previous response
+  - http_count_ge:
+      method: POST
+      path: /soap/orders/cursor
+      body_contains: "SOAP-CUR-2"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /soap/orders/cursor
+      body_contains: "SOAP-CUR-3"
+      expected: 1
+  # records from every page reach the destination
+  - http_count_ge:
+      method: POST
+      path: /soap/destination/orders
+      body_contains: "SOAP-P1-A"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /soap/destination/orders
+      body_contains: "SOAP-P2-B"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /soap/destination/orders
+      body_contains: "SOAP-P3-A"
+      expected: 1

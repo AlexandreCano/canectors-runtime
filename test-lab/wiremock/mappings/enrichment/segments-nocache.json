@@ -1,0 +1,10 @@
+{
+  "name": "enrichment-segments-nocache",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/enrichment/nocache/segments" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "segment": "nocache-premium" }
+  }
+}

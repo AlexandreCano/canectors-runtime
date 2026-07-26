@@ -1,0 +1,10 @@
+name: filters-script-inline
+description: inline script builds statusUpper/fullLabel per record.
+pipeline: test-lab/pipelines/filters-script-inline.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/filters/script-inline, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-inline, body_contains: "REC-1:PAID", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/script-inline, body_contains: "REC-2:PENDING", expected: 1 }

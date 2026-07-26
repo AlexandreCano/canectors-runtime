@@ -1,0 +1,19 @@
+name: state-timestamp
+description: A persisted lastTimestamp is replayed as the updated_after query param on the next run.
+pipeline: test-lab/pipelines/state-timestamp.yaml
+expect_status: success
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "printf '{\"pipelineId\":\"state-timestamp\",\"lastTimestamp\":\"2026-01-02T03:04:05Z\",\"updatedAt\":\"2026-01-02T03:04:05Z\"}' > test-lab/state/state-timestamp.json"
+assertions:
+  # the seeded timestamp is replayed verbatim (RFC3339) on the source request
+  - http_count_ge:
+      method: GET
+      path: /source/state/events
+      query: { updated_after: "2026-01-02T03:04:05Z" }
+      expected: 1
+  - http_count_ge: { method: POST, path: /destination/state/timestamp, body_contains: "EVT-102", expected: 1 }
+  # the state file is refreshed after the run (no longer the seeded value)
+  - log_not_contains: "panic:"

@@ -1,0 +1,10 @@
+{
+  "name": "enrichment-bearer-profile-401",
+  "priority": 5,
+  "request": { "method": "GET", "urlPath": "/enrichment/bearer/profile" },
+  "response": {
+    "status": 401,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "unauthorized enrichment" }
+  }
+}

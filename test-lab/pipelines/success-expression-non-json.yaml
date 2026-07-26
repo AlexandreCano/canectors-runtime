@@ -1,0 +1,19 @@
+name: success-expression-non-json
+version: 1.0.0
+description: successCondition coverage — success-expression-non-json
+tags:
+  - test-lab
+  - success-condition
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/customers
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/success/non-json
+  method: POST
+  headers:
+    Content-Type: application/json
+  success:
+    expression: 'body.result.status == "ACCEPTED"'

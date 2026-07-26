@@ -1,0 +1,11 @@
+name: http-call-on-error-fail
+description: With the default onError=fail, the 404 enrichment lookup makes the pipeline fail.
+pipeline: test-lab/pipelines/http-call-on-error-fail.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge: { method: GET, path: /enrichment/customers/CUST-999, status: 404, expected: 1 }
+  # nothing is forwarded once the filter aborts
+  - http_count_eq_zero: { method: POST, path: /destination/enrichment/http-merge }
+  - log_not_contains: "panic:"

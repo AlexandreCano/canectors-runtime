@@ -1,0 +1,14 @@
+{
+  "name": "enrichment-bearer-profile",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/enrichment/bearer/profile",
+    "headers": { "Authorization": { "equalTo": "Bearer lab-enrichment-bearer" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "profile": { "clearance": "level-3" } }
+  }
+}

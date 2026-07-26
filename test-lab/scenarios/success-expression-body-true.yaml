@@ -1,0 +1,9 @@
+name: success-expression-body-true
+description: success.expression on a nested body field evaluates true — pipeline succeeds.
+pipeline: test-lab/pipelines/success-expression-body-true.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/accepted-body, status: 200, expected: 1 }
+  - log_not_contains: "panic:"

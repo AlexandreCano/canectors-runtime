@@ -1,0 +1,10 @@
+name: retry-output-exhausted-backoff
+description: maxAttempts 2 with backoffMultiplier 4 makes exactly 3 attempts, then the pipeline fails.
+pipeline: test-lab/pipelines/retry-output-exhausted-backoff.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  # maxAttempts counts retries, so 1 initial attempt + 2 retries = 3 requests.
+  - http_count_eq: { method: POST, path: /reliability/destination/always-500, status: 500, expected: 3 }
+  - log_not_contains: "panic:"

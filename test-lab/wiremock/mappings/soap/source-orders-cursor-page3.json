@@ -1,0 +1,14 @@
+{
+  "name": "soap-source-orders-cursor-page3",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/soap/orders/cursor",
+    "bodyPatterns": [ { "contains": "SOAP-CUR-3" } ]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "text/xml; charset=utf-8" },
+    "body": "<Envelope><Body><ListOrdersPageResponse><NextCursor></NextCursor><Orders><Order><id>SOAP-P3-A</id></Order></Orders></ListOrdersPageResponse></Body></Envelope>"
+  }
+}

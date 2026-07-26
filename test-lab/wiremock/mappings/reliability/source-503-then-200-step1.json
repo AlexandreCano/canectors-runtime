@@ -1,0 +1,13 @@
+{
+  "name": "reliability-source-503-then-200-step1",
+  "priority": 1,
+  "scenarioName": "source-503-then-200",
+  "requiredScenarioState": "Started",
+  "newScenarioState": "recovered",
+  "request": { "method": "GET", "urlPath": "/reliability/source/503-then-200" },
+  "response": {
+    "status": 503,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "service unavailable" }
+  }
+}

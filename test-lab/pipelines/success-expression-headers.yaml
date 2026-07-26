@@ -1,0 +1,19 @@
+name: success-expression-headers
+version: 1.0.0
+description: successCondition coverage — success-expression-headers
+tags:
+  - test-lab
+  - success-condition
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/customers
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/success/teapot
+  method: POST
+  headers:
+    Content-Type: application/json
+  success:
+    expression: 'statusCode == 418 && headers["X-Sync-Result"][0] == "queued"'

@@ -1,0 +1,14 @@
+name: db-input-parameters
+description: Database input with a named SQL parameter ($1='active') selects only the 4 active customers.
+pipeline: test-lab/pipelines/db-input-parameters.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/db-input/active-customers, status: 202, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-002", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-004", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-006", expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-003" }
+  - http_count_eq_zero: { method: POST, path: /destination/db-input/active-customers, body_contains: "CUST-005" }

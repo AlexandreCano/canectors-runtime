@@ -1,0 +1,14 @@
+{
+  "name": "auth-destination-oauth2",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/auth/destination/oauth2",
+    "headers": { "Authorization": { "equalTo": "Bearer lab-oauth2-access-token" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "ok": true }
+  }
+}

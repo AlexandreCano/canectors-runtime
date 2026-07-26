@@ -1,0 +1,10 @@
+{
+  "name": "soap-source-secure-orders-401",
+  "priority": 5,
+  "request": { "method": "POST", "urlPath": "/soap/secure/source/orders" },
+  "response": {
+    "status": 401,
+    "headers": { "Content-Type": "text/xml; charset=utf-8" },
+    "body": "<Envelope><Body><Fault><faultcode>Client</faultcode><faultstring>missing WS-Security header</faultstring></Fault></Body></Envelope>"
+  }
+}

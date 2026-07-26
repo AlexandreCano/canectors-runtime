@@ -1,0 +1,23 @@
+name: auth-input-bearer-env
+version: 1.0.0
+description: Bearer token supplied through an environment variable reference instead of a literal.
+tags:
+  - test-lab
+  - auth
+  - secrets
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/bearer
+  dataField: customers
+  authentication:
+    type: bearer
+    credentials:
+      token: "${LAB_BEARER_TOKEN}"
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/public
+  method: POST
+  headers:
+    Content-Type: application/json

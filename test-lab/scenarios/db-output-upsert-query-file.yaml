@@ -1,0 +1,12 @@
+name: db-output-upsert-query-file
+description: Upsert via external SQL file (ON CONFLICT) inserts the 3 feed customers with their segments.
+pipeline: test-lab/pipelines/db-output-upsert-query-file.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'DBOUT-%'", expected: "3" }
+  - sql_eq: { query: "SELECT segment FROM dest_customers WHERE external_id='DBOUT-001'", expected: "premium" }
+  - sql_eq: { query: "SELECT segment FROM dest_customers WHERE external_id='DBOUT-002'", expected: "standard" }
+  - sql_eq: { query: "SELECT segment FROM dest_customers WHERE external_id='DBOUT-003'", expected: "trial" }
+  - log_not_contains: "panic:"

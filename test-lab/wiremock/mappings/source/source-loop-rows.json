@@ -1,0 +1,10 @@
+{
+  "name": "source-loop-rows",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/loop/rows" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/loop-rows.json"
+  }
+}

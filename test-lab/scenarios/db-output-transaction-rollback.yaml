@@ -1,0 +1,10 @@
+name: db-output-transaction-rollback
+description: transaction=true + onError=fail — the email-conflict row aborts the whole batch; nothing is committed.
+pipeline: test-lab/pipelines/db-output-transaction-rollback.yaml
+expect_status: error
+setup:
+  reset_db: true
+assertions:
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id IN ('DBOUT-100','DBOUT-101','DBOUT-102')", expected: "0" }
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'DBOUT-%'", expected: "0" }
+  - log_not_contains: "panic:"

@@ -1,0 +1,14 @@
+{
+  "name": "source-paginated-nested-cursor-start",
+  "priority": 2,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/paginated/nested-cursor",
+    "queryParameters": { "cursor": { "absent": true } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/paginated/nested-cursor-start.json"
+  }
+}

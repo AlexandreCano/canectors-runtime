@@ -1,0 +1,22 @@
+{
+  "name": "source-state-paginated-page2",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/state-paginated/events",
+    "queryParameters": {
+      "after_id": { "equalTo": "EVT-SEED" },
+      "page": { "equalTo": "2" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "total_pages": 2,
+      "events": [
+        { "event": { "id": "SP-3" }, "name": "page2-a" }
+      ]
+    }
+  }
+}

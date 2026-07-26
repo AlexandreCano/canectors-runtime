@@ -1,0 +1,25 @@
+name: filters-transform-object-error
+version: 1.0.0
+description: toObject on a scalar cannot convert — with the default onError=fail the pipeline errors.
+tags:
+  - test-lab
+  - filters
+  - mapping
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/transform/records
+  dataField: data
+filters:
+  - type: mapping
+    mappings:
+      - source: scalar
+        target: brokenObj
+        transforms:
+          - op: toObject
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  headers:
+    Content-Type: application/json

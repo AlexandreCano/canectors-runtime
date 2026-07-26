@@ -1,0 +1,10 @@
+{
+  "name": "soap-destination-orders-v12-wrong-ct",
+  "priority": 5,
+  "request": { "method": "POST", "urlPath": "/soap/destination/v12" },
+  "response": {
+    "status": 415,
+    "headers": { "Content-Type": "text/plain" },
+    "body": "unsupported content type for SOAP 1.2"
+  }
+}

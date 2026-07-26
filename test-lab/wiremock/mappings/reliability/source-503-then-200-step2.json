@@ -1,0 +1,12 @@
+{
+  "name": "reliability-source-503-then-200-step2",
+  "priority": 1,
+  "scenarioName": "source-503-then-200",
+  "requiredScenarioState": "recovered",
+  "request": { "method": "GET", "urlPath": "/reliability/source/503-then-200" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "records": [ { "id": "RETRY-IN-1", "value": "recovered" } ] }
+  }
+}

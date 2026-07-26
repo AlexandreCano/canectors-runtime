@@ -1,0 +1,22 @@
+name: env-subst-missing
+version: 1.0.0
+description: References an environment variable that is not set — startup must fail fast.
+tags:
+  - test-lab
+  - secrets
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/orders
+  dataField: orders
+  authentication:
+    type: bearer
+    credentials:
+      token: "${LAB_TOKEN_NEVER_SET}"
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/public
+  method: POST
+  headers:
+    Content-Type: application/json

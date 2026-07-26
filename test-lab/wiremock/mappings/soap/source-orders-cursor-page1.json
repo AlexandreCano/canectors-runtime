@@ -1,0 +1,13 @@
+{
+  "name": "soap-source-orders-cursor-page1",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/soap/orders/cursor"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "text/xml; charset=utf-8" },
+    "body": "<Envelope><Body><ListOrdersPageResponse><NextCursor>SOAP-CUR-2</NextCursor><Orders><Order><id>SOAP-P1-A</id></Order><Order><id>SOAP-P1-B</id></Order></Orders></ListOrdersPageResponse></Body></Envelope>"
+  }
+}

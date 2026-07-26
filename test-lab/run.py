@@ -159,6 +159,37 @@ def reset_database() -> None:
         raise RuntimeError(f"db reset failed: {proc.stderr}")
 
 
+def mysql_query(query: str) -> str:
+    """Run a SQL query against the lab MySQL and return the single-cell result."""
+    proc = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE_FILE),
+            "exec",
+            "-T",
+            "mysql",
+            "mysql",
+            "-N",
+            "-B",
+            "-u",
+            "cannectors_test",
+            "-pcannectors_test",
+            "cannectors_test",
+            "-e",
+            query,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"mysql query failed: {proc.stderr.strip()}")
+    # The client prints a password warning on stderr; stdout holds the value.
+    return proc.stdout.strip()
+
+
 def psql_query(query: str) -> str:
     """Run a SQL query and return the single-cell result as a stripped string."""
     proc = subprocess.run(
@@ -191,20 +222,30 @@ def psql_query(query: str) -> str:
 # ---------- pipeline execution ----------------------------------------------
 
 
-def run_pipeline_once(pipeline: Path, timeout: int = 30) -> Path:
-    """Run a pipeline via the existing helper script and return the log file path."""
+def run_pipeline_once(
+    pipeline: Path, timeout: int = 30, env: dict[str, Any] | None = None
+) -> Path:
+    """Run a pipeline via the existing helper script and return the log file path.
+
+    `env` entries are added to the pipeline process environment, which lets
+    scenarios exercise ${VAR} substitution and connectionStringRef.
+    """
     log_file = Path(
         subprocess.run(
             ["mktemp"], capture_output=True, text=True, check=True
         ).stdout.strip()
     )
     helper = SCRIPTS_DIR / "run-pipeline-once.sh"
+    run_env = None
+    if env:
+        run_env = {**os.environ, **{k: str(v) for k, v in env.items()}}
     with log_file.open("w") as f:
         subprocess.run(
             ["bash", str(helper), str(pipeline), str(timeout)],
             stdout=f,
             stderr=subprocess.STDOUT,
             check=False,
+            env=run_env,
         )
     return log_file
 
@@ -316,6 +357,16 @@ def evaluate_assertion(idx: int, spec: dict[str, Any], log_file: Path) -> Assert
             ok=actual == expected,
             detail=f"expected={expected!r}, actual={actual!r}",
         )
+    if "mysql_eq" in spec:
+        params = spec["mysql_eq"]
+        query = params["query"]
+        expected = str(params["expected"])
+        actual = mysql_query(query)
+        return AssertionResult(
+            label=f"mysql_eq {shlex.quote(query)}",
+            ok=actual == expected,
+            detail=f"expected={expected!r}, actual={actual!r}",
+        )
     if "log_contains" in spec:
         needle = spec["log_contains"]
         text = log_file.read_text()
@@ -395,7 +446,7 @@ def run_scenario(path: Path) -> ScenarioResult:
     pipeline_id = yaml.safe_load(pipeline_path.read_text())["name"]
     timeout = int(spec.get("timeout", 30))
 
-    log_file = run_pipeline_once(pipeline_path, timeout=timeout)
+    log_file = run_pipeline_once(pipeline_path, timeout=timeout, env=spec.get("env"))
     result.log_path = log_file
     result.pipeline_status = parse_pipeline_status(log_file, pipeline_id)
 

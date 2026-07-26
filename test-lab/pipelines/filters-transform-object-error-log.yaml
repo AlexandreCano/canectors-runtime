@@ -1,0 +1,26 @@
+name: filters-transform-object-error-log
+version: 1.0.0
+description: Same failing toObject but the mapping filter uses onError=log, so the pipeline keeps going.
+tags:
+  - test-lab
+  - filters
+  - mapping
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/transform/records
+  dataField: data
+filters:
+  - type: mapping
+    onError: log
+    mappings:
+      - source: scalar
+        target: brokenObj
+        transforms:
+          - op: toObject
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  headers:
+    Content-Type: application/json

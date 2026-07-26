@@ -1,0 +1,25 @@
+name: auth-negative-api-key-wrong
+version: 1.0.0
+description: Negative — wrong API key on the source; 401 and the pipeline fails.
+tags:
+  - test-lab
+  - auth
+  - negative
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/api-key-header
+  dataField: customers
+  authentication:
+    type: api-key
+    credentials:
+      key: wrong-api-key
+      location: header
+      headerName: X-API-Key
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/public
+  method: POST
+  headers:
+    Content-Type: application/json

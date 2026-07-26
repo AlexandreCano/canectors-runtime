@@ -1,0 +1,31 @@
+name: pagination-cursor-numeric
+description: >
+  Cursor pagination with a NUMERIC next_cursor. A JSON number cursor is valid;
+  the input must follow it exactly like a string cursor and fetch all 3 pages.
+pipeline: test-lab/pipelines/pagination-cursor-numeric.yaml
+expect_status: success
+assertions:
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/numeric-cursor
+      expected: 3
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/numeric-cursor
+      query: { cursor: "1002" }
+      expected: 1
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/numeric-cursor
+      query: { cursor: "1003" }
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "NUM-101"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "NUM-106"
+      expected: 1

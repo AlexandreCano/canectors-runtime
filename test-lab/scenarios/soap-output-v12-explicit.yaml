@@ -1,0 +1,11 @@
+name: soap-output-v12-explicit
+description: An explicit soapVersion 1.2 output sends the SOAP 1.2 content type (stub only matches application/soap+xml).
+pipeline: test-lab/pipelines/soap-output-v12-explicit.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge: { method: POST, path: /soap/destination/v12, status: 200, expected: 1 }
+  # the 415 catch-all fires only if the content type were wrong
+  - http_count_eq_zero: { method: POST, path: /soap/destination/v12, status: 415 }
+  - http_count_ge: { method: POST, path: /soap/destination/v12, body_contains: "SubmitOrder", expected: 1 }

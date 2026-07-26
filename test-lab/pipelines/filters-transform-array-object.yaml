@@ -1,0 +1,35 @@
+name: filters-transform-array-object
+version: 1.0.0
+description: mapping transforms toArray (scalar wrapped, array passthrough) and toObject (map passthrough).
+tags:
+  - test-lab
+  - filters
+  - mapping
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/transform/records
+  dataField: data
+filters:
+  - type: mapping
+    mappings:
+      - source: id
+        target: id
+      - source: single
+        target: singleArr
+        transforms:
+          - op: toArray
+      - source: list
+        target: listArr
+        transforms:
+          - op: toArray
+      - source: nested
+        target: nestedObj
+        transforms:
+          - op: toObject
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  headers:
+    Content-Type: application/json

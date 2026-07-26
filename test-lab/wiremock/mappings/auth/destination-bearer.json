@@ -1,0 +1,14 @@
+{
+  "name": "auth-destination-bearer",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/auth/destination/bearer",
+    "headers": { "Authorization": { "equalTo": "Bearer lab-destination-bearer" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "ok": true }
+  }
+}

@@ -1,0 +1,20 @@
+name: db-input-sqlite
+version: 1.0.0
+description: Database input against the sqlite driver (pure-Go modernc driver), reading a seeded lab file.
+tags:
+  - test-lab
+  - database
+  - sqlite
+input:
+  type: database
+  schedule: "* * * * * *"
+  driver: sqlite
+  connectionString: "file:./test-lab/tmp/lab.db"
+  query: "SELECT external_id, email, segment FROM lab_customers ORDER BY external_id"
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/sqlite/customers
+  method: POST
+  headers:
+    Content-Type: application/json
