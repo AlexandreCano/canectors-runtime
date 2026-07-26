@@ -57,8 +57,10 @@ jobs:
           docker compose -f test-lab/docker-compose.yml exec -T mysql \
             mysqladmin ping -h 127.0.0.1 -u cannectors_test -pcannectors_test --silent
 
-      # On push/PR the full declarative suite runs (deterministic, ~30s): every
-      # input/filter/output option, pagination edge cases, and enrichment filters.
+      # On push/PR the full declarative suite runs: every input/filter/output
+      # option, pagination edge cases, and enrichment filters. Deterministic but
+      # not fast — the 307 scenarios run sequentially, each spawning the CLI and
+      # querying the lab databases (~5 min locally, budget more on a runner).
       # A manual workflow_dispatch can still pass a comma-separated SCENARIO filter
       # to run a focused subset. Webhook scenarios stay out (long-running listeners,
       # covered by verify-webhook.sh).

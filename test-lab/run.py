@@ -169,13 +169,16 @@ def mysql_query(query: str) -> str:
             str(COMPOSE_FILE),
             "exec",
             "-T",
+            # MYSQL_PWD keeps the password out of the container's argv (and out
+            # of the client's "password on the command line" warning).
+            "-e",
+            "MYSQL_PWD=cannectors_test",
             "mysql",
             "mysql",
             "-N",
             "-B",
             "-u",
             "cannectors_test",
-            "-pcannectors_test",
             "cannectors_test",
             "-e",
             query,
@@ -186,7 +189,6 @@ def mysql_query(query: str) -> str:
     )
     if proc.returncode != 0:
         raise RuntimeError(f"mysql query failed: {proc.stderr.strip()}")
-    # The client prints a password warning on stderr; stdout holds the value.
     return proc.stdout.strip()
 
 
