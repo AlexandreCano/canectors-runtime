@@ -246,6 +246,21 @@
 							"$ref": "common-schema.json#/$defs/retryConfig"
 						}
 					}
+				},
+				{
+					"description": "Without a body or bodyTemplateFile the keys are the only way to parameterize the call per record, so at least one key is required. Mirrors the runtime check in NewHTTPCallFromConfig.",
+					"if": {
+						"allOf": [
+							{ "not": { "required": ["body"] } },
+							{ "not": { "required": ["bodyTemplateFile"] } }
+						]
+					},
+					"then": {
+						"required": ["keys"],
+						"properties": {
+							"keys": { "minItems": 1 }
+						}
+					}
 				}
 			]
 		},
