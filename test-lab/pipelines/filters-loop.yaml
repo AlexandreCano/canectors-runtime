@@ -1,0 +1,41 @@
+name: filters-loop
+version: 1.0.0
+description: loop filter — iterate cells[] per row, extract columns into flat record fields, then drop cells.
+tags:
+  - test-lab
+  - filters
+  - loop
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/loop/rows
+  dataField: data
+filters:
+  - type: loop
+    field: cells
+    itemName: cell
+    filters:
+      - type: condition
+        expression: cell.columnId == 1
+        then:
+          - type: mapping
+            mappings:
+              - source: cell.displayValue
+                target: record.eventId
+      - type: condition
+        expression: cell.columnId == 3
+        then:
+          - type: mapping
+            mappings:
+              - source: cell.displayValue
+                target: record.customerName
+  - type: remove
+    target:
+      - cells
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  requestMode: single
+  headers:
+    Content-Type: application/json

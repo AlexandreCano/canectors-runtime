@@ -1,0 +1,11 @@
+{
+  "data": [
+    {
+      "id": "TR-1",
+      "single": "solo",
+      "list": ["alpha", "beta"],
+      "nested": { "zone": "eu-west" },
+      "scalar": "not-an-object"
+    }
+  ]
+}

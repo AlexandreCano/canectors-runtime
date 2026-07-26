@@ -1,0 +1,10 @@
+{
+  "name": "enrichment-profile-put-only-405",
+  "priority": 5,
+  "request": { "urlPath": "/enrichment/put/profile" },
+  "response": {
+    "status": 405,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "method not allowed, PUT expected" }
+  }
+}

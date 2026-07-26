@@ -1,0 +1,13 @@
+{
+  "name": "auth-destination-bearer-401",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/auth/destination/bearer"
+  },
+  "response": {
+    "status": 401,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "missing or invalid credentials on destination" }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "destination-mysql-input",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/destination/mysql/customers" },
+  "response": {
+    "status": 202,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "accepted": true }
+  }
+}

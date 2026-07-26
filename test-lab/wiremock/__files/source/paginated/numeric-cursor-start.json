@@ -1,0 +1,7 @@
+{
+  "next_cursor": 1002,
+  "data": [
+    { "id": "NUM-101", "sku": "SKU-101" },
+    { "id": "NUM-102", "sku": "SKU-102" }
+  ]
+}

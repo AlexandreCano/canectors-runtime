@@ -1,0 +1,15 @@
+name: http-call-query-replace
+description: http_call GET /enrichment/segments?customerId=... replaces overlapping fields; cache dedups to 3 GETs.
+pipeline: test-lab/pipelines/http-call-query-replace.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: GET, path: /enrichment/segments, expected: 3 }
+  - http_count_eq: { method: GET, path: /enrichment/segments, query: { customerId: CUST-001 }, expected: 1 }
+  - http_count_eq: { method: GET, path: /enrichment/segments, query: { customerId: CUST-002 }, expected: 1 }
+  - http_count_eq: { method: GET, path: /enrichment/segments, query: { customerId: CUST-999 }, expected: 1 }
+  - http_count_eq: { method: POST, path: /destination/enrichment/http-replace, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-replace, body_contains: "premium", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-replace, body_contains: "ORD-A1", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-replace, body_contains: "ORD-A5", expected: 1 }

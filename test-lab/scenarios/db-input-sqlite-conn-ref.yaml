@@ -1,0 +1,13 @@
+name: db-input-sqlite-conn-ref
+description: connectionStringRef resolves the DSN from an environment variable at runtime.
+pipeline: test-lab/pipelines/db-input-sqlite-conn-ref.yaml
+expect_status: success
+setup:
+  reset_db: false
+  commands:
+    - "python3 test-lab/scripts/seed-sqlite.py test-lab/tmp/lab-ref.db"
+env:
+  LAB_SQLITE_URL: "file:./test-lab/tmp/lab-ref.db"
+assertions:
+  - http_count_eq: { method: POST, path: /destination/sqlite/customers, status: 202, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/sqlite/customers, body_contains: "SQL-002", expected: 1 }

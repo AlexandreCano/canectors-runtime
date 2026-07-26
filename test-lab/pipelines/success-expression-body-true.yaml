@@ -1,0 +1,19 @@
+name: success-expression-body-true
+version: 1.0.0
+description: successCondition coverage — success-expression-body-true
+tags:
+  - test-lab
+  - success-condition
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/customers
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/success/accepted-body
+  method: POST
+  headers:
+    Content-Type: application/json
+  success:
+    expression: 'body.result.status == "ACCEPTED"'

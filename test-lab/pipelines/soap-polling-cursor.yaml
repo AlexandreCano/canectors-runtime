@@ -1,0 +1,30 @@
+name: soap-polling-cursor
+version: 1.0.0
+description: SOAP cursor pagination — the cursor is injected into the XML body and read back from a nested response path.
+tags:
+  - test-lab
+  - soap
+  - pagination
+input:
+  type: soapPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/soap/orders/cursor
+  soapAction: urn:ListOrdersPage
+  operation: ListOrdersPage
+  body: |
+    <m:ListOrdersPage xmlns:m="urn:orders">
+      <m:Cursor>{{ record.pagination.cursor | default('') }}</m:Cursor>
+    </m:ListOrdersPage>
+  dataField: Envelope.Body.ListOrdersPageResponse.Orders.Order
+  pagination:
+    type: cursor
+    param: cursor
+    nextCursorField: Envelope.Body.ListOrdersPageResponse.NextCursor
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/soap/destination/orders
+  method: POST
+  requestMode: batch
+  headers:
+    Content-Type: application/json

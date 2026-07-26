@@ -18,9 +18,9 @@ env:
 
 jobs:
   test-lab:
-    name: Run E2E test lab (curated CI suite)
+    name: Run E2E test lab (full declarative suite)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -54,14 +54,19 @@ jobs:
           curl -fsS "$WIREMOCK_BASE/__admin/mappings" >/dev/null
           docker compose -f test-lab/docker-compose.yml exec -T postgres \
             pg_isready -U cannectors_test -d cannectors_test
+          docker compose -f test-lab/docker-compose.yml exec -T mysql \
+            mysqladmin ping -h 127.0.0.1 -u cannectors_test -pcannectors_test --silent
 
-      # Curated CI suite: covers HTTP polling → HTTP output, database I/O,
-      # focused auth scenarios, and focused retry/error scenarios. Long or slow scenarios
-      # are excluded from PRs and can be run manually with workflow_dispatch
-      # on a separate filter.
-      - name: Run curated CI scenarios
+      # On push/PR the full declarative suite runs: every input/filter/output
+      # option, pagination edge cases, and enrichment filters. Deterministic but
+      # not fast — the 307 scenarios run sequentially, each spawning the CLI and
+      # querying the lab databases (~5 min locally, budget more on a runner).
+      # A manual workflow_dispatch can still pass a comma-separated SCENARIO filter
+      # to run a focused subset. Webhook scenarios stay out (long-running listeners,
+      # covered by verify-webhook.sh).
+      - name: Run declarative E2E suite
         env:
-          SCENARIO: ${{ github.event.inputs.scenario || 'pagination-page,db-input-basic,db-output-insert,auth-input-bearer,auth-input-api-key-header,auth-negative-bearer-wrong,retry-output-500,retry-input-invalid-json' }}
+          SCENARIO: ${{ github.event.inputs.scenario }}
         run: python3 test-lab/run.py
 
       - name: Dump WireMock request journal on failure
@@ -78,6 +83,7 @@ jobs:
           mkdir -p test-lab-logs
           docker compose -f test-lab/docker-compose.yml logs wiremock > test-lab-logs/wiremock.log || true
           docker compose -f test-lab/docker-compose.yml logs postgres > test-lab-logs/postgres.log || true
+          docker compose -f test-lab/docker-compose.yml logs mysql > test-lab-logs/mysql.log || true
           docker compose -f test-lab/docker-compose.yml exec -T postgres \
             pg_dump -U cannectors_test -d cannectors_test --schema-only > test-lab-logs/db-schema.sql || true
           docker compose -f test-lab/docker-compose.yml exec -T postgres \

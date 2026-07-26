@@ -1,0 +1,32 @@
+name: soap-call-merge-keys
+version: 1.0.0
+description: soap_call with mergeStrategy merge plus a header key extracted from the record.
+tags:
+  - test-lab
+  - soap_call
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/soap-call/orders
+  dataField: orders
+filters:
+  - type: soap_call
+    endpoint: http://localhost:18080/soap/enrich/customer
+    soapAction: urn:GetCustomer
+    operation: GetCustomer
+    keys:
+      - field: customerId
+        paramType: header
+        paramName: X-Customer-Id
+    body: |
+      <m:GetCustomer xmlns:m="urn:customers">
+        <m:CustomerId>{{record.customerId}}</m:CustomerId>
+      </m:GetCustomer>
+    dataField: Envelope.Body.GetCustomerResponse.Customer
+    mergeStrategy: merge
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  headers:
+    Content-Type: application/json

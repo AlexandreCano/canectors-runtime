@@ -1,0 +1,20 @@
+name: success-both-and
+version: 1.0.0
+description: successCondition coverage — success-both-and
+tags:
+  - test-lab
+  - success-condition
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/customers
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/success/failed-body
+  method: POST
+  headers:
+    Content-Type: application/json
+  success:
+    statusCodes: [200]
+    expression: 'body.result.status == "ACCEPTED"'

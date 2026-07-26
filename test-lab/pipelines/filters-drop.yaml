@@ -1,0 +1,24 @@
+name: filters-drop
+version: 1.0.0
+description: drop filter — inside a condition, drop cancelled orders; paid orders pass through.
+tags:
+  - test-lab
+  - filters
+  - drop
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/drop/orders
+  dataField: data
+filters:
+  - type: condition
+    expression: status == "cancelled"
+    then:
+      - type: drop
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/filter/sink
+  method: POST
+  requestMode: single
+  headers:
+    Content-Type: application/json

@@ -1,0 +1,17 @@
+name: retry-input-503-then-200
+description: The input retries a 503 source and succeeds on the second attempt.
+pipeline: test-lab/pipelines/retry-input-503-then-200.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  # The 503 is served once (WireMock scenario state then advances), so this count is exact.
+  - http_count_eq: { method: GET, path: /reliability/source/503-then-200, status: 503, expected: 1 }
+  # The recovered 200 is steady state; the 1s CRON may fire again before SIGTERM, so use >=.
+  - http_count_ge: { method: GET, path: /reliability/source/503-then-200, status: 200, expected: 1 }
+  # the recovered record reaches the destination
+  - http_count_ge:
+      method: POST
+      path: /reliability/destination/500-then-200
+      body_contains: "RETRY-IN-1"
+      expected: 1

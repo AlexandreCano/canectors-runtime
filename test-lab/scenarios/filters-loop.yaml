@@ -1,0 +1,31 @@
+name: filters-loop
+description: loop iterates cells[] and flattens columns into record fields; cells removed afterwards.
+pipeline: test-lab/pipelines/filters-loop.yaml
+expect_status: success
+assertions:
+  # single mode → one POST per row (2 rows).
+  - http_count_eq:
+      method: POST
+      path: /destination/filter/sink
+      expected: 2
+  # extracted flat fields present.
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "EVT-1"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "Alice"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "Bob"
+      expected: 1
+  # cells array removed from the forwarded payload.
+  - http_count_eq_zero:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "columnId"

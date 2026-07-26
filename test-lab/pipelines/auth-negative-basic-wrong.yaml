@@ -1,0 +1,24 @@
+name: auth-negative-basic-wrong
+version: 1.0.0
+description: Negative — wrong basic password on the source; 401 and the pipeline fails.
+tags:
+  - test-lab
+  - auth
+  - negative
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/basic
+  dataField: customers
+  authentication:
+    type: basic
+    credentials:
+      username: lab-user
+      password: wrong-password
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/public
+  method: POST
+  headers:
+    Content-Type: application/json

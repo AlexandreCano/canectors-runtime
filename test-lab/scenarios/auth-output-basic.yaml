@@ -1,0 +1,14 @@
+name: auth-output-basic
+description: "Output basic auth — the destination receives the base64 Basic header and accepts."
+pipeline: test-lab/pipelines/auth-output-basic.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq:
+      method: POST
+      path: /auth/destination/basic
+      headers: { Authorization: "Basic bGFiLXVzZXI6bGFiLXBhc3M=" }
+      status: 200
+      expected: 1
+  - http_count_eq_zero: { method: POST, path: /auth/destination/basic, status: 401 }

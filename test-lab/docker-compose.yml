@@ -20,6 +20,28 @@ services:
       retries: 20
       start_period: 5s
 
+  # MySQL exists to cover the mysql driver end to end. It is seeded once at
+  # startup and only read by the mysql scenarios, so it stays small.
+  mysql:
+    image: mysql:8.4
+    container_name: cannectors-test-lab-mysql
+    environment:
+      MYSQL_DATABASE: cannectors_test
+      MYSQL_USER: cannectors_test
+      MYSQL_PASSWORD: cannectors_test
+      MYSQL_ROOT_PASSWORD: cannectors_root
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u cannectors_test -pcannectors_test --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
   wiremock:
     image: wiremock/wiremock:3.9.2
     container_name: cannectors-test-lab-wiremock
@@ -40,3 +62,4 @@ services:
 
 volumes:
   postgres-data:
+  mysql-data:

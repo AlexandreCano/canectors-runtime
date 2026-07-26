@@ -1,0 +1,12 @@
+name: http-call-method-put
+description: http_call issues a PUT (beyond GET/POST); the stub 405s anything else.
+pipeline: test-lab/pipelines/http-call-method-put.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge: { method: PUT, path: /enrichment/put/profile, status: 200, expected: 1 }
+  - http_count_eq_zero: { path: /enrichment/put/profile, status: 405 }
+  # the request body template was rendered per record
+  - http_count_ge: { method: PUT, path: /enrichment/put/profile, body_contains: "CUST-001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "yes-via-put", expected: 1 }

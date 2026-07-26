@@ -1,0 +1,9 @@
+name: success-status-codes-reject
+description: success.statusCodes [201] rejects the 200 the destination returns — pipeline fails.
+pipeline: test-lab/pipelines/success-status-codes-reject.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/accepted-body, status: 200, expected: 1 }
+  - log_not_contains: "panic:"

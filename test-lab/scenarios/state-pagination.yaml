@@ -1,0 +1,28 @@
+name: state-pagination
+description: >
+  With a pre-seeded state file, every paginated request must carry BOTH the state
+  query param (after_id) and the page param. The stubs only match when both are present.
+pipeline: test-lab/pipelines/state-pagination.yaml
+expect_status: success
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "printf '{\"pipelineId\":\"state-pagination\",\"lastId\":\"EVT-SEED\",\"updatedAt\":\"2026-07-26T00:00:00Z\"}' > test-lab/state/state-pagination.json"
+assertions:
+  # both pages carry the persisted state param
+  - http_count_ge:
+      method: GET
+      path: /source/state-paginated/events
+      query: { after_id: "EVT-SEED", page: "1" }
+      expected: 1
+  - http_count_ge:
+      method: GET
+      path: /source/state-paginated/events
+      query: { after_id: "EVT-SEED", page: "2" }
+      expected: 1
+  # the catch-all that fires when after_id is missing must never be hit
+  - http_count_eq_zero: { method: GET, path: /source/state-paginated/events, status: 400 }
+  # records from both pages reach the destination
+  - http_count_ge: { method: POST, path: /destination/state-paginated/events, body_contains: "SP-1", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/state-paginated/events, body_contains: "SP-3", expected: 1 }

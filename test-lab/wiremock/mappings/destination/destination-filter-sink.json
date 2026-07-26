@@ -1,0 +1,10 @@
+{
+  "name": "destination-filter-sink",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/destination/filter/sink" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "ok": true }
+  }
+}

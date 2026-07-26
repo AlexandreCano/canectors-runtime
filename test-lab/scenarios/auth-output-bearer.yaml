@@ -1,0 +1,14 @@
+name: auth-output-bearer
+description: "Output bearer auth — the destination receives an Authorization Bearer header and accepts."
+pipeline: test-lab/pipelines/auth-output-bearer.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq:
+      method: POST
+      path: /auth/destination/bearer
+      headers: { Authorization: "Bearer lab-destination-bearer" }
+      status: 200
+      expected: 1
+  - http_count_eq_zero: { method: POST, path: /auth/destination/bearer, status: 401 }

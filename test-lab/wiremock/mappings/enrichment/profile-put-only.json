@@ -1,0 +1,10 @@
+{
+  "name": "enrichment-profile-put-only",
+  "priority": 1,
+  "request": { "method": "PUT", "urlPath": "/enrichment/put/profile" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "profile": { "verified": "yes-via-put" } }
+  }
+}

@@ -1,0 +1,17 @@
+name: http-call-cache-disabled
+description: >
+  With cache.enabled false the 5 orders produce 5 enrichment calls — including 3 for the
+  repeated CUST-001 — instead of the 3 deduplicated calls the cached variants make.
+pipeline: test-lab/pipelines/http-call-cache-disabled.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: GET, path: /enrichment/nocache/segments, expected: 5 }
+  # the repeated customer is called once per record, proving no deduplication
+  - http_count_eq:
+      method: GET
+      path: /enrichment/nocache/segments
+      query: { customerId: CUST-001 }
+      expected: 3
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "nocache-premium", expected: 1 }

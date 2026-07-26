@@ -235,6 +235,14 @@ func runPipeline(_ *cobra.Command, args []string) {
 		fmt.Printf("✓ Configuration loaded successfully (format: %s)\n", result.Format)
 	}
 
+	// Resolve ${VAR} references once, before the pipeline is built, so modules
+	// only ever see resolved values. Runs after schema validation because some
+	// fields (connectionStringRef) are validated against the literal form.
+	if err := config.SubstituteEnvVars(result.Data); err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(ExitValidationError)
+	}
+
 	pipeline, err := config.ConvertToPipeline(result.Data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "✗ Failed to convert configuration: %v\n", err)

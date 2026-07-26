@@ -1,0 +1,10 @@
+name: success-expression-non-json
+description: expression references body but the response is plain text — surfaces an explicit error.
+pipeline: test-lab/pipelines/success-expression-non-json.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/non-json, status: 200, expected: 1 }
+  - log_contains: "not valid JSON"
+  - log_not_contains: "panic:"

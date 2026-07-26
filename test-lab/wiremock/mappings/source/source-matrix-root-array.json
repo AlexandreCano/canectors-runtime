@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-root-array",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/root-array" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": [ { "id": "ROOT-1" }, { "id": "ROOT-2" } ]
+  }
+}

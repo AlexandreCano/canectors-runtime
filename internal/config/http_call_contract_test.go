@@ -97,3 +97,49 @@ func TestSchemaHTTPCall_KeyParamTypeValidated(t *testing.T) {
 		})
 	}
 }
+
+// TestSchemaHTTPCall_KeysRequiredWithoutBody locks the schema to the runtime rule
+// in NewHTTPCallFromConfig: without a body or bodyTemplateFile the keys are the
+// only way to parameterize the call per record, so at least one key is required.
+// Before this, such a config validated fine and then failed on every scheduler tick.
+func TestSchemaHTTPCall_KeysRequiredWithoutBody(t *testing.T) {
+	const key = `"keys":[{"field":"id","paramType":"query","paramName":"id"}]`
+	cases := []struct {
+		name      string
+		filter    string
+		wantValid bool
+	}{
+		{
+			"no keys and no body is rejected",
+			`{"type":"http_call","endpoint":"https://e/x"}`,
+			false,
+		},
+		{
+			"empty keys and no body is rejected",
+			`{"type":"http_call","endpoint":"https://e/x","keys":[]}`,
+			false,
+		},
+		{
+			"keys without body is accepted",
+			`{"type":"http_call","endpoint":"https://e/x",` + key + `}`,
+			true,
+		},
+		{
+			"body without keys is accepted",
+			`{"type":"http_call","endpoint":"https://e/x","body":"{\"a\":1}"}`,
+			true,
+		},
+		{
+			"bodyTemplateFile without keys is accepted",
+			`{"type":"http_call","endpoint":"https://e/x","bodyTemplateFile":"tpl.json"}`,
+			true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validateFilter(t, tc.filter); got != tc.wantValid {
+				t.Fatalf("validateFilter(%s) = %v, want %v", tc.filter, got, tc.wantValid)
+			}
+		})
+	}
+}

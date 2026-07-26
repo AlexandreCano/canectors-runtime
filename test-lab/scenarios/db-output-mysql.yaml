@@ -1,0 +1,14 @@
+name: db-output-mysql
+description: >
+  The mysql driver writes the HTTP feed into mysql_dest_customers. The pipeline declares
+  canonical $N placeholders; the runtime translates them to ? for mysql.
+pipeline: test-lab/pipelines/db-output-mysql.yaml
+expect_status: success
+setup:
+  reset_db: false
+  commands:
+    - "docker compose -f test-lab/docker-compose.yml exec -T mysql mysql -u cannectors_test -pcannectors_test cannectors_test -e 'TRUNCATE TABLE mysql_dest_customers' 2>/dev/null"
+assertions:
+  - mysql_eq: { query: "SELECT COUNT(*) FROM mysql_dest_customers", expected: "3" }
+  - mysql_eq: { query: "SELECT segment FROM mysql_dest_customers WHERE external_id='DBOUT-001'", expected: "premium" }
+  - mysql_eq: { query: "SELECT email FROM mysql_dest_customers WHERE external_id='DBOUT-002'", expected: "beta@example.test" }

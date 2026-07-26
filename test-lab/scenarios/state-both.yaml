@@ -1,0 +1,18 @@
+name: state-both
+description: With timestamp and id both enabled, the next run replays both query params together.
+pipeline: test-lab/pipelines/state-both.yaml
+expect_status: success
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "printf '{\"pipelineId\":\"state-both\",\"lastTimestamp\":\"2026-01-02T03:04:05Z\",\"lastId\":\"EVT-SEED\",\"updatedAt\":\"2026-01-02T03:04:05Z\"}' > test-lab/state/state-both.json"
+assertions:
+  # both params must appear on the same request
+  - http_count_ge:
+      method: GET
+      path: /source/state/events
+      query: { updated_after: "2026-01-02T03:04:05Z", after_id: "EVT-SEED" }
+      expected: 1
+  - http_count_ge: { method: POST, path: /destination/state/both, body_contains: "EVT-102", expected: 1 }
+  - log_not_contains: "panic:"

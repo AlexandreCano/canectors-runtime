@@ -1,0 +1,10 @@
+{
+  "name": "source-soap-call-orders",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/soap-call/orders" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/soap-call-orders.json"
+  }
+}

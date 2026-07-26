@@ -1,0 +1,16 @@
+name: http-call-path-merge
+description: http_call GET /enrichment/customers/{id} deep-merges profile; cache dedups to 3 GETs; CUST-999 404 (onError=skip) drops ORD-A5.
+pipeline: test-lab/pipelines/http-call-path-merge.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: GET, path_prefix: /enrichment/customers/, expected: 3 }
+  - http_count_eq: { method: GET, path: /enrichment/customers/CUST-001, expected: 1 }
+  - http_count_eq: { method: GET, path: /enrichment/customers/CUST-002, expected: 1 }
+  - http_count_eq: { method: GET, path: /enrichment/customers/CUST-999, expected: 1 }
+  - http_count_eq: { method: POST, path: /destination/enrichment/http-merge, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "gold", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "silver", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "ORD-A1", expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /destination/enrichment/http-merge, body_contains: "ORD-A5" }

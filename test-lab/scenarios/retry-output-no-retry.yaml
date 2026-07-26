@@ -1,0 +1,9 @@
+name: retry-output-no-retry
+description: maxAttempts 0 disables retry entirely — exactly one request is sent.
+pipeline: test-lab/pipelines/retry-output-no-retry.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /reliability/destination/always-500, status: 500, expected: 1 }
+  - log_not_contains: "panic:"

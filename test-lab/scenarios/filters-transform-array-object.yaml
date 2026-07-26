@@ -1,0 +1,14 @@
+name: filters-transform-array-object
+description: toArray wraps a scalar and passes arrays through; toObject passes a nested map through.
+pipeline: test-lab/pipelines/filters-transform-array-object.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/filter/sink, expected: 1 }
+  # scalar "solo" wrapped into a single-element array
+  - http_count_ge: { method: POST, path: /destination/filter/sink, body_contains: '["solo"]', expected: 1 }
+  # existing array passed through unchanged
+  - http_count_ge: { method: POST, path: /destination/filter/sink, body_contains: '["alpha","beta"]', expected: 1 }
+  # nested object passed through by toObject
+  - http_count_ge: { method: POST, path: /destination/filter/sink, body_contains: '"zone":"eu-west"', expected: 1 }

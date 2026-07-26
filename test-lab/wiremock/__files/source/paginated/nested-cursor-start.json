@@ -1,0 +1,7 @@
+{
+  "meta": { "next_cursor": "nested-2" },
+  "data": [
+    { "id": "NEST-101", "sku": "SKU-201" },
+    { "id": "NEST-102", "sku": "SKU-202" }
+  ]
+}

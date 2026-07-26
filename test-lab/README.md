@@ -15,6 +15,7 @@ This directory contains a Docker Compose lab for local integration testing. It i
 | --- | ---: | ---: | --- |
 | WireMock | `18080` | `8080` | Source and destination HTTP stubs |
 | PostgreSQL | `15432` | `5432` | Local database seeded at startup |
+| MySQL | `13306` | `3306` | Covers the `mysql` driver; seeded at startup from `mysql/init/` |
 
 PostgreSQL local credentials:
 
@@ -33,7 +34,7 @@ make test-lab-down
 make test-lab-reset
 ```
 
-`test-lab-up` starts WireMock and PostgreSQL and waits for Compose healthchecks. `test-lab-reset` removes the PostgreSQL volume, recreates both services, reloads WireMock mappings from disk, and resets the WireMock request journal.
+`test-lab-up` starts WireMock, PostgreSQL and MySQL and waits for Compose healthchecks. `test-lab-reset` removes the PostgreSQL volume, recreates both services, reloads WireMock mappings from disk, and resets the WireMock request journal.
 
 Additional helpers:
 
@@ -49,6 +50,7 @@ make test-lab-requests-reset
 docker compose -f test-lab/docker-compose.yml ps
 curl -fsS http://localhost:18080/__admin/mappings
 docker compose -f test-lab/docker-compose.yml exec -T postgres pg_isready -U cannectors_test -d cannectors_test
+docker compose -f test-lab/docker-compose.yml exec -T mysql mysqladmin ping -h 127.0.0.1 -u cannectors_test -pcannectors_test --silent
 ```
 
 ## Source API stubs
@@ -143,6 +145,39 @@ Tables:
 - Reference: `customer_reference`, `product_reference`
 
 The seed data includes nominal rows, nullable fields, pagination and incremental timestamps, missing-reference rows, duplicate destination keys, and rows that can trigger controlled destination check constraint failures.
+
+## MySQL seed data
+
+`mysql/init/001_schema.sql` creates and seeds `mysql_customers` (3 read-only rows) and an
+empty `mysql_dest_customers` for output scenarios. Scenarios that write to it truncate the
+table in `setup.commands` so re-runs stay deterministic. Queries in pipelines always use the
+canonical `$1, $2, …` placeholders — the runtime translates them to `?` for MySQL and SQLite.
+
+## Generated combinatorial layer
+
+Most of the suite is generated. `test-lab/generate-matrix.py` holds a declarative
+matrix — transform ops against each input kind, onMissing strategies, set/remove path
+shapes and value types, condition operators, script bodies, loop scoping, drop, output
+templates, successCondition combinations, HTTP methods x requestMode, pagination
+boundaries, onError per module, transform chains, retry configurations and dataField
+response shapes — and emits one pipeline plus one scenario per cell:
+
+```bash
+test-lab/generate-matrix.py           # (re)write every gen-*.yaml pair
+test-lab/generate-matrix.py --list    # show the cells and per-axis totals
+test-lab/generate-matrix.py --clean   # delete the generated files
+```
+
+Generated files carry a `gen-` prefix and a "GENERATED" header; edit the matrix, not
+the files. Expected values are computed from the documented semantics (see the comments
+in each axis function), so a generated assertion failing means a real defect rather than
+a snapshot drifting. Cells reading the shared fixture use
+`GET /source/matrix/record` and post to `/destination/matrix/sink`.
+
+Two cells deliberately lock a limitation rather than a feature:
+`gen-condition-op-modulo-on-float-fails` (every JSON number is a float64, so expr-lang's
+`%` needs an `int()` cast) and `gen-loop-missing-field-is-noop` (looping an absent field
+is a no-op by design).
 
 ## Scenario pipelines
 
@@ -387,8 +422,27 @@ assertions:
   - sql_eq:
       query: "SELECT COUNT(*) FROM dest_customers"
       expected: "4"
+  - mysql_eq:                     # same, against the MySQL service
+      query: "SELECT COUNT(*) FROM mysql_dest_customers"
+      expected: "3"
   - log_contains: "request timeout"
   - log_not_contains: "panic:"
+env:                              # optional: vars exported to the pipeline process
+  LAB_BEARER_TOKEN: lab-bearer-token
+```
+
+`env:` exists so scenarios can exercise `${VAR}` substitution and
+`connectionStringRef` without leaking values into the YAML.
+
+Scenarios that need a pre-existing state file (to assert the state
+round-trip deterministically in a single run) write it in
+`setup.commands`, e.g.:
+
+```yaml
+setup:
+  reset_state: true
+  commands:
+    - "printf '{\"pipelineId\":\"state-id\",\"lastId\":\"EVT-SEED\",\"updatedAt\":\"2026-01-02T03:04:05Z\"}' > test-lab/state/state-id.json"
 ```
 
 #### Adding a CI-safe scenario
@@ -407,14 +461,15 @@ CI runs a curated subset (see below). To make a scenario CI-safe:
 
 ### CI workflow (story 23.4)
 
-`.github/workflows/test-lab.yml` runs a curated subset of scenarios on every
+`.github/workflows/test-lab.yml` runs the full declarative suite on every
 push and pull request to `main` / `develop`:
 
 - builds the CLI
-- starts WireMock + PostgreSQL via Docker Compose with healthchecks
-- runs `python3 test-lab/run.py` filtered by a `SCENARIO=...` allowlist
+- starts WireMock + PostgreSQL + MySQL via Docker Compose with healthchecks
+- runs `python3 test-lab/run.py` with no filter (every `scenarios/*.yaml`,
+  deterministic, ~30s)
 - supports manual `workflow_dispatch` runs with a custom comma-separated
-  scenario filter for long or focused suites
+  `SCENARIO` filter for focused subsets
 - on failure, dumps the WireMock journal, the WireMock mappings, the
   container logs and the PostgreSQL row counts as workflow artifacts under
   `test-lab-logs/`

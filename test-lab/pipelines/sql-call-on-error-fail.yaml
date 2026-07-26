@@ -1,0 +1,27 @@
+name: sql-call-on-error-fail
+version: 1.0.0
+description: sql_call against a missing table with the default onError=fail — the pipeline errors.
+tags:
+  - test-lab
+  - sql_call
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/enrichment/orders
+  dataField: orders
+filters:
+  - type: sql_call
+
+    connectionString: postgres://cannectors_test:cannectors_test@localhost:15432/cannectors_test?sslmode=disable
+    driver: postgres
+    query: |
+      SELECT segment FROM table_that_does_not_exist WHERE external_id = $1 LIMIT 1
+    parameters:
+      - record.customer.id
+    mergeStrategy: merge
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/enrichment/merge
+  method: POST
+  headers:
+    Content-Type: application/json

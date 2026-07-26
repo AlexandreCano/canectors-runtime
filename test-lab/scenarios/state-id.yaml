@@ -1,0 +1,17 @@
+name: state-id
+description: A persisted lastId is replayed as the after_id query param on the next run.
+pipeline: test-lab/pipelines/state-id.yaml
+expect_status: success
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "printf '{\"pipelineId\":\"state-id\",\"lastId\":\"EVT-SEED\",\"updatedAt\":\"2026-01-02T03:04:05Z\"}' > test-lab/state/state-id.json"
+assertions:
+  - http_count_ge:
+      method: GET
+      path: /source/state/events
+      query: { after_id: "EVT-SEED" }
+      expected: 1
+  - http_count_ge: { method: POST, path: /destination/state/id, body_contains: "EVT-102", expected: 1 }
+  - log_not_contains: "panic:"

@@ -1,0 +1,7 @@
+{
+  "data": [
+    { "id": "ORD-A", "status": "paid" },
+    { "id": "ORD-B", "status": "cancelled" },
+    { "id": "ORD-C", "status": "paid" }
+  ]
+}

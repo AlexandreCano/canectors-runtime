@@ -1,0 +1,14 @@
+{
+  "name": "source-paginated-numeric-cursor-1003",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/paginated/numeric-cursor",
+    "queryParameters": { "cursor": { "equalTo": "1003" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/paginated/numeric-cursor-1003.json"
+  }
+}

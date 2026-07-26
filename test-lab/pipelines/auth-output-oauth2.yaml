@@ -1,0 +1,24 @@
+name: auth-output-oauth2
+version: 1.0.0
+description: Output authenticated with OAuth2 client credentials.
+tags:
+  - test-lab
+  - auth
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/orders
+  dataField: orders
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/oauth2
+  method: POST
+  headers:
+    Content-Type: application/json
+  authentication:
+    type: oauth2
+    credentials:
+      tokenUrl: http://localhost:18080/auth/oauth2/token
+      clientId: lab-client-id
+      clientSecret: lab-client-secret

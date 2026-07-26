@@ -1,0 +1,8 @@
+name: sql-call-on-error-log
+description: sql_call on a missing table with onError=log keeps the pipeline successful.
+pipeline: test-lab/pipelines/sql-call-on-error-log.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

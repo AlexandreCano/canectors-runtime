@@ -1,0 +1,10 @@
+{
+  "name": "source-transform-records",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/transform/records" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/transform-records.json"
+  }
+}

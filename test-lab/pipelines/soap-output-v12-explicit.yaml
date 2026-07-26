@@ -1,0 +1,23 @@
+name: soap-output-v12-explicit
+version: 1.0.0
+description: soapRequest output with an explicit soapVersion 1.2 — must use the application/soap+xml content type.
+tags:
+  - test-lab
+  - soap
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/orders
+  dataField: orders
+filters: []
+output:
+  type: soapRequest
+  endpoint: http://localhost:18080/soap/destination/v12
+  soapVersion: "1.2"
+  soapAction: urn:SubmitOrder
+  operation: SubmitOrder
+  requestMode: single
+  body: |
+    <m:SubmitOrder xmlns:m="urn:orders">
+      <m:Id>{{ record.id }}</m:Id>
+    </m:SubmitOrder>

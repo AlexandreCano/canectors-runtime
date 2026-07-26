@@ -1,0 +1,32 @@
+name: http-call-on-error-fail
+version: 1.0.0
+description: http_call with the default onError=fail — the 404 lookup aborts the pipeline.
+tags:
+  - test-lab
+  - http_call
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/enrichment/orders
+  dataField: orders
+filters:
+  - type: http_call
+    endpoint: http://localhost:18080/enrichment/customers/{customerId}
+    method: GET
+    keys:
+      - field: customer.id
+        paramType: path
+        paramName: customerId
+    dataField: profile
+    mergeStrategy: merge
+    cache:
+      enabled: true
+      maxSize: 100
+      ttlSeconds: 60
+      key: "{{record.customer.id}}"
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/enrichment/http-merge
+  method: POST
+  headers:
+    Content-Type: application/json

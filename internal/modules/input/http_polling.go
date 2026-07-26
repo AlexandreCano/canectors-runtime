@@ -326,7 +326,7 @@ func (h *HTTPPolling) parseResponse(body []byte) ([]map[string]any, error) {
 
 // extractDataFromField extracts array data from a specific field in the response object
 func (h *HTTPPolling) extractDataFromField(obj map[string]any, field string) ([]map[string]any, error) {
-	data, ok := obj[field]
+	data, ok := resolvePath(obj, field)
 	if !ok {
 		return nil, fmt.Errorf("%w: field '%s' not found", ErrInvalidDataField, field)
 	}

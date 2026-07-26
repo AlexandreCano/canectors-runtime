@@ -1,0 +1,13 @@
+name: db-input-sqlite
+description: The sqlite driver reads a seeded lab database file and forwards the 3 rows.
+pipeline: test-lab/pipelines/db-input-sqlite.yaml
+expect_status: success
+setup:
+  reset_db: false
+  commands:
+    - "python3 test-lab/scripts/seed-sqlite.py test-lab/tmp/lab.db"
+assertions:
+  - http_count_eq: { method: POST, path: /destination/sqlite/customers, status: 202, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/sqlite/customers, body_contains: "SQL-001", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/sqlite/customers, body_contains: "SQL-003", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/sqlite/customers, body_contains: "sqlite.one@example.test", expected: 1 }

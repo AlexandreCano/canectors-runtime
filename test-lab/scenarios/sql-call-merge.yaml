@@ -1,0 +1,12 @@
+name: sql-call-merge
+description: sql_call deep-merges customer_reference into each order; the no-match order keeps its original fields.
+pipeline: test-lab/pipelines/sql-call-merge.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/enrichment/merge, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/merge, body_contains: "premium", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/merge, body_contains: "enterprise", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/merge, body_contains: "north-america", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/merge, body_contains: "ORD-A5", expected: 1 }

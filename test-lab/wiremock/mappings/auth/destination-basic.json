@@ -1,0 +1,14 @@
+{
+  "name": "auth-destination-basic",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/auth/destination/basic",
+    "headers": { "Authorization": { "equalTo": "Basic bGFiLXVzZXI6bGFiLXBhc3M=" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "ok": true }
+  }
+}

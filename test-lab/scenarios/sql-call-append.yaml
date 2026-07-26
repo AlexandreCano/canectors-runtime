@@ -1,0 +1,12 @@
+name: sql-call-append
+description: sql_call appends product_reference rows under 'reference' per line; unknown sku yields an empty reference.
+pipeline: test-lab/pipelines/sql-call-append.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  - http_count_eq: { method: POST, path: /destination/enrichment/append, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/append, body_contains: "Local Widget", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/append, body_contains: "Enterprise Gadget", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/append, body_contains: "gadgets", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/append, body_contains: "L-4", expected: 1 }

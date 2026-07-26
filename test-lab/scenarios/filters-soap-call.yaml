@@ -1,0 +1,27 @@
+name: filters-soap-call
+description: soap_call enriches each order via SOAP lookup; enriched fields appended under customer.
+pipeline: test-lab/pipelines/filters-soap-call.yaml
+expect_status: success
+assertions:
+  # two SOAP lookups, one per distinct customerId.
+  - http_count_eq:
+      method: POST
+      path: /soap/enrich/customer
+      body_contains: "CUST-001"
+      expected: 1
+  - http_count_eq:
+      method: POST
+      path: /soap/enrich/customer
+      body_contains: "CUST-002"
+      expected: 1
+  # enriched batch forwarded with SOAP-derived fields.
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "Ada Lovelace"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/filter/sink
+      body_contains: "Grace Hopper"
+      expected: 1

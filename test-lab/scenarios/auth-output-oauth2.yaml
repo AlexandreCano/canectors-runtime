@@ -1,0 +1,21 @@
+name: auth-output-oauth2
+description: Output OAuth2 client credentials — token fetched, then the destination accepts the bearer token.
+pipeline: test-lab/pipelines/auth-output-oauth2.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  # token endpoint hit with client credentials
+  - http_count_ge:
+      method: POST
+      path: /auth/oauth2/token
+      body_contains: "grant_type=client_credentials"
+      expected: 1
+  # destination receives the issued access token
+  - http_count_eq:
+      method: POST
+      path: /auth/destination/oauth2
+      headers: { Authorization: "Bearer lab-oauth2-access-token" }
+      status: 200
+      expected: 1
+  - http_count_eq_zero: { method: POST, path: /auth/destination/oauth2, status: 401 }

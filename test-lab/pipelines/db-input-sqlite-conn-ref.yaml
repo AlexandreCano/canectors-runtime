@@ -1,0 +1,20 @@
+name: db-input-sqlite-conn-ref
+version: 1.0.0
+description: Same sqlite read but the DSN comes from a connectionStringRef env reference.
+tags:
+  - test-lab
+  - database
+  - sqlite
+input:
+  type: database
+  schedule: "* * * * * *"
+  driver: sqlite
+  connectionStringRef: "${LAB_SQLITE_URL}"
+  query: "SELECT external_id, email, segment FROM lab_customers ORDER BY external_id"
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/sqlite/customers
+  method: POST
+  headers:
+    Content-Type: application/json

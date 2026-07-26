@@ -1,0 +1,22 @@
+name: retry-output-no-retry
+version: 1.0.0
+description: maxAttempts 0 disables retry — a single request is made before failing.
+tags:
+  - test-lab
+  - retry
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/reliability/source/records
+  dataField: records
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/reliability/destination/always-500
+  method: POST
+  headers:
+    Content-Type: application/json
+  retry:
+    maxAttempts: 0
+    delayMs: 50
+    retryableStatusCodes: [500]

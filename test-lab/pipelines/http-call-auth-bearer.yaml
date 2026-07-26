@@ -1,0 +1,35 @@
+name: http-call-auth-bearer
+version: 1.0.0
+description: http_call enrichment authenticated with a bearer token (only basic was covered before).
+tags:
+  - test-lab
+  - http_call
+  - auth
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/enrichment/orders
+  dataField: orders
+filters:
+  - type: http_call
+    endpoint: http://localhost:18080/enrichment/bearer/profile
+    method: GET
+    keys:
+      - field: customer.id
+        paramType: query
+        paramName: customerId
+    dataField: profile
+    mergeStrategy: merge
+    authentication:
+      type: bearer
+      credentials:
+        token: lab-enrichment-bearer
+    cache:
+      enabled: true
+      key: "{{record.customer.id}}"
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/enrichment/http-merge
+  method: POST
+  headers:
+    Content-Type: application/json

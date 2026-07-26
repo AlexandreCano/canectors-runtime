@@ -1,0 +1,13 @@
+name: filters-set-remove
+description: set writes nested routing.bucket/meta.processed; remove strips card.cvv, card.number and deprecatedField.
+pipeline: test-lab/pipelines/filters-set-remove.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/filters/set-remove, expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/set-remove, body_contains: "routing", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filters/set-remove, body_contains: "processed", expected: 1 }
+  - http_count_eq_zero: { method: POST, path: /destination/filters/set-remove, body_contains: "4111111111111111" }
+  - http_count_eq_zero: { method: POST, path: /destination/filters/set-remove, body_contains: "4222222222222222" }
+  - http_count_eq_zero: { method: POST, path: /destination/filters/set-remove, body_contains: "drop-me" }

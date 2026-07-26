@@ -1,0 +1,8 @@
+name: filters-transform-object-error-log
+description: The same failing toObject with onError=log keeps the pipeline successful.
+pipeline: test-lab/pipelines/filters-transform-object-error-log.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

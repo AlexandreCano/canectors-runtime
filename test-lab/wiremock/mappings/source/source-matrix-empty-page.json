@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-empty-page",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/empty-page" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "total_pages": 0, "data": [] }
+  }
+}

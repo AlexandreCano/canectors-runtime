@@ -1,0 +1,9 @@
+name: success-expression-body-false
+description: success.expression false on a 200 response — the output is treated as failed.
+pipeline: test-lab/pipelines/success-expression-body-false.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: POST, path: /destination/success/failed-body, status: 200, expected: 1 }
+  - log_not_contains: "panic:"

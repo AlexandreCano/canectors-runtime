@@ -1,0 +1,23 @@
+name: pagination-cursor-numeric
+version: 1.0.0
+description: Cursor pagination where the API returns a NUMERIC next_cursor (e.g. 1002). Should paginate all 3 pages.
+tags:
+  - test-lab
+  - pagination
+  - pagination-cursor
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/paginated/numeric-cursor
+  dataField: data
+  pagination:
+    type: cursor
+    param: cursor
+    nextCursorField: next_cursor
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/pagination/inventory
+  method: POST
+  headers:
+    Content-Type: application/json

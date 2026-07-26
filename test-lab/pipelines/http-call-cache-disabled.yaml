@@ -1,0 +1,28 @@
+name: http-call-cache-disabled
+version: 1.0.0
+description: http_call with cache.enabled false — every record triggers its own request, no deduplication.
+tags:
+  - test-lab
+  - http_call
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/enrichment/orders
+  dataField: orders
+filters:
+  - type: http_call
+    endpoint: http://localhost:18080/enrichment/nocache/segments
+    method: GET
+    keys:
+      - field: customer.id
+        paramType: query
+        paramName: customerId
+    mergeStrategy: merge
+    cache:
+      enabled: false
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/enrichment/http-merge
+  method: POST
+  headers:
+    Content-Type: application/json

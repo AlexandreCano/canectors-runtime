@@ -1,0 +1,13 @@
+name: env-subst-missing
+description: An unset ${VAR} aborts at startup with a named error, before any request is sent.
+pipeline: test-lab/pipelines/env-subst-missing.yaml
+# The process exits during startup, so no "execution completed" event is ever logged.
+expect_status: ""
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "unresolved environment variable"
+  - log_contains: "LAB_TOKEN_NEVER_SET"
+  # nothing must reach the network when a secret cannot be resolved
+  - http_count_eq_zero: { method: GET, path: /auth/source/orders }
+  - http_count_eq_zero: { method: POST, path: /auth/destination/public }

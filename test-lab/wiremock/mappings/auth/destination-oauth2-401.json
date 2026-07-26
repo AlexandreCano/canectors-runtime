@@ -1,0 +1,13 @@
+{
+  "name": "auth-destination-oauth2-401",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/auth/destination/oauth2"
+  },
+  "response": {
+    "status": 401,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "missing or invalid credentials on destination" }
+  }
+}

@@ -1,0 +1,15 @@
+name: http-call-auth-bearer
+description: http_call sends a bearer token to the enrichment endpoint and merges the response.
+pipeline: test-lab/pipelines/http-call-auth-bearer.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge:
+      method: GET
+      path: /enrichment/bearer/profile
+      headers: { Authorization: "Bearer lab-enrichment-bearer" }
+      status: 200
+      expected: 1
+  - http_count_eq_zero: { method: GET, path: /enrichment/bearer/profile, status: 401 }
+  - http_count_ge: { method: POST, path: /destination/enrichment/http-merge, body_contains: "level-3", expected: 1 }

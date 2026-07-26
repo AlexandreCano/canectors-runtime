@@ -1,0 +1,26 @@
+name: soap-input-wssecurity
+description: A WS-Security UsernameToken on soapPolling authenticates the source request.
+pipeline: test-lab/pipelines/soap-input-wssecurity.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge:
+      method: POST
+      path: /soap/secure/source/orders
+      body_contains: "lab-soap-user"
+      status: 200
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /soap/secure/source/orders
+      body_contains: "#PasswordText"
+      status: 200
+      expected: 1
+  # the unauthenticated catch-all must never be hit
+  - http_count_eq_zero: { method: POST, path: /soap/secure/source/orders, status: 401 }
+  - http_count_ge:
+      method: POST
+      path: /soap/destination/orders
+      body_contains: "SECURE-IN-1"
+      expected: 1

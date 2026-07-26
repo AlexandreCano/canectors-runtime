@@ -1,0 +1,18 @@
+name: db-output-transaction-skip
+description: >
+  transaction=true + onError=skip does NOT give partial success on PostgreSQL: the first
+  failing statement aborts the transaction (SQLSTATE 25P02), every later record then fails
+  too, the commit fails and nothing is persisted — not even the row that inserted fine.
+  This scenario locks that real behaviour so it cannot change silently.
+pipeline: test-lab/pipelines/db-output-transaction-skip.yaml
+expect_status: error
+setup:
+  reset_db: true
+assertions:
+  # nothing is committed, including DBOUT-100 which succeeded before the conflict
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'DBOUT-%'", expected: "0" }
+  # the conflicting row is reported as skipped...
+  - log_contains: "skipping record due to database error"
+  # ...and the follow-up record dies on the poisoned transaction
+  - log_contains: "current transaction is aborted"
+  - log_not_contains: "panic:"

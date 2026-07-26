@@ -1,0 +1,9 @@
+name: sql-call-on-error-fail
+description: sql_call on a missing table with the default onError=fail aborts the pipeline.
+pipeline: test-lab/pipelines/sql-call-on-error-fail.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq_zero: { method: POST, path: /destination/enrichment/merge }
+  - log_not_contains: "panic:"

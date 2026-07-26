@@ -1,0 +1,10 @@
+{
+  "name": "source-state-paginated-missing-state",
+  "priority": 5,
+  "request": { "method": "GET", "urlPath": "/source/state-paginated/events" },
+  "response": {
+    "status": 400,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "after_id state param missing on a paginated request" }
+  }
+}

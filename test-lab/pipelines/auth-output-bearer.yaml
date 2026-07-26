@@ -1,0 +1,22 @@
+name: auth-output-bearer
+version: 1.0.0
+description: Output authenticated with a bearer token.
+tags:
+  - test-lab
+  - auth
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/source/orders
+  dataField: orders
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/bearer
+  method: POST
+  headers:
+    Content-Type: application/json
+  authentication:
+    type: bearer
+    credentials:
+      token: lab-destination-bearer

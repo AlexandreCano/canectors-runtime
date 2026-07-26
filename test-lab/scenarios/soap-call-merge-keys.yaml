@@ -1,0 +1,15 @@
+name: soap-call-merge-keys
+description: soap_call merges the SOAP result into the record root and sends the header key it extracted.
+pipeline: test-lab/pipelines/soap-call-merge-keys.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge:
+      method: POST
+      path: /soap/enrich/customer
+      headers: { X-Customer-Id: CUST-001 }
+      expected: 1
+  # merge puts the SOAP fields at the record root, alongside the original id
+  - http_count_ge: { method: POST, path: /destination/filter/sink, body_contains: "Ada Lovelace", expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/filter/sink, body_contains: "SO-1", expected: 1 }

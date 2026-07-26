@@ -1,0 +1,26 @@
+name: pagination-cursor-nested
+description: >
+  Cursor pagination where the next cursor is nested (meta.next_cursor). dataField
+  already supports dot-notation, so nextCursorField should too — fetch both pages.
+pipeline: test-lab/pipelines/pagination-cursor-nested.yaml
+expect_status: success
+assertions:
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/nested-cursor
+      expected: 2
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/nested-cursor
+      query: { cursor: "nested-2" }
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "NEST-101"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/inventory
+      body_contains: "NEST-104"
+      expected: 1

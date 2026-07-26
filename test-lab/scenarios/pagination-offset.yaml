@@ -1,0 +1,35 @@
+name: pagination-offset
+description: Offset pagination — 3 pages (offset 0/2/4, limit 2, total 6), all 6 orders forwarded.
+pipeline: test-lab/pipelines/pagination-offset.yaml
+expect_status: success
+assertions:
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/orders
+      query: { offset: "0", limit: "2" }
+      expected: 1
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/orders
+      query: { offset: "2", limit: "2" }
+      expected: 1
+  - http_count_eq:
+      method: GET
+      path: /source/paginated/orders
+      query: { offset: "4", limit: "2" }
+      expected: 1
+  # No fourth page fetched once offset reaches total (6).
+  - http_count_eq_zero:
+      method: GET
+      path: /source/paginated/orders
+      query: { offset: "6" }
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/orders
+      body_contains: "ORD-1001"
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/pagination/orders
+      body_contains: "ORD-1006"
+      expected: 1
