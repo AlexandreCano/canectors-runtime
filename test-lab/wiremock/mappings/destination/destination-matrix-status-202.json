@@ -1,0 +1,10 @@
+{
+  "name": "destination-matrix-status-202",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/destination/matrix/status/202" },
+  "response": {
+    "status": 202,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "code": 202, "state": "done" }
+  }
+}

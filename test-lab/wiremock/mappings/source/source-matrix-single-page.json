@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-single-page",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/single-page" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "total_pages": 1, "data": [ { "id": "SINGLE-1" } ] }
+  }
+}

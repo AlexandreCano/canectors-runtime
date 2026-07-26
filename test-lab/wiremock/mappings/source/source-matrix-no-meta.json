@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-no-meta",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/no-meta" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "data": [ { "id": "NOMETA-1" } ] }
+  }
+}

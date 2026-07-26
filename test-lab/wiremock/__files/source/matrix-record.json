@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "id": "MTX-1",
+      "padded": "  spaced value  ",
+      "mixed": "MiXeD Case",
+      "int_str": "42",
+      "bad_int_str": "not-a-number",
+      "float_str": "98.5",
+      "bool_str": "true",
+      "bad_bool_str": "yes",
+      "csv": "alpha, beta ,gamma",
+      "pipe_list": ["one", "two", "three"],
+      "obj": { "zone": "eu-west" },
+      "date_iso": "2026-03-04T05:06:07Z",
+      "date_only": "2026-03-04",
+      "bad_date": "definitely-not-a-date",
+      "phone": "+33 (1) 23-45-67",
+      "int_val": 7,
+      "float_val": 1.5,
+      "bool_val": true,
+      "null_val": null,
+      "empty_str": "",
+      "nested": { "deep": { "leaf": "found-me" } }
+    }
+  ]
+}

@@ -153,6 +153,32 @@ empty `mysql_dest_customers` for output scenarios. Scenarios that write to it tr
 table in `setup.commands` so re-runs stay deterministic. Queries in pipelines always use the
 canonical `$1, $2, …` placeholders — the runtime translates them to `?` for MySQL and SQLite.
 
+## Generated combinatorial layer
+
+Most of the suite is generated. `test-lab/generate-matrix.py` holds a declarative
+matrix — transform ops against each input kind, onMissing strategies, set/remove path
+shapes and value types, condition operators, script bodies, loop scoping, drop, output
+templates, successCondition combinations, HTTP methods x requestMode, pagination
+boundaries, onError per module, transform chains, retry configurations and dataField
+response shapes — and emits one pipeline plus one scenario per cell:
+
+```bash
+test-lab/generate-matrix.py           # (re)write every gen-*.yaml pair
+test-lab/generate-matrix.py --list    # show the cells and per-axis totals
+test-lab/generate-matrix.py --clean   # delete the generated files
+```
+
+Generated files carry a `gen-` prefix and a "GENERATED" header; edit the matrix, not
+the files. Expected values are computed from the documented semantics (see the comments
+in each axis function), so a generated assertion failing means a real defect rather than
+a snapshot drifting. Cells reading the shared fixture use
+`GET /source/matrix/record` and post to `/destination/matrix/sink`.
+
+Two cells deliberately lock a limitation rather than a feature:
+`gen-condition-op-modulo-on-float-fails` (every JSON number is a float64, so expr-lang's
+`%` needs an `int()` cast) and `gen-loop-missing-field-is-noop` (looping an absent field
+is a no-op by design).
+
 ## Scenario pipelines
 
 Pipelines that exercise the lab live under `test-lab/pipelines/`. Each pipeline targets WireMock at `http://localhost:18080` and PostgreSQL at `localhost:15432` and is validated by the canonical schema.

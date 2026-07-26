@@ -1,0 +1,10 @@
+{
+  "name": "reliability-dest-always-503-retryable",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/reliability/destination/always-503-retryable" },
+  "response": {
+    "status": 503,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "retryable": true, "error": "try again" }
+  }
+}

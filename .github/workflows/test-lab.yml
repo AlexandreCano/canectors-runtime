@@ -18,9 +18,9 @@ env:
 
 jobs:
   test-lab:
-    name: Run E2E test lab (curated CI suite)
+    name: Run E2E test lab (full declarative suite)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code

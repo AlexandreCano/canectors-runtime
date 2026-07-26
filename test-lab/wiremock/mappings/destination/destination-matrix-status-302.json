@@ -1,0 +1,10 @@
+{
+  "name": "destination-matrix-status-302",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/destination/matrix/status/302" },
+  "response": {
+    "status": 302,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "code": 302, "state": "done" }
+  }
+}

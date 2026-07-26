@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-record",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/record" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "source/matrix-record.json"
+  }
+}

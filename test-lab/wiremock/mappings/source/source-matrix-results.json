@@ -1,0 +1,10 @@
+{
+  "name": "source-matrix-results",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/matrix/results" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "results": [ { "id": "SHAPE-results" } ] }
+  }
+}

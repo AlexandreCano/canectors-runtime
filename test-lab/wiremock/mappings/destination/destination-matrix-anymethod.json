@@ -1,0 +1,10 @@
+{
+  "name": "destination-matrix-anymethod",
+  "priority": 1,
+  "request": { "urlPath": "/destination/matrix/anymethod" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "ok": true }
+  }
+}
