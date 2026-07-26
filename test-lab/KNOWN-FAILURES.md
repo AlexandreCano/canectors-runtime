@@ -1,6 +1,6 @@
 # Known gaps surfaced by the E2E suite
 
-**Aucun gap ouvert.** Les 85 scénarios de `scenarios/` passent (`python3 test-lab/run.py`)
+**Aucun gap ouvert.** Les 307 scénarios de `scenarios/` passent (`python3 test-lab/run.py`)
 et `scenarios-pending/` est vide.
 
 Ce fichier sert de journal des écarts trouvés par la couverture E2E, et de convention :
@@ -13,7 +13,9 @@ un scénario décrivant un comportement non implémenté vit dans `scenarios-pen
 
 - **BUG #1 — curseur numérique** (`next_cursor: 1002`) stoppait la pagination après la page 1
   (perte de données silencieuse : `status: success`, aucun log d'erreur). Corrigé :
-  `extractStringField` coerce les scalaires JSON (float64/bool) en string.
+  `extractStringField` coerce les nombres JSON en string. Les booléens restent
+  volontairement non coercés — un `nextCursorField` pointant sur `has_more: false`
+  donnerait `"false"`, non vide, et ferait tourner la boucle jusqu'au plafond de pages.
   Scénario : `pagination-cursor-numeric`.
 - **BUG #2 — chemins imbriqués** (`meta.next_cursor`, `meta.total_pages`) non résolus alors que
   la doc les montre. Corrigé : résolveur partagé `resolvePath` (dot-notation) appliqué à

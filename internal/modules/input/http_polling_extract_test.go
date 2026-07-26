@@ -58,11 +58,13 @@ func TestExtractStringField(t *testing.T) {
 		{"num", "1002"},                      // numeric cursor coerced, no trailing .0
 		{"bignum", "128374645"},              // large int still exact
 		{"flt", "3.5"},                       // non-integer numeric preserved
-		{"boolv", "true"},                    // bool coerced
 		{"meta.next_cursor", "nested-token"}, // nested path resolved
 		{"missing", ""},                      // absent → empty
 		{"obj", ""},                          // non-scalar → empty
 		{"", ""},                             // empty field → empty
+		// A bool must stay empty: coercing `has_more: false` to "false" would
+		// look like a valid cursor and keep the loop running to the page cap.
+		{"boolv", ""},
 	}
 	for _, tc := range tests {
 		if got := extractStringField(obj, tc.field); got != tc.want {

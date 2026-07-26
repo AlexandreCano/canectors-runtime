@@ -280,15 +280,16 @@ func extractStringField(obj map[string]any, field string) string {
 		return ""
 	}
 	// Cursors are opaque tokens; APIs often return them as JSON numbers rather
-	// than strings. Coerce scalar values so a numeric next_cursor is followed
-	// exactly like a string one (integers up to 2^53 render exactly).
+	// than strings. Coerce numbers so a numeric next_cursor is followed exactly
+	// like a string one (integers up to 2^53 render exactly). Booleans stay
+	// unhandled on purpose: a field pointing at `has_more: false` would coerce
+	// to the non-empty "false" and keep the cursor loop spinning to the page
+	// cap instead of stopping.
 	switch v := val.(type) {
 	case string:
 		return v
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(v)
 	default:
 		return ""
 	}
