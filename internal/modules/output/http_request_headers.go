@@ -16,7 +16,11 @@ func (h *HTTPRequestModule) extractHeadersFromRecord(record map[string]any) (map
 	for headerName, headerValue := range h.headers {
 		value := headerValue
 		if template.HasVariables(headerValue) {
-			value = h.templateEvaluator.Evaluate(headerValue, record)
+			rendered, err := h.renderField(headerValue, template.TargetText, record)
+			if err != nil {
+				return nil, fmt.Errorf("evaluating header %q: %w", headerName, err)
+			}
+			value = rendered
 			if value == "" {
 				continue
 			}

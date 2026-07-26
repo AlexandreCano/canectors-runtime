@@ -11,7 +11,7 @@ input:
   operation: ListOrdersPage
   body: |
     <m:ListOrdersPage xmlns:m="urn:orders">
-      <m:Cursor>{{record.pagination.cursor | default: ""}}</m:Cursor>
+      <m:Cursor>{{record.pagination.cursor | default('')}}</m:Cursor>
       <m:Limit>100</m:Limit>
     </m:ListOrdersPage>
   dataField: Envelope.Body.ListOrdersPageResponse.Orders.Order

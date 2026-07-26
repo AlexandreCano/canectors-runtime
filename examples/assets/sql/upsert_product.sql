@@ -1,5 +1,5 @@
 insert into products (product_id, sku, price, updated_at)
-values ({{record.product_id}}, {{record.sku}}, {{record.price}}, {{record.updated_at}})
+values ($1, $2, $3, $4)
 on conflict (product_id) do update set
   sku = excluded.sku,
   price = excluded.price,

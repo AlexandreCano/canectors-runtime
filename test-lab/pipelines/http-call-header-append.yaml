@@ -19,6 +19,11 @@ filters:
         paramType: header
         paramName: X-Customer-Id
     mergeStrategy: append
+    cache:
+      enabled: true
+      maxSize: 100
+      ttlSeconds: 60
+      key: "{{record.customer.id}}"
 output:
   type: httpRequest
   endpoint: http://localhost:18080/destination/enrichment/http-append

@@ -7,10 +7,17 @@ package input
 import (
 	"context"
 	"errors"
+
+	"github.com/cannectors/runtime/internal/template"
 )
 
 // ErrNotImplemented is returned when a feature is not yet implemented.
 var ErrNotImplemented = errors.New("not implemented")
+
+// templateEngine is shared by every input module so the compiled-template cache
+// is reused across module instances (compiled templates are safe for concurrent
+// renders).
+var templateEngine = template.NewEngine()
 
 // Module represents an input module that fetches data from a source system.
 //

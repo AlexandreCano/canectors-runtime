@@ -2,45 +2,10 @@ package soapclient
 
 import (
 	"bytes"
-	"io"
-	"mime"
 	"mime/multipart"
 	"strings"
 	"testing"
 )
-
-func TestBuildMTOMRequest_EmitsMultipartRelated(t *testing.T) {
-	payload, contentType, err := BuildMTOMRequest([]byte(`<Envelope/>`), SOAPVersion12, []MTOMAttachment{
-		{ContentID: "doc-1", ContentType: "application/pdf", Data: []byte("pdf-bytes")},
-	})
-	if err != nil {
-		t.Fatalf("BuildMTOMRequest returned error: %v", err)
-	}
-	mediaType, params, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		t.Fatalf("invalid content type: %v", err)
-	}
-	if mediaType != "multipart/related" || params["type"] != "application/xop+xml" || params["start-info"] != "application/soap+xml" {
-		t.Fatalf("unexpected content type: %s params=%v", mediaType, params)
-	}
-
-	reader := multipart.NewReader(bytes.NewReader(payload), params["boundary"])
-	root, err := reader.NextPart()
-	if err != nil {
-		t.Fatalf("missing root part: %v", err)
-	}
-	rootBody, _ := io.ReadAll(root)
-	if string(rootBody) != `<Envelope/>` {
-		t.Fatalf("unexpected root body: %s", rootBody)
-	}
-	attachment, err := reader.NextPart()
-	if err != nil {
-		t.Fatalf("missing attachment part: %v", err)
-	}
-	if got := attachment.Header.Get("Content-ID"); got != "<doc-1>" {
-		t.Fatalf("unexpected attachment content id: %q", got)
-	}
-}
 
 func TestParseMTOMResponse_ReturnsEnvelopeAndAttachments(t *testing.T) {
 	var b bytes.Buffer

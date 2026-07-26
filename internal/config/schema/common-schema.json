@@ -509,12 +509,20 @@
 				"query": {
 					"type": "string",
 					"minLength": 1,
-					"description": "SQL query. Supports module-specific placeholders (e.g. {{record.field}}, {{lastRunTimestamp}})."
+					"description": "SQL query as a Jinja template rendered to text (control blocks {% if %}/{% for %} allowed). Dynamic values are never interpolated: use $1, $2, ... placeholders bound to the 'parameters' list."
 				},
 				"queryFile": {
 					"type": "string",
 					"minLength": 1,
-					"description": "Path to SQL file. Supports module-specific placeholders."
+					"description": "Path to a SQL file containing the query template (same contract as 'query')."
+				},
+				"parameters": {
+					"type": "array",
+					"description": "Ordered expr expressions bound to the query's $N placeholders (parameters[0] -> $1). Evaluated against record/meta/state/pagination; values bind natively typed (nil -> NULL).",
+					"items": {
+						"type": "string",
+						"minLength": 1
+					}
 				}
 			},
 			"allOf": [
@@ -538,7 +546,7 @@
 
 		"databasePaginationConfig": {
 			"type": "object",
-			"description": "Pagination configuration for database queries. Uses canonical 'param' field for both cursor and limit-offset placeholders.",
+			"description": "Pagination configuration for database queries. Page values are exposed to parameter expressions as pagination.offset / pagination.cursor / pagination.limit; when no parameter references pagination, the runtime appends LIMIT/OFFSET literally.",
 			"unevaluatedProperties": false,
 			"properties": {
 				"type": {
@@ -551,11 +559,6 @@
 					"description": "Number of records per page. Optional; runtime applies default when omitted.",
 					"minimum": 1
 				},
-				"param": {
-					"type": "string",
-					"minLength": 1,
-					"description": "Named placeholder used in the SQL query to inject the cursor or offset value (e.g. ':cursor' / ':offset')."
-				},
 				"cursorField": {
 					"type": "string",
 					"minLength": 1,
@@ -565,20 +568,8 @@
 			"allOf": [
 				{ "required": ["type"] },
 				{
-					"oneOf": [
-						{
-							"allOf": [
-								{ "properties": { "type": { "const": "limit-offset" } } },
-								{ "required": ["param"] }
-							]
-						},
-						{
-							"allOf": [
-								{ "properties": { "type": { "const": "cursor" } } },
-								{ "required": ["cursorField", "param"] }
-							]
-						}
-					]
+					"if": { "properties": { "type": { "const": "cursor" } } },
+					"then": { "required": ["cursorField"] }
 				}
 			]
 		},
@@ -594,19 +585,11 @@
 				},
 				"timestampField": {
 					"type": "string",
-					"description": "Field name for timestamp-based incremental queries."
-				},
-				"timestampParam": {
-					"type": "string",
-					"description": "Parameter name for timestamp in query."
+					"description": "Record field persisted as the incremental timestamp. Consumed by the query through the state.lastRunTimestamp parameter expression."
 				},
 				"idField": {
 					"type": "string",
-					"description": "Field name for ID-based incremental queries."
-				},
-				"idParam": {
-					"type": "string",
-					"description": "Parameter name for ID in query."
+					"description": "Record field persisted as the incremental ID. Consumed by the query through the state.lastRunId parameter expression."
 				}
 			},
 			"additionalProperties": false

@@ -27,5 +27,10 @@ output:
   connectionStringRef: ${WAREHOUSE_DATABASE_URL}
   driver: postgres
   queryFile: examples/assets/sql/upsert_product.sql
+  parameters:
+    - record.product_id
+    - record.sku
+    - record.price
+    - record.updated_at
   transaction: true
   onError: fail

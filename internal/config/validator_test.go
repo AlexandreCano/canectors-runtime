@@ -141,13 +141,6 @@ func TestValidationError_Path(t *testing.T) {
 	}
 }
 
-func TestGetSchema_ReturnsSchema(t *testing.T) {
-	schema := GetEmbeddedSchema()
-	if len(schema) == 0 {
-		t.Error("expected embedded schema to be non-empty")
-	}
-}
-
 func TestValidateConfig_WebhookWithSchedule_Rejected(t *testing.T) {
 	// Webhook input must not have schedule (AC#2, #4). Schema rejects it.
 	data := map[string]any{

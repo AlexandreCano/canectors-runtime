@@ -12,11 +12,13 @@ input:
     select id, sku, quantity
     from inventory
     order by id asc
-    limit :limit offset :offset
+    limit $1 offset $2
+  parameters:
+    - pagination.limit
+    - pagination.offset
   pagination:
     type: limit-offset
     limit: 500
-    param: offset
 filters:
   - type: set
     target: sync_source
@@ -27,5 +29,10 @@ output:
   driver: postgres
   query: |
     insert into inventory_snapshot (id, sku, quantity, sync_source)
-    values ({{record.id}}, {{record.sku}}, {{record.quantity}}, {{record.sync_source}})
+    values ($1, $2, $3, $4)
+  parameters:
+    - record.id
+    - record.sku
+    - record.quantity
+    - record.sync_source
   transaction: true

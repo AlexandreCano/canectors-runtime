@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cannectors/runtime/internal/database"
@@ -17,6 +16,8 @@ import (
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/pathutil"
 	"github.com/cannectors/runtime/internal/persistence"
+	"github.com/cannectors/runtime/internal/sqltemplate"
+	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
@@ -26,24 +27,20 @@ const (
 	defaultQueryLimit      = 1000
 )
 
-// Template placeholder constants
-const (
-	// LastRunTimestampPlaceholder is the template placeholder for the last execution timestamp
-	LastRunTimestampPlaceholder = "{{lastRunTimestamp}}"
-)
-
 // Error types for database input module
 var (
 	ErrDatabaseNilConfig = errors.New("database input configuration is nil")
 )
 
 // DatabaseInputConfig holds configuration for the database input module.
+// The query is a Jinja template with $N placeholders bound to the parameters
+// list (inherited from SQLRequestBase). Parameter expressions may reference
+// `state` (state.lastRunTimestamp, state.lastRunId) and, when pagination is
+// configured, `pagination` (pagination.offset / pagination.cursor /
+// pagination.limit) — pagination-aware parameters are re-evaluated per page.
 type DatabaseInputConfig struct {
 	connector.ModuleBase
 	moduleconfig.SQLRequestBase
-
-	// Query parameters
-	Parameters map[string]any `json:"parameters"`
 
 	// Pagination configuration
 	Pagination *moduleconfig.DatabasePaginationConfig `json:"pagination"`
@@ -52,18 +49,16 @@ type DatabaseInputConfig struct {
 	Incremental *IncrementalConfig `json:"incremental"`
 }
 
-// IncrementalConfig defines incremental query configuration.
+// IncrementalConfig defines incremental query configuration. The fields name
+// which record columns feed the persisted state; the query consumes that state
+// through parameter expressions (state.lastRunTimestamp, state.lastRunId).
 type IncrementalConfig struct {
 	// Enabled: whether to enable incremental queries
 	Enabled bool `json:"enabled"`
 	// TimestampField: field name for timestamp-based incremental queries
 	TimestampField string `json:"timestampField"`
-	// TimestampParam: parameter name for timestamp in query
-	TimestampParam string `json:"timestampParam"`
 	// IDField: field name for ID-based incremental queries
 	IDField string `json:"idField"`
-	// IDParam: parameter name for ID in query
-	IDParam string `json:"idParam"`
 }
 
 // DatabaseInput implements a database input module.
@@ -72,6 +67,7 @@ type DatabaseInput struct {
 	config     DatabaseInputConfig
 	db         *sql.DB
 	driver     string
+	sqlQuery   *sqltemplate.Query
 	timeout    time.Duration
 	pipelineID string
 	stateStore *persistence.StateStore
@@ -95,6 +91,15 @@ func NewDatabaseInputFromConfig(cfg *connector.ModuleConfig) (*DatabaseInput, er
 
 	if validateErr := config.Pagination.Validate(); validateErr != nil {
 		return nil, fmt.Errorf("database input: %w", validateErr)
+	}
+
+	// Cursor pagination has no module-side fallback: the cursor can only reach the
+	// query through a parameter expression. Without one, every page would re-run
+	// the same unbounded query and the paging loop would never advance.
+	if config.Pagination != nil && config.Pagination.Type == "cursor" &&
+		!sqltemplate.ReferencesPagination(config.Parameters) {
+		return nil, fmt.Errorf("database input: cursor pagination requires a parameter expression referencing the pagination " +
+			"context (e.g. parameters: [\"pagination.cursor ?? 0\"] bound to a $N placeholder in the query)")
 	}
 
 	// Load query from file if queryFile is specified
@@ -137,11 +142,18 @@ func NewDatabaseInputFromConfig(cfg *connector.ModuleConfig) (*DatabaseInput, er
 		return nil, fmt.Errorf("creating database connection: %w", err)
 	}
 
+	sqlQuery, err := sqltemplate.Compile(templateEngine, config.Query, config.Parameters, driver)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("database input query: %w", err)
+	}
+
 	module := &DatabaseInput{
-		config:  config,
-		db:      db,
-		driver:  driver,
-		timeout: timeout,
+		config:   config,
+		db:       db,
+		driver:   driver,
+		sqlQuery: sqlQuery,
+		timeout:  timeout,
 	}
 
 	// Initialize state store if incremental is enabled
@@ -183,17 +195,14 @@ func (d *DatabaseInput) Fetch(ctx context.Context) ([]map[string]any, error) {
 		"has_incremental", d.config.Incremental != nil && d.config.Incremental.Enabled,
 	)
 
-	// Build query with parameters
-	query, args := d.buildQuery()
-
 	// Execute query based on pagination configuration
 	var records []map[string]any
 	var err error
 
 	if d.config.Pagination != nil && d.config.Pagination.Type != "" {
-		records, err = d.fetchWithPagination(ctx, query, args)
+		records, err = d.fetchWithPagination(ctx)
 	} else {
-		records, err = d.fetchSingle(ctx, query, args)
+		records, err = d.fetchSingle(ctx)
 	}
 
 	duration := time.Since(startTime)
@@ -216,155 +225,41 @@ func (d *DatabaseInput) Fetch(ctx context.Context) ([]map[string]any, error) {
 	return records, nil
 }
 
-// buildQuery builds the SQL query with parameters.
-func (d *DatabaseInput) buildQuery() (string, []any) {
-	query := d.config.Query
-	var args []any
-
-	// Replace {{lastRunTimestamp}} placeholder
-	query, args = d.replaceLastRunTimestamp(query, args)
-
-	// Add incremental parameters (legacy support)
-	query, args = d.replaceIncrementalParameters(query, args)
-
-	// Add static parameters
-	query, args = d.replaceStaticParameters(query, args)
-
-	return query, args
-}
-
-// replaceLastRunTimestamp replaces {{lastRunTimestamp}} placeholder with parameterized value.
-func (d *DatabaseInput) replaceLastRunTimestamp(query string, args []any) (string, []any) {
-	if !strings.Contains(query, LastRunTimestampPlaceholder) {
-		return query, args
-	}
-
-	var timestamp time.Time
+// stateContext exposes the persisted incremental state to query templates and
+// parameter expressions as `state.*`. On the first run lastRunTimestamp is the
+// epoch, so incremental queries fetch all records.
+func (d *DatabaseInput) stateContext() map[string]any {
+	timestamp := time.Unix(0, 0).UTC()
 	if d.lastState != nil && d.lastState.LastTimestamp != nil {
 		timestamp = *d.lastState.LastTimestamp
-	} else {
-		// First run: use epoch time (1970-01-01) to get all records
-		timestamp = time.Unix(0, 0)
 	}
-
-	placeholder := database.FormatPlaceholder(d.driver, len(args)+1)
-	query = strings.ReplaceAll(query, LastRunTimestampPlaceholder, placeholder)
-	args = append(args, timestamp.Format(time.RFC3339))
-
-	return query, args
+	var lastID any
+	if d.lastState != nil && d.lastState.LastID != nil {
+		lastID = *d.lastState.LastID
+	}
+	return map[string]any{
+		"lastRunTimestamp": timestamp.Format(time.RFC3339),
+		"lastRunId":        lastID,
+	}
 }
 
-// replaceIncrementalParameters replaces incremental parameter placeholders (legacy support).
-func (d *DatabaseInput) replaceIncrementalParameters(query string, args []any) (string, []any) {
-	if d.config.Incremental == nil || !d.config.Incremental.Enabled || d.lastState == nil {
-		return query, args
-	}
-
-	// Replace timestamp parameter if configured
-	if d.config.Incremental.TimestampParam != "" && d.lastState.LastTimestamp != nil {
-		placeholder := ":" + d.config.Incremental.TimestampParam
-		paramPlaceholder := database.FormatPlaceholder(d.driver, len(args)+1)
-		query = strings.ReplaceAll(query, placeholder, paramPlaceholder)
-		args = append(args, d.lastState.LastTimestamp.Format(time.RFC3339))
-	}
-
-	// Replace ID parameter if configured
-	if d.config.Incremental.IDParam != "" && d.lastState.LastID != nil {
-		placeholder := ":" + d.config.Incremental.IDParam
-		paramPlaceholder := database.FormatPlaceholder(d.driver, len(args)+1)
-		query = strings.ReplaceAll(query, placeholder, paramPlaceholder)
-		args = append(args, *d.lastState.LastID)
-	}
-
-	return query, args
-}
-
-// replaceStaticParameters replaces static parameter placeholders from config.Parameters.
-// For Postgres ($n): reuses same placeholder for all occurrences (append arg once).
-// For MySQL/SQLite (?): replaces each occurrence sequentially (append arg each time).
-func (d *DatabaseInput) replaceStaticParameters(query string, args []any) (string, []any) {
-	paramOrder := extractParameterOrder(query)
-	for _, paramName := range paramOrder {
-		value, exists := d.config.Parameters[paramName]
-		if !exists {
-			continue
-		}
-
-		namedPlaceholder := ":" + paramName
-		query, args = d.replaceNamedParameter(query, args, namedPlaceholder, value)
-	}
-
-	return query, args
-}
-
-// replaceNamedParameter replaces a named parameter placeholder with a positional placeholder.
-// Handles driver-specific behavior:
-//   - Postgres: replaces all occurrences with same $n placeholder (reuses $1)
-//   - MySQL/SQLite: replaces each occurrence sequentially with separate ? placeholders
-func (d *DatabaseInput) replaceNamedParameter(query string, args []any, namedPlaceholder string, value any) (string, []any) {
-	if !strings.Contains(query, namedPlaceholder) {
-		return query, args
-	}
-
-	if d.driver == "postgres" {
-		// Postgres: replace all occurrences with same placeholder, append arg once
-		paramPlaceholder := database.FormatPlaceholder(d.driver, len(args)+1)
-		query = strings.ReplaceAll(query, namedPlaceholder, paramPlaceholder)
-		args = append(args, value)
-	} else {
-		// MySQL/SQLite: replace each occurrence sequentially, append arg each time
-		for strings.Contains(query, namedPlaceholder) {
-			paramPlaceholder := database.FormatPlaceholder(d.driver, len(args)+1)
-			query = strings.Replace(query, namedPlaceholder, paramPlaceholder, 1)
-			args = append(args, value)
-		}
-	}
-
-	return query, args
-}
-
-// extractParameterOrder extracts parameter names from query in left-to-right order.
-// This ensures args slice matches placeholder order for MySQL/SQLite compatibility.
-func extractParameterOrder(query string) []string {
-	var order []string
-	seen := make(map[string]bool)
-
-	// Find all :paramName patterns in order
-	start := 0
-	for {
-		idx := strings.Index(query[start:], ":")
-		if idx == -1 {
-			break
-		}
-		idx += start
-
-		// Find end of parameter name (alphanumeric + underscore)
-		end := idx + 1
-		for end < len(query) && (isAlphanumeric(query[end]) || query[end] == '_') {
-			end++
-		}
-
-		if end > idx+1 {
-			paramName := query[idx+1 : end]
-			if !seen[paramName] {
-				order = append(order, paramName)
-				seen[paramName] = true
-			}
-		}
-
-		start = end
-	}
-
-	return order
-}
-
-// isAlphanumeric checks if a byte is alphanumeric.
-func isAlphanumeric(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+// buildForPage renders the query for one page of results. Pagination-aware
+// parameter expressions (pagination.offset / pagination.cursor /
+// pagination.limit) are re-evaluated with the page context.
+func (d *DatabaseInput) buildForPage(pagination map[string]any) (string, []any, error) {
+	return d.sqlQuery.Build(template.RenderContext{
+		State:      d.stateContext(),
+		Pagination: pagination,
+	})
 }
 
 // fetchSingle executes a single query without pagination.
-func (d *DatabaseInput) fetchSingle(ctx context.Context, query string, args []any) ([]map[string]any, error) {
+func (d *DatabaseInput) fetchSingle(ctx context.Context) ([]map[string]any, error) {
+	query, args, err := d.buildForPage(nil)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
@@ -381,51 +276,46 @@ func (d *DatabaseInput) fetchSingle(ctx context.Context, query string, args []an
 }
 
 // fetchWithPagination executes queries with pagination.
-func (d *DatabaseInput) fetchWithPagination(ctx context.Context, query string, args []any) ([]map[string]any, error) {
+func (d *DatabaseInput) fetchWithPagination(ctx context.Context) ([]map[string]any, error) {
 	switch d.config.Pagination.Type {
 	case "limit-offset":
-		return d.fetchLimitOffset(ctx, query, args)
+		return d.fetchLimitOffset(ctx)
 	case "cursor":
-		return d.fetchCursor(ctx, query, args)
+		return d.fetchCursor(ctx)
 	default:
 		return nil, fmt.Errorf("database input: unknown pagination type %q (expected 'limit-offset' or 'cursor')", d.config.Pagination.Type)
 	}
 }
 
 // fetchLimitOffset implements LIMIT/OFFSET pagination.
-func (d *DatabaseInput) fetchLimitOffset(ctx context.Context, query string, args []any) ([]map[string]any, error) {
+//
+// When a parameter expression references the pagination context, the author
+// owns the LIMIT/OFFSET clause (e.g. `limit $2 offset $1` with parameters
+// pagination.limit / pagination.offset). Otherwise the module appends
+// `LIMIT n OFFSET m` literally, as before.
+func (d *DatabaseInput) fetchLimitOffset(ctx context.Context) ([]map[string]any, error) {
 	var allRecords []map[string]any
 	offset := 0
 	limit := d.config.Pagination.Limit
 	if limit <= 0 {
 		limit = defaultQueryLimit
 	}
-
-	// Check if query uses the canonical pagination param placeholder
-	offsetParam := d.config.Pagination.Param
-	usesOffsetParam := offsetParam != "" && strings.Contains(query, ":"+offsetParam)
+	usesPagination := d.sqlQuery.UsesPagination()
 
 	for {
-		var paginatedQuery string
-		var paginatedArgs []any
-
-		if usesOffsetParam {
-			// Replace :offsetParam placeholder with parameterized value
-			paginatedQuery = strings.ReplaceAll(query, ":"+offsetParam,
-				database.FormatPlaceholder(d.driver, len(args)+1))
-			paginatedArgs = append(args, offset)
-			paginatedQuery = fmt.Sprintf("%s LIMIT %d", paginatedQuery, limit)
-		} else {
-			// Use literal LIMIT/OFFSET syntax
-			paginatedQuery = fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
-			paginatedArgs = args
+		query, args, err := d.buildForPage(map[string]any{"offset": offset, "limit": limit})
+		if err != nil {
+			return nil, err
+		}
+		if !usesPagination {
+			query = fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
 		}
 
 		queryCtx, cancel := context.WithTimeout(ctx, d.timeout)
-		rows, err := d.db.QueryContext(queryCtx, paginatedQuery, paginatedArgs...)
+		rows, err := d.db.QueryContext(queryCtx, query, args...)
 		if err != nil {
 			cancel()
-			dbErr := database.ClassifyDatabaseError(err, d.driver, "select", paginatedQuery, len(paginatedArgs))
+			dbErr := database.ClassifyDatabaseError(err, d.driver, "select", query, len(args))
 			return nil, dbErr
 		}
 
@@ -450,7 +340,12 @@ func (d *DatabaseInput) fetchLimitOffset(ctx context.Context, query string, args
 }
 
 // fetchCursor implements cursor-based pagination.
-func (d *DatabaseInput) fetchCursor(ctx context.Context, query string, args []any) ([]map[string]any, error) {
+//
+// The cursor is exposed to parameter expressions as pagination.cursor (nil on
+// the first page — use an expression like `pagination.cursor ?? 0` to provide
+// a starting bound). A query that binds no pagination parameter is rejected at
+// construction, so the cursor always reaches the query.
+func (d *DatabaseInput) fetchCursor(ctx context.Context) ([]map[string]any, error) {
 	var allRecords []map[string]any
 	var cursor any
 	limit := d.config.Pagination.Limit
@@ -459,30 +354,18 @@ func (d *DatabaseInput) fetchCursor(ctx context.Context, query string, args []an
 	}
 
 	cursorField := d.config.Pagination.CursorField
-	cursorParam := d.config.Pagination.Param
 
 	for {
-		cursorQuery := query
-		cursorArgs := make([]any, len(args))
-		copy(cursorArgs, args)
-
-		if cursorParam != "" {
-			placeholder := ":" + cursorParam
-			if strings.Contains(cursorQuery, placeholder) {
-				cursorQuery = strings.ReplaceAll(cursorQuery, placeholder,
-					database.FormatPlaceholder(d.driver, len(cursorArgs)+1))
-				// Always append the current cursor value, which may be nil on the first page.
-				cursorArgs = append(cursorArgs, cursor)
-			}
+		query, args, err := d.buildForPage(map[string]any{"cursor": cursor, "limit": limit})
+		if err != nil {
+			return nil, err
 		}
 
-		cursorQuery = fmt.Sprintf("%s LIMIT %d", cursorQuery, limit)
-
 		queryCtx, cancel := context.WithTimeout(ctx, d.timeout)
-		rows, err := d.db.QueryContext(queryCtx, cursorQuery, cursorArgs...)
+		rows, err := d.db.QueryContext(queryCtx, query, args...)
 		if err != nil {
 			cancel()
-			dbErr := database.ClassifyDatabaseError(err, d.driver, "select", cursorQuery, len(cursorArgs))
+			dbErr := database.ClassifyDatabaseError(err, d.driver, "select", query, len(args))
 			return nil, dbErr
 		}
 

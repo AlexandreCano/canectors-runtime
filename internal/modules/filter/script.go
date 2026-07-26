@@ -325,44 +325,6 @@ func getTransformFunction(vm *goja.Runtime) (goja.Callable, error) {
 	return transformFn, nil
 }
 
-// ParseScriptConfig parses a script filter configuration from raw config.
-// Supports both inline script and script file path.
-func ParseScriptConfig(cfg map[string]any) (ScriptConfig, error) {
-	config := ScriptConfig{}
-
-	script, hasScript := cfg["script"].(string)
-	scriptFile, hasScriptFile := cfg["scriptFile"].(string)
-
-	// Validate that exactly one of script or scriptFile is provided
-	if hasScript && hasScriptFile {
-		return config, fmt.Errorf("cannot specify both 'script' and 'scriptFile' - use only one")
-	}
-
-	if !hasScript && !hasScriptFile {
-		// Check if they provided wrong types
-		if cfg["script"] != nil {
-			return config, fmt.Errorf("field 'script' must be a string")
-		}
-		if cfg["scriptFile"] != nil {
-			return config, fmt.Errorf("field 'scriptFile' must be a string")
-		}
-		return config, fmt.Errorf("either 'script' or 'scriptFile' is required in script config")
-	}
-
-	if hasScript {
-		config.Script = script
-	}
-	if hasScriptFile {
-		config.ScriptFile = scriptFile
-	}
-
-	if onError, ok := cfg["onError"].(string); ok {
-		config.OnError = onError
-	}
-
-	return config, nil
-}
-
 // Process applies the JavaScript transform function to each input record.
 //
 // For each record:

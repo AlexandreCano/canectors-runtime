@@ -19,7 +19,7 @@ import (
 	"github.com/cannectors/runtime/internal/logger"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/pathutil"
-	"github.com/cannectors/runtime/internal/recordpath"
+	"github.com/cannectors/runtime/internal/sqltemplate"
 	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 )
@@ -30,12 +30,6 @@ const (
 	defaultSQLCallCacheSize = 1000
 	defaultSQLCallCacheTTL  = 300 // 5 minutes
 	defaultSQLCallStrategy  = "merge"
-)
-
-// Template prefix constants
-const (
-	// RecordFieldPrefix is the prefix for record field access in templates
-	RecordFieldPrefix = "record."
 )
 
 // SQLCallConfig represents the configuration for a sql_call filter module.
@@ -53,18 +47,19 @@ type SQLCallConfig struct {
 
 // SQLCallModule implements a filter that executes SQL queries for enrichment.
 type SQLCallModule struct {
-	db                *sql.DB
-	driver            string
-	query             string
-	mergeStrategy     string
-	resultKey         string
-	onError           errhandling.OnErrorStrategy
-	cache             cache.Cache
-	cacheEnabled      bool
-	cacheTTL          time.Duration
-	cacheKey          string
-	timeout           time.Duration
-	templateEvaluator *template.Evaluator
+	db            *sql.DB
+	driver        string
+	query         string // template source, used in the default cache key
+	sqlQuery      *sqltemplate.Query
+	mergeStrategy string
+	resultKey     string
+	onError       errhandling.OnErrorStrategy
+	cache         cache.Cache
+	cacheEnabled  bool
+	cacheTTL      time.Duration
+	cacheKey      string
+	timeout       time.Duration
+	engine        *template.Engine
 }
 
 // NewSQLCallFromConfig creates a new sql_call filter module from configuration.
@@ -85,14 +80,11 @@ func NewSQLCallFromConfig(config SQLCallConfig) (*SQLCallModule, error) {
 		return nil, fmt.Errorf("sql_call: resultKey is required when mergeStrategy is 'append'")
 	}
 
-	// Validate template syntax in query
-	if tplErr := template.ValidateSyntax(config.Query); tplErr != nil {
-		return nil, fmt.Errorf("invalid template syntax in sql_call query: %w", tplErr)
-	}
+	engine := templateEngine
 
 	// Validate cache key template syntax if configured
 	if config.Cache.Key != "" {
-		if cacheKeyErr := template.ValidateSyntax(config.Cache.Key); cacheKeyErr != nil {
+		if cacheKeyErr := engine.Validate(config.Cache.Key, template.TargetText, false); cacheKeyErr != nil {
 			return nil, fmt.Errorf("invalid template syntax in sql_call cache key: %w", cacheKeyErr)
 		}
 	}
@@ -108,21 +100,28 @@ func NewSQLCallFromConfig(config SQLCallConfig) (*SQLCallModule, error) {
 		return nil, err
 	}
 
+	sqlQuery, err := sqltemplate.Compile(engine, config.Query, config.Parameters, driver)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sql_call query: %w", err)
+	}
+
 	cache, cacheTTL, cacheEnabled := setupCache(config)
 
 	module := &SQLCallModule{
-		db:                db,
-		driver:            driver,
-		query:             config.Query,
-		mergeStrategy:     mergeStrategy,
-		resultKey:         config.ResultKey,
-		onError:           onError,
-		cache:             cache,
-		cacheEnabled:      cacheEnabled,
-		cacheTTL:          cacheTTL,
-		cacheKey:          config.Cache.Key,
-		timeout:           timeout,
-		templateEvaluator: template.NewEvaluator(),
+		db:            db,
+		driver:        driver,
+		query:         config.Query,
+		sqlQuery:      sqlQuery,
+		mergeStrategy: mergeStrategy,
+		resultKey:     config.ResultKey,
+		onError:       onError,
+		cache:         cache,
+		cacheEnabled:  cacheEnabled,
+		cacheTTL:      cacheTTL,
+		cacheKey:      config.Cache.Key,
+		timeout:       timeout,
+		engine:        engine,
 	}
 
 	logSQLCallModuleInitialization(driver, mergeStrategy, onError, cacheEnabled, timeout)
@@ -327,7 +326,7 @@ func (m *SQLCallModule) processRecord(ctx context.Context, record map[string]any
 	}
 
 	// Execute query
-	resultData, err := m.executeQuery(ctx, m.query, record)
+	resultData, err := m.executeQuery(ctx, record)
 	if err != nil {
 		return nil, false, err
 	}
@@ -344,9 +343,9 @@ func (m *SQLCallModule) processRecord(ctx context.Context, record map[string]any
 }
 
 // executeQuery executes a single SQL query with record data.
-func (m *SQLCallModule) executeQuery(ctx context.Context, queryTemplate string, record map[string]any) (map[string]any, error) {
-	// Build parameterized query from template
-	query, args, err := m.buildParameterizedQuery(queryTemplate, record)
+func (m *SQLCallModule) executeQuery(ctx context.Context, record map[string]any) (map[string]any, error) {
+	// Render the query template and bind its parameters
+	query, args, err := m.sqlQuery.Build(recordRenderContext(record))
 	if err != nil {
 		return nil, fmt.Errorf("building parameterized query: %w", err)
 	}
@@ -376,52 +375,6 @@ func (m *SQLCallModule) executeQuery(ctx context.Context, queryTemplate string, 
 	}
 
 	return records[0], nil
-}
-
-// buildParameterizedQuery builds a parameterized query from a template.
-// Replaces {{record.field}} with positional parameters and returns args.
-// Validates that all template placeholders are replaced to prevent SQL injection.
-func (m *SQLCallModule) buildParameterizedQuery(queryTemplate string, record map[string]any) (string, []any, error) {
-	query := queryTemplate
-	var args []any
-
-	// Find and replace all {{record.field}} patterns
-	paramIndex := 1
-	for {
-		start := strings.Index(query, "{{")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(query[start:], "}}")
-		if end == -1 {
-			// Unmatched opening brace - potential SQL injection risk
-			return "", nil, fmt.Errorf("unmatched template placeholder in query: missing closing }}")
-		}
-		end += start + 2
-
-		// Extract field path
-		placeholder := query[start:end]
-		fieldPath := strings.TrimSpace(placeholder[2 : len(placeholder)-2])
-
-		// Remove "record." prefix if present
-		fieldPath = strings.TrimPrefix(fieldPath, RecordFieldPrefix)
-
-		// Get value from record
-		value, _ := recordpath.Get(record, fieldPath)
-
-		// Replace with positional parameter
-		paramPlaceholder := database.FormatPlaceholder(m.driver, paramIndex)
-		query = query[:start] + paramPlaceholder + query[end:]
-		args = append(args, value)
-		paramIndex++
-	}
-
-	// Validate no unmatched braces remain (security check)
-	if strings.Contains(query, "{{") || strings.Contains(query, "}}") {
-		return "", nil, fmt.Errorf("unmatched template placeholders remain in query after processing")
-	}
-
-	return query, args, nil
 }
 
 // rowsToRecords converts sql.Rows to a slice of maps.
@@ -467,8 +420,13 @@ func (m *SQLCallModule) rowsToRecords(rows *sql.Rows) ([]map[string]any, error) 
 // buildCacheKey builds a cache key from record data.
 func (m *SQLCallModule) buildCacheKey(record map[string]any) string {
 	if m.cacheKey != "" {
-		// Evaluate template
-		return m.templateEvaluator.Evaluate(m.cacheKey, record)
+		compiled, err := m.engine.Compile(m.cacheKey, template.TargetText, false)
+		if err == nil {
+			if key, renderErr := compiled.Render(recordRenderContext(record)); renderErr == nil {
+				return key
+			}
+		}
+		logger.Warn("sql_call cache key template render failed, using default key")
 	}
 
 	// Default: use query + sorted JSON-encoded record for deterministic key

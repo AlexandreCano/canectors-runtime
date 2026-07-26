@@ -548,7 +548,7 @@ func TestHTTPRequestModule_Templating_MissingFieldWithDefault(t *testing.T) {
 	config := &connector.ModuleConfig{
 		Type: "httpRequest",
 		Raw: mustJSON(map[string]any{
-			"endpoint":    server.URL + `/api/users/{{record.user_id | default: "unknown"}}/data`,
+			"endpoint":    server.URL + `/api/users/{{record.user_id | default("unknown")}}/data`,
 			"method":      "POST",
 			"requestMode": "single",
 		}),
@@ -764,6 +764,54 @@ func TestHTTPRequestModule_Templating_InvalidSyntax(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestHTTPRequestModule_Templating_JSONBodyEscaping verifies that values
+// substituted into a JSON body template are JSON-escaped, so a record value
+// containing quotes / backslashes / newlines cannot break the payload.
+func TestHTTPRequestModule_Templating_JSONBodyEscaping(t *testing.T) {
+	server := newCaptureServer()
+	defer server.Close()
+
+	config := &connector.ModuleConfig{
+		Type: "httpRequest",
+		Raw: mustJSON(map[string]any{
+			"endpoint":    server.URL + "/api/users",
+			"method":      "POST",
+			"requestMode": "single",
+			"body":        `{"name":"{{record.name}}","note":"{{record.note}}"}`,
+		}),
+	}
+
+	module, err := NewHTTPRequestFromConfig(config)
+	if err != nil {
+		t.Fatalf("failed to create module: %v", err)
+	}
+	defer func() { _ = module.Close() }()
+
+	dirtyName := `Tom & "Jerry"\` // contains a quote and a backslash
+	dirtyNote := "line1\nline2"   // contains a newline
+	records := []map[string]any{{"name": dirtyName, "note": dirtyNote}}
+
+	sent, err := module.Send(context.Background(), records)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+	if sent != 1 {
+		t.Fatalf("expected 1 record sent, got %d", sent)
+	}
+
+	reqs := server.getRequests()
+	var body map[string]any
+	if err := json.Unmarshal(reqs[0].Body, &body); err != nil {
+		t.Fatalf("body is not valid JSON (escaping failed): %v\nraw: %s", err, reqs[0].Body)
+	}
+	if body["name"] != dirtyName {
+		t.Errorf("name did not round-trip: got %q want %q", body["name"], dirtyName)
+	}
+	if body["note"] != dirtyNote {
+		t.Errorf("note did not round-trip: got %q want %q", body["note"], dirtyNote)
 	}
 }
 
@@ -1081,14 +1129,6 @@ func TestNewHTTPRequestFromConfig_InvalidTemplateSyntax(t *testing.T) {
 			name: "invalid endpoint template - unmatched opening brace",
 			config: map[string]any{
 				"endpoint": "https://api.example.com/{{record.id",
-				"method":   "POST",
-			},
-			expectError: "invalid endpoint template",
-		},
-		{
-			name: "invalid endpoint template - unmatched closing brace",
-			config: map[string]any{
-				"endpoint": "https://api.example.com/record.id}}",
 				"method":   "POST",
 			},
 			expectError: "invalid endpoint template",

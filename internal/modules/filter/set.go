@@ -128,25 +128,5 @@ func (m *SetModule) processRecord(record map[string]any) (map[string]any, error)
 	return record, nil
 }
 
-// ParseSetConfig parses a raw configuration map into SetConfig.
-func ParseSetConfig(config map[string]any) (SetConfig, error) {
-	var cfg SetConfig
-
-	target, ok := config["target"].(string)
-	if !ok || target == "" {
-		return cfg, errors.New("'target' is required and must be a non-empty string")
-	}
-	cfg.Target = target
-
-	value, hasValue := config["value"]
-	if !hasValue {
-		return cfg, errors.New("'value' is required (use null to set the field to null)")
-	}
-	cfg.Value = value
-	cfg.HasValue = true
-
-	return cfg, nil
-}
-
 // Verify interface compliance at compile time
 var _ Module = (*SetModule)(nil)

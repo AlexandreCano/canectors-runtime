@@ -244,20 +244,6 @@ func TestHumanHandler_FormatsDuration(t *testing.T) {
 	}
 }
 
-func TestFormatMetricsHuman(t *testing.T) {
-	formatted := logger.FormatMetricsHuman(logger.ExecutionMetrics{
-		TotalDuration:    5 * time.Second,
-		RecordsProcessed: 1000,
-		RecordsFailed:    5,
-		RecordsPerSecond: 200.0,
-	})
-	for _, want := range []string{"1000 records", "5.00s", "200.0 records/sec", "5 failed"} {
-		if !strings.Contains(formatted, want) {
-			t.Errorf("expected %q in %q", want, formatted)
-		}
-	}
-}
-
 // =============================================================================
 // Log file output tests
 // =============================================================================

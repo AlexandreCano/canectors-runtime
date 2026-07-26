@@ -17,7 +17,7 @@ output:
   body: |
     <m:ImportOrders xmlns:m="urn:orders">
       <m:RecordCount>{{record.recordCount}}</m:RecordCount>
-      <m:FirstOrderId>{{record.records[0].orderId | default: ""}}</m:FirstOrderId>
+      <m:FirstOrderId>{{record.records[0].orderId | default('')}}</m:FirstOrderId>
     </m:ImportOrders>
   success:
     statusCodes:

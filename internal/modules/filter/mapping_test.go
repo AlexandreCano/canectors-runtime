@@ -774,15 +774,39 @@ func TestMapping_Process_OnMissing(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "field exists but is null - does not trigger onMissing",
+			name: "field exists but is null - triggers onMissing fail",
 			mappings: []FieldMapping{
 				{Source: strPtr("nullField"), Target: "output", OnMissing: "fail"},
 			},
 			input: []map[string]any{
 				{"nullField": nil},
 			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "field exists but is null - triggers onMissing useDefault",
+			mappings: []FieldMapping{
+				{Source: strPtr("nullField"), Target: "output", OnMissing: "useDefault", HasDefaultValue: true, DefaultValue: "fallback"},
+			},
+			input: []map[string]any{
+				{"nullField": nil},
+			},
 			want: []map[string]any{
-				{"nullField": nil, "output": nil},
+				{"nullField": nil, "output": "fallback"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "field exists but is null - triggers onMissing skipField",
+			mappings: []FieldMapping{
+				{Source: strPtr("nullField"), Target: "output", OnMissing: "skipField"},
+			},
+			input: []map[string]any{
+				{"nullField": nil},
+			},
+			want: []map[string]any{
+				{"nullField": nil},
 			},
 			wantErr: false,
 		},

@@ -388,7 +388,7 @@ func (m *MappingModule) processRecord(record map[string]any, recordIdx int) (map
 func (m *MappingModule) getSourceValue(record map[string]any, mapping MappingConfig, recordIdx, mappingIdx int) (any, bool, error) {
 	value, found := recordpath.Get(record, mapping.Source)
 
-	if !found {
+	if !found || value == nil {
 		switch mapping.OnMissing {
 		case OnMissingSetNull:
 			return nil, true, nil

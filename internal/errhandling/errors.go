@@ -437,17 +437,6 @@ func NewAuthenticationError(statusCode int, message string, originalErr error) *
 	}
 }
 
-// NewValidationError creates a ClassifiedError for validation errors.
-func NewValidationError(statusCode int, message string, originalErr error) *ClassifiedError {
-	return &ClassifiedError{
-		Category:    CategoryValidation,
-		Retryable:   false,
-		StatusCode:  statusCode,
-		Message:     message,
-		OriginalErr: originalErr,
-	}
-}
-
 // NewServerError creates a ClassifiedError for server errors.
 func NewServerError(statusCode int, message string, originalErr error) *ClassifiedError {
 	return &ClassifiedError{
@@ -459,7 +448,18 @@ func NewServerError(statusCode int, message string, originalErr error) *Classifi
 	}
 }
 
-// NewRateLimitError creates a ClassifiedError for rate limit errors.
+// NewValidationError builds a non-retryable validation error.
+func NewValidationError(statusCode int, message string, originalErr error) *ClassifiedError {
+	return &ClassifiedError{
+		Category:    CategoryValidation,
+		Retryable:   false,
+		StatusCode:  statusCode,
+		Message:     message,
+		OriginalErr: originalErr,
+	}
+}
+
+// NewRateLimitError builds a retryable rate-limit error.
 func NewRateLimitError(message string, originalErr error) *ClassifiedError {
 	return &ClassifiedError{
 		Category:    CategoryRateLimit,

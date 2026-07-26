@@ -3,10 +3,14 @@ package output
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/cannectors/runtime/internal/moduleconfig"
+	"github.com/cannectors/runtime/internal/sqltemplate"
+	"github.com/cannectors/runtime/internal/template"
+	"github.com/cannectors/runtime/pkg/connector"
 
 	_ "modernc.org/sqlite"
 )
@@ -39,15 +43,21 @@ func setupDatabaseOutputSQLiteDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func newDatabaseOutputForTest(db *sql.DB, cfg DatabaseOutputConfig) *DatabaseOutput {
+func newDatabaseOutputForTest(t *testing.T, db *sql.DB, cfg DatabaseOutputConfig) *DatabaseOutput {
+	t.Helper()
 	if cfg.OnError == "" {
 		cfg.OnError = "fail"
 	}
+	sqlQuery, err := sqltemplate.Compile(template.NewEngine(), cfg.Query, cfg.Parameters, "sqlite")
+	if err != nil {
+		t.Fatalf("compiling query: %v", err)
+	}
 	return &DatabaseOutput{
-		db:      db,
-		driver:  "sqlite",
-		config:  cfg,
-		timeout: 200 * time.Millisecond,
+		db:       db,
+		driver:   "sqlite",
+		config:   cfg,
+		sqlQuery: sqlQuery,
+		timeout:  200 * time.Millisecond,
 	}
 }
 
@@ -72,20 +82,20 @@ func TestDatabaseOutput_SendModes(t *testing.T) {
 	}{
 		{
 			name:      "insert",
-			query:     "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})",
+			query:     "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)",
 			records:   []map[string]any{{"id": 1, "name": "Alice", "email": "alice@example.com"}},
 			wantCount: 1,
 		},
 		{
 			name:      "upsert sqlite replace",
 			seed:      "INSERT INTO users (id, name, email) VALUES (1, 'Old', 'old@example.com')",
-			query:     "REPLACE INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})",
+			query:     "REPLACE INTO users (id, name, email) VALUES ($1, $2, $3)",
 			records:   []map[string]any{{"id": 1, "name": "Alice", "email": "alice@example.com"}},
 			wantCount: 1, wantNameID: 1, wantName: "Alice",
 		},
 		{
 			name:      "custom templated query",
-			query:     "INSERT INTO users (id, name, email) SELECT {{record.id}}, upper({{record.name}}), {{record.email}}",
+			query:     "INSERT INTO users (id, name, email) SELECT $1, upper($2), $3",
 			records:   []map[string]any{{"id": 2, "name": "bob", "email": "bob@example.com"}},
 			wantCount: 1, wantNameID: 2, wantName: "BOB",
 		},
@@ -99,8 +109,8 @@ func TestDatabaseOutput_SendModes(t *testing.T) {
 					t.Fatalf("seeding output db: %v", err)
 				}
 			}
-			output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-				SQLRequestBase: moduleconfig.SQLRequestBase{Query: tt.query},
+			output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+				SQLRequestBase: moduleconfig.SQLRequestBase{Query: tt.query, Parameters: []string{"record.id", "record.name", "record.email"}},
 			})
 
 			sent, err := output.Send(context.Background(), tt.records)
@@ -129,8 +139,8 @@ func TestDatabaseOutput_SendModes(t *testing.T) {
 func TestDatabaseOutput_TransactionCommitAndRollback(t *testing.T) {
 	t.Run("commit on success", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 			Transaction:    true,
 		})
 
@@ -148,8 +158,8 @@ func TestDatabaseOutput_TransactionCommitAndRollback(t *testing.T) {
 
 	t.Run("rollback on error", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 			Transaction:    true,
 		})
 
@@ -178,8 +188,8 @@ func TestDatabaseOutput_OnErrorSkipAndFail(t *testing.T) {
 
 	t.Run("skip individual record", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 		})
 		output.config.OnError = "skip"
 
@@ -194,8 +204,8 @@ func TestDatabaseOutput_OnErrorSkipAndFail(t *testing.T) {
 
 	t.Run("fail stops at first invalid record", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 		})
 
 		sent, err := output.Send(context.Background(), records)
@@ -221,8 +231,8 @@ func TestDatabaseOutput_BatchVsIndividual(t *testing.T) {
 
 	t.Run("batch transaction rolls back all on failure", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 			Transaction:    true,
 		})
 
@@ -237,8 +247,8 @@ func TestDatabaseOutput_BatchVsIndividual(t *testing.T) {
 
 	t.Run("individual mode commits prior records and stops on failure", func(t *testing.T) {
 		db := setupDatabaseOutputSQLiteDB(t)
-		output := newDatabaseOutputForTest(db, DatabaseOutputConfig{
-			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ({{record.id}}, {{record.name}}, {{record.email}})"},
+		output := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+			SQLRequestBase: moduleconfig.SQLRequestBase{Query: "INSERT INTO users (id, name, email) VALUES ($1, $2, $3)", Parameters: []string{"record.id", "record.name", "record.email"}},
 			Transaction:    false,
 		})
 
@@ -255,10 +265,21 @@ func TestDatabaseOutput_BatchVsIndividual(t *testing.T) {
 	})
 }
 
-func TestDatabaseOutput_BuildParameterizedQueryUnmatchedTemplate(t *testing.T) {
-	output := newDatabaseOutputForTest(setupDatabaseOutputSQLiteDB(t), DatabaseOutputConfig{})
-	_, _, err := output.buildParameterizedQuery("INSERT INTO users (name) VALUES ({{record.name)", map[string]any{"name": "Alice"})
+func TestDatabaseOutput_PlaceholderWithoutParameterFails(t *testing.T) {
+	// A $N placeholder with no matching parameters entry must be rejected at
+	// construction time (placeholder/parameter consistency check).
+	_, err := NewDatabaseOutputFromConfig(&connector.ModuleConfig{
+		Type: "database",
+		Raw: mustJSON(map[string]any{
+			"connectionString": ":memory:",
+			"driver":           "sqlite",
+			"query":            "INSERT INTO users (name) VALUES ($1)",
+		}),
+	})
 	if err == nil {
-		t.Fatal("buildParameterizedQuery() error = nil, want unmatched template error")
+		t.Fatal("expected error for $1 with no declared parameters")
+	}
+	if !strings.Contains(err.Error(), "parameter") {
+		t.Fatalf("error = %v, want placeholder/parameter consistency error", err)
 	}
 }

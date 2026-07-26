@@ -100,6 +100,20 @@ filters:
           - op: lowercase
 ```
 
+Missing source fields and `null` source values are handled by `onMissing`.
+Supported values are `setNull` (default), `skipField`, `useDefault`, and
+`fail`. When using `useDefault`, provide `defaultValue`.
+
+```yaml
+filters:
+  - type: mapping
+    mappings:
+      - source: status
+        target: status
+        onMissing: useDefault
+        defaultValue: pending
+```
+
 See [examples/10-mapping-transforms-all.yaml](../examples/10-mapping-transforms-all.yaml).
 
 ### `condition`

@@ -14,6 +14,8 @@ filters:
     connectionStringRef: ${REFERENCE_DATABASE_URL}
     driver: postgres
     queryFile: examples/assets/sql/customer_lookup.sql
+    parameters:
+      - record.id
     mergeStrategy: append
     resultKey: reference
     cache:

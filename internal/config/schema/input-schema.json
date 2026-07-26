@@ -131,18 +131,13 @@
 
 		"databaseInputConfig": {
 			"type": "object",
-			"description": "Database input module configuration. Executes SQL queries to fetch data. Supports {{lastRunTimestamp}} placeholder for incremental queries. Without 'schedule', runs once. With 'schedule', registered with the CRON scheduler.",
+			"description": "Database input module configuration. Executes SQL queries to fetch data. Incremental state is consumed via parameter expressions (state.lastRunTimestamp, state.lastRunId). Without 'schedule', runs once. With 'schedule', registered with the CRON scheduler.",
 			"allOf": [ { "$ref": "common-schema.json#/$defs/sqlRequestBase" } ],
 			"properties": {
 				"schedule": {
 					"type": "string",
 					"description": "Optional CRON expression to run the database input on a schedule. Validated at runtime.",
 					"minLength": 9
-				},
-				"parameters": {
-					"type": "object",
-					"description": "Query parameters. Keys are parameter names (used with :paramName syntax).",
-					"additionalProperties": true
 				},
 				"pagination": {
 					"$ref": "common-schema.json#/$defs/databasePaginationConfig"

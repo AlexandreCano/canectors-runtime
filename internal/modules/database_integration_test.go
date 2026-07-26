@@ -5,6 +5,7 @@ package modules
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -123,11 +124,11 @@ func TestDatabaseInputBasicQuery(t *testing.T) {
 	// Test database input module
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
 			"query":            "SELECT id, name, email FROM users ORDER BY id",
-		},
+		}),
 	}
 
 	inputModule, err := input.NewDatabaseInputFromConfig(cfg)
@@ -179,11 +180,11 @@ func TestDatabaseInputWithQueryFile(t *testing.T) {
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
 			"queryFile":        sqlFile,
-		},
+		}),
 	}
 
 	inputModule, err := input.NewDatabaseInputFromConfig(cfg)
@@ -206,7 +207,7 @@ func TestDatabaseInputWithQueryFile(t *testing.T) {
 	}
 }
 
-// TestDatabaseInputWithLastRunTimestamp tests {{lastRunTimestamp}} injection
+// TestDatabaseInputWithLastRunTimestamp tests state.lastRunTimestamp injection
 func TestDatabaseInputWithLastRunTimestamp(t *testing.T) {
 	t.Parallel()
 
@@ -233,11 +234,12 @@ func TestDatabaseInputWithLastRunTimestamp(t *testing.T) {
 	// Query with lastRunTimestamp - should get all records on first run (epoch time)
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "SELECT id, name, created_at FROM events WHERE created_at > {{lastRunTimestamp}} ORDER BY id",
-		},
+			"query":            "SELECT id, name, created_at FROM events WHERE created_at > $1 ORDER BY id",
+			"parameters":       []any{"state.lastRunTimestamp"},
+		}),
 	}
 
 	inputModule, err := input.NewDatabaseInputFromConfig(cfg)
@@ -282,7 +284,8 @@ func TestSQLCallFilterEnrichment(t *testing.T) {
 		SQLRequestBase: moduleconfig.SQLRequestBase{
 			ConnectionString: "file:" + tmpFile,
 			Driver:           "sqlite",
-			Query:            "SELECT department, manager FROM user_details WHERE user_id = {{record.user_id}}",
+			Query:            "SELECT department, manager FROM user_details WHERE user_id = $1",
+			Parameters:       []string{"record.user_id"},
 		},
 		MergeStrategy: "merge",
 	}
@@ -337,13 +340,14 @@ func TestSQLCallFilterWithQueryFile(t *testing.T) {
 	}
 	db.Close()
 
-	sqlFile := createTempSQLFile(t, "SELECT quantity FROM inventory WHERE sku = {{record.sku}}")
+	sqlFile := createTempSQLFile(t, "SELECT quantity FROM inventory WHERE sku = $1")
 
 	cfg := filter.SQLCallConfig{
 		SQLRequestBase: moduleconfig.SQLRequestBase{
 			ConnectionString: "file:" + tmpFile,
 			Driver:           "sqlite",
 			QueryFile:        sqlFile,
+			Parameters:       []string{"record.sku"},
 		},
 		MergeStrategy: "merge",
 	}
@@ -389,11 +393,12 @@ func TestDatabaseOutputInsert(t *testing.T) {
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "INSERT INTO audit_log (action, entity, timestamp) VALUES ({{record.action}}, {{record.entity}}, {{record.timestamp}})",
-		},
+			"query":            "INSERT INTO audit_log (action, entity, timestamp) VALUES ($1, $2, $3)",
+			"parameters":       []any{"record.action", "record.entity", "record.timestamp"},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -456,12 +461,13 @@ func TestDatabaseOutputWithTransaction(t *testing.T) {
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "INSERT INTO items (id, name) VALUES ({{record.id}}, {{record.name}})",
+			"query":            "INSERT INTO items (id, name) VALUES ($1, $2)",
+			"parameters":       []any{"record.id", "record.name"},
 			"transaction":      true,
-		},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -517,11 +523,12 @@ func TestDatabaseOutputUpsert(t *testing.T) {
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "INSERT OR REPLACE INTO products (sku, name, price) VALUES ({{record.sku}}, {{record.name}}, {{record.price}})",
-		},
+			"query":            "INSERT OR REPLACE INTO products (sku, name, price) VALUES ($1, $2, $3)",
+			"parameters":       []any{"record.sku", "record.name", "record.price"},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -590,12 +597,13 @@ func TestDatabaseOutputErrorHandling(t *testing.T) {
 	// Test with onError: skip - should continue after constraint violation
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "INSERT INTO unique_items (id, code) VALUES ({{record.id}}, {{record.code}})",
+			"query":            "INSERT INTO unique_items (id, code) VALUES ($1, $2)",
+			"parameters":       []any{"record.id", "record.code"},
 			"onError":          "skip",
-		},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -646,15 +654,16 @@ func TestDatabaseOutputWithQueryFile(t *testing.T) {
 	}
 	db.Close()
 
-	sqlFile := createTempSQLFile(t, "INSERT INTO logs (message) VALUES ({{record.msg}})")
+	sqlFile := createTempSQLFile(t, "INSERT INTO logs (message) VALUES ($1)")
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
 			"queryFile":        sqlFile,
-		},
+			"parameters":       []any{"record.msg"},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -706,11 +715,12 @@ func TestDatabaseOutputNestedFields(t *testing.T) {
 
 	cfg := &connector.ModuleConfig{
 		Type: "database",
-		Config: map[string]any{
+		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
-			"query":            "INSERT INTO events (event_type, user_name) VALUES ({{record.event.type}}, {{record.user.name}})",
-		},
+			"query":            "INSERT INTO events (event_type, user_name) VALUES ($1, $2)",
+			"parameters":       []any{"record.event.type", "record.user.name"},
+		}),
 	}
 
 	outputModule, err := output.NewDatabaseOutputFromConfig(cfg)
@@ -744,4 +754,14 @@ func TestDatabaseOutputNestedFields(t *testing.T) {
 	if eventType != "login" || userName != "alice" {
 		t.Errorf("Got (%q, %q), want (login, alice)", eventType, userName)
 	}
+}
+
+// mustJSON marshals a config map into the json.RawMessage form expected by
+// connector.ModuleConfig.Raw.
+func mustJSON(m map[string]any) json.RawMessage {
+	b, err := json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }

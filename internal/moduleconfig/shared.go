@@ -77,6 +77,9 @@ type SQLRequestBase struct {
 	TimeoutMs              int    `json:"timeoutMs,omitempty"`
 	Query                  string `json:"query,omitempty"`
 	QueryFile              string `json:"queryFile,omitempty"`
+	// Parameters are expr expressions bound to the $N placeholders of the query
+	// (1-based: parameters[0] -> $1). Values bind natively typed; nil -> NULL.
+	Parameters []string `json:"parameters,omitempty"`
 }
 
 // connectionStringRefPattern matches ${ENV_VAR_NAME} format used by
@@ -168,28 +171,28 @@ func (p *PaginationConfig) Validate() error {
 }
 
 // DatabasePaginationConfig mirrors common-schema.json#/$defs/databasePaginationConfig.
-// Param is the canonical SQL placeholder name used to inject either the cursor
-// or the offset value into the query (e.g. ':offset' or ':cursor').
+// The page values are exposed to the query's parameter expressions as
+// pagination.offset / pagination.cursor / pagination.limit.
 type DatabasePaginationConfig struct {
 	Type        string `json:"type"`
 	Limit       int    `json:"limit,omitempty"`
-	Param       string `json:"param,omitempty"`
 	CursorField string `json:"cursorField,omitempty"`
 }
 
-// Validate enforces the runtime contract: pagination.type must be one of
-// the supported strategies. Both strategies require param; cursor additionally
-// requires cursorField (mirrors common-schema.json#/$defs/databasePaginationConfig).
+// Validate enforces the runtime contract: pagination.type must be one of the
+// supported strategies, and cursor additionally requires cursorField (mirrors
+// common-schema.json#/$defs/databasePaginationConfig). The pagination values
+// themselves reach the query through parameter expressions reading the
+// `pagination` context, which the input module validates.
 func (p *DatabasePaginationConfig) Validate() error {
 	if p == nil {
 		return nil
 	}
 	switch p.Type {
-	case "limit-offset", "cursor":
-		if p.Param == "" {
-			return fmt.Errorf("pagination.param is required when pagination.type is %q", p.Type)
-		}
-		if p.Type == "cursor" && p.CursorField == "" {
+	case "limit-offset":
+		return nil
+	case "cursor":
+		if p.CursorField == "" {
 			return fmt.Errorf("pagination.cursorField is required when pagination.type is %q", p.Type)
 		}
 		return nil

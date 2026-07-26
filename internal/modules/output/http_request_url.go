@@ -54,7 +54,11 @@ func (h *HTTPRequestModule) resolveEndpointForBatch(endpoint string, records []m
 func (h *HTTPRequestModule) resolveEndpointForRecord(record map[string]any) (string, error) {
 	endpoint := h.endpoint
 	if template.HasVariables(endpoint) {
-		endpoint = h.templateEvaluator.EvaluateForURL(endpoint, record)
+		rendered, err := h.renderField(endpoint, template.TargetURL, record)
+		if err != nil {
+			return "", fmt.Errorf("evaluating endpoint template: %w", err)
+		}
+		endpoint = rendered
 	}
 
 	for _, k := range h.request.Keys {

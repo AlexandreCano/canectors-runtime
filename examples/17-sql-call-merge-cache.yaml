@@ -16,8 +16,10 @@ filters:
     query: |
       select segment, account_owner
       from customer_reference
-      where customer_id = {{record.customer.id}}
+      where customer_id = $1
       limit 1
+    parameters:
+      - record.customer.id
     mergeStrategy: merge
     cache:
       enabled: true

@@ -34,7 +34,7 @@ output:
       paramName: X-Tenant-Id
   headers:
     Content-Type: application/json
-    X-Trace-Source: "{{record.source | default: \"unknown\"}}"
+    X-Trace-Source: "{{record.source | default('unknown')}}"
   success:
     statusCodes:
       - 200

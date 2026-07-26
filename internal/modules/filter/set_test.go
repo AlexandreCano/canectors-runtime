@@ -6,67 +6,6 @@ import (
 	"testing"
 )
 
-func TestParseSetConfig_Validation(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  map[string]any
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name:    "missing target",
-			config:  map[string]any{"value": "test"},
-			wantErr: true,
-			errMsg:  "'target' is required",
-		},
-		{
-			name:    "empty target",
-			config:  map[string]any{"target": "", "value": "test"},
-			wantErr: true,
-			errMsg:  "'target' is required",
-		},
-		{
-			name:    "missing value",
-			config:  map[string]any{"target": "id"},
-			wantErr: true,
-			errMsg:  "'value' is required",
-		},
-		{
-			name: "valid config with string value",
-			config: map[string]any{
-				"target": "id",
-				"value":  "literal-value",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid config with null value",
-			config: map[string]any{
-				"target": "id",
-				"value":  nil,
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSetConfig(tt.config)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error containing %q, got nil", tt.errMsg)
-				} else if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
-					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
 func TestNewSetFromConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string

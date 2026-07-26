@@ -15,6 +15,8 @@ filters:
     connectionString: postgres://cannectors_test:cannectors_test@localhost:15432/cannectors_test?sslmode=disable
     driver: postgres
     queryFile: test-lab/assets/sql/customer-lookup.sql
+    parameters:
+      - record.customer.id
     mergeStrategy: merge
 output:
   type: httpRequest

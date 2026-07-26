@@ -152,18 +152,3 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fm", d.Minutes())
 	}
 }
-
-// FormatMetricsHuman renders execution metrics for the human format banner.
-func FormatMetricsHuman(metrics ExecutionMetrics) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Processed %d records in %s",
-		metrics.RecordsProcessed,
-		formatDuration(metrics.TotalDuration))
-	if metrics.RecordsPerSecond > 0 {
-		fmt.Fprintf(&sb, " (%.1f records/sec)", metrics.RecordsPerSecond)
-	}
-	if metrics.RecordsFailed > 0 {
-		fmt.Fprintf(&sb, ", %d failed", metrics.RecordsFailed)
-	}
-	return sb.String()
-}

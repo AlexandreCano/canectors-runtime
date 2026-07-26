@@ -94,11 +94,11 @@ func TestParseDatabaseInputConfig(t *testing.T) {
 			name: "config with incremental",
 			cfg: map[string]any{
 				"connectionString": "postgres://localhost/db",
-				"query":            "SELECT * FROM events WHERE created_at > :since",
+				"query":            "SELECT * FROM events WHERE created_at > $1",
+				"parameters":       []any{"state.lastRunTimestamp"},
 				"incremental": map[string]any{
 					"enabled":        true,
 					"timestampField": "created_at",
-					"timestampParam": "since",
 				},
 			},
 			check: func(t *testing.T, config DatabaseInputConfig) {
@@ -111,8 +111,8 @@ func TestParseDatabaseInputConfig(t *testing.T) {
 				if config.Incremental.TimestampField != "created_at" {
 					t.Errorf("Incremental.TimestampField = %q, want created_at", config.Incremental.TimestampField)
 				}
-				if config.Incremental.TimestampParam != "since" {
-					t.Errorf("Incremental.TimestampParam = %q, want since", config.Incremental.TimestampParam)
+				if len(config.Parameters) != 1 || config.Parameters[0] != "state.lastRunTimestamp" {
+					t.Errorf("Parameters = %v, want [state.lastRunTimestamp]", config.Parameters)
 				}
 			},
 		},
@@ -174,7 +174,6 @@ func TestParseDatabasePaginationConfig(t *testing.T) {
 			cfg: map[string]any{
 				"type":  "limit-offset",
 				"limit": float64(100),
-				"param": "offset",
 			},
 			check: func(t *testing.T, config *moduleconfig.DatabasePaginationConfig) {
 				if config.Type != "limit-offset" {
@@ -182,9 +181,6 @@ func TestParseDatabasePaginationConfig(t *testing.T) {
 				}
 				if config.Limit != 100 {
 					t.Errorf("Limit = %d, want 100", config.Limit)
-				}
-				if config.Param != "offset" {
-					t.Errorf("Param = %q, want offset", config.Param)
 				}
 			},
 		},
@@ -194,7 +190,6 @@ func TestParseDatabasePaginationConfig(t *testing.T) {
 				"type":        "cursor",
 				"limit":       float64(50),
 				"cursorField": "id",
-				"param":       "after_id",
 			},
 			check: func(t *testing.T, config *moduleconfig.DatabasePaginationConfig) {
 				if config.Type != "cursor" {
@@ -202,9 +197,6 @@ func TestParseDatabasePaginationConfig(t *testing.T) {
 				}
 				if config.CursorField != "id" {
 					t.Errorf("CursorField = %q, want id", config.CursorField)
-				}
-				if config.Param != "after_id" {
-					t.Errorf("Param = %q, want after_id", config.Param)
 				}
 			},
 		},
@@ -247,7 +239,6 @@ func TestParseIncrementalConfig(t *testing.T) {
 			cfg: map[string]any{
 				"enabled":        true,
 				"timestampField": "updated_at",
-				"timestampParam": "since",
 			},
 			check: func(t *testing.T, config *IncrementalConfig) {
 				if !config.Enabled {
@@ -256,9 +247,6 @@ func TestParseIncrementalConfig(t *testing.T) {
 				if config.TimestampField != "updated_at" {
 					t.Errorf("TimestampField = %q, want updated_at", config.TimestampField)
 				}
-				if config.TimestampParam != "since" {
-					t.Errorf("TimestampParam = %q, want since", config.TimestampParam)
-				}
 			},
 		},
 		{
@@ -266,7 +254,6 @@ func TestParseIncrementalConfig(t *testing.T) {
 			cfg: map[string]any{
 				"enabled": true,
 				"idField": "id",
-				"idParam": "after_id",
 			},
 			check: func(t *testing.T, config *IncrementalConfig) {
 				if !config.Enabled {
@@ -274,9 +261,6 @@ func TestParseIncrementalConfig(t *testing.T) {
 				}
 				if config.IDField != "id" {
 					t.Errorf("IDField = %q, want id", config.IDField)
-				}
-				if config.IDParam != "after_id" {
-					t.Errorf("IDParam = %q, want after_id", config.IDParam)
 				}
 			},
 		},
@@ -388,11 +372,29 @@ func TestNewDatabaseInputFromConfig_Validation(t *testing.T) {
 					"pagination": map[string]any{
 						"type":  "cursor",
 						"limit": 10,
-						"param": "after_id",
 					},
 				}),
 			},
 			wantErrSub: "cursorField is required",
+		},
+		{
+			// Without a pagination-aware parameter the cursor never reaches the
+			// query and the paging loop would spin forever on the same page.
+			name: "cursor pagination without pagination parameter",
+			cfg: &connector.ModuleConfig{
+				Type: "database",
+				Raw: mustJSON(map[string]any{
+					"connectionString": "postgres://localhost/db",
+					"query":            "SELECT id FROM t WHERE id > $1",
+					"parameters":       []any{"state.lastRunId ?? 0"},
+					"pagination": map[string]any{
+						"type":        "cursor",
+						"limit":       10,
+						"cursorField": "id",
+					},
+				}),
+			},
+			wantErrSub: "cursor pagination requires a parameter expression",
 		},
 	}
 
