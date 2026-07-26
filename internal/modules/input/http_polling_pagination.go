@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/cannectors/runtime/internal/logger"
 )
@@ -42,7 +43,9 @@ func (h *HTTPPolling) fetchPageBased(ctx context.Context, baseEndpoint string) (
 	)
 
 	for page <= maxPaginationPages {
-		pageURL, err := h.buildPaginatedURLFrom(baseEndpoint, h.pagination.Param, strconv.Itoa(page))
+		params := h.paginationLimitParams()
+		params[h.pagination.Param] = strconv.Itoa(page)
+		pageURL, err := h.buildPaginatedURLMultiFrom(baseEndpoint, params)
 		if err != nil {
 			return nil, err
 		}
@@ -152,15 +155,13 @@ func (h *HTTPPolling) fetchCursorBased(ctx context.Context, baseEndpoint string)
 	)
 
 	for iterationsFetched < maxPaginationPages {
-		var fetchURL string
-		var err error
-		if cursor == "" {
-			fetchURL = baseEndpoint
-		} else {
-			fetchURL, err = h.buildPaginatedURLFrom(baseEndpoint, h.pagination.Param, cursor)
-			if err != nil {
-				return nil, err
-			}
+		params := h.paginationLimitParams()
+		if cursor != "" {
+			params[h.pagination.Param] = cursor
+		}
+		fetchURL, err := h.buildPaginatedURLMultiFrom(baseEndpoint, params)
+		if err != nil {
+			return nil, err
 		}
 		records, nextCursor, err := h.fetchCursorWithMeta(ctx, fetchURL, h.pagination.NextCursorField)
 		if err != nil {
@@ -241,24 +242,56 @@ func (h *HTTPPolling) fetchAndParseObject(ctx context.Context, endpoint string) 
 	return result, nil
 }
 
-func extractIntField(obj map[string]any, field string) int {
-	if field == "" {
-		return 0
+// resolvePath walks obj following a dot-separated field path and returns the
+// value at the leaf. A single segment behaves like a plain map lookup, so flat
+// field names keep working; nested paths like "meta.next_cursor" are resolved
+// segment by segment. This backs dataField / nextCursorField / totalPagesField /
+// totalField so the runtime matches the nested paths shown in the docs.
+func resolvePath(obj map[string]any, path string) (any, bool) {
+	if path == "" {
+		return nil, false
 	}
-	if val, ok := obj[field].(float64); ok {
-		return int(val)
+	var current any = obj
+	for _, segment := range strings.Split(path, ".") {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = m[segment]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func extractIntField(obj map[string]any, field string) int {
+	if val, ok := resolvePath(obj, field); ok {
+		if num, ok := val.(float64); ok {
+			return int(num)
+		}
 	}
 	return 0
 }
 
 func extractStringField(obj map[string]any, field string) string {
-	if field == "" {
+	val, ok := resolvePath(obj, field)
+	if !ok {
 		return ""
 	}
-	if val, ok := obj[field].(string); ok {
-		return val
+	// Cursors are opaque tokens; APIs often return them as JSON numbers rather
+	// than strings. Coerce scalar values so a numeric next_cursor is followed
+	// exactly like a string one (integers up to 2^53 render exactly).
+	switch v := val.(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(v)
+	default:
+		return ""
 	}
-	return ""
 }
 
 func (h *HTTPPolling) extractRecordsFromObject(obj map[string]any) ([]map[string]any, error) {
@@ -276,16 +309,15 @@ func (h *HTTPPolling) extractRecordsFromObject(obj map[string]any) ([]map[string
 	return nil, fmt.Errorf("%w: pagination requires dataField when response is object (tried common fields: %v)", ErrInvalidDataField, commonFields)
 }
 
-// buildPaginatedURLFrom adds a single query parameter to baseURL.
-func (h *HTTPPolling) buildPaginatedURLFrom(baseURL, param, value string) (string, error) {
-	parsedURL, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf(errMsgParsingEndpointURL, err)
+// paginationLimitParams returns the page-size query param to add to every
+// paginated request when limitParam/limit are configured. Offset already emits
+// it inline; page and cursor rely on this so all three strategies behave alike.
+func (h *HTTPPolling) paginationLimitParams() map[string]string {
+	params := map[string]string{}
+	if h.pagination.LimitParam != "" && h.pagination.Limit > 0 {
+		params[h.pagination.LimitParam] = strconv.Itoa(h.pagination.Limit)
 	}
-	q := parsedURL.Query()
-	q.Set(param, value)
-	parsedURL.RawQuery = q.Encode()
-	return parsedURL.String(), nil
+	return params
 }
 
 // buildPaginatedURLMultiFrom adds multiple query parameters to baseURL.
