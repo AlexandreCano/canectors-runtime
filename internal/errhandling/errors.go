@@ -477,22 +477,3 @@ func NewRateLimitError(message string, originalErr error) *ClassifiedError {
 		OriginalErr: originalErr,
 	}
 }
-
-// sanitizeErrorURL strips the parts of a URL that carry secrets before it is
-// put in an error message: the query string (api keys, tokens) and any
-// user:password credentials. httpclient has a similar helper, but httpclient
-// imports this package, so duplicating the few lines here avoids an import
-// cycle. Unlike that one, this also drops credentials.
-func sanitizeErrorURL(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "[invalid URL]"
-	}
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	parsed.User = nil
-	return parsed.String()
-}
