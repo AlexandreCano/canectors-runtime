@@ -331,7 +331,13 @@ func TestJSConsole_Integration(t *testing.T) {
 		t.Fatalf("failed to create module: %v", err)
 	}
 
-	if module.console == nil {
+	// The console is bound to a runtime, and a runtime now belongs to an
+	// execution rather than to the module, so check the run the module builds.
+	run, err := module.newScriptRun()
+	if err != nil {
+		t.Fatalf("newScriptRun() error = %v", err)
+	}
+	if run.console == nil {
 		t.Fatal("console should be initialized")
 	}
 }
