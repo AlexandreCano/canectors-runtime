@@ -14,11 +14,15 @@ Exit code: 0 if every scenario passes, 1 otherwise.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
 import shlex
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -265,6 +269,152 @@ def parse_pipeline_status(log_file: Path, pipeline_id: str) -> str:
             if evt.get("pipeline_id") == pipeline_id:
                 status = evt.get("status", "")
     return status
+
+
+# ---------- webhook scenarios ------------------------------------------------
+#
+# A webhook input is a server, not a scheduled job: it never "completes", so the
+# scheduled-run helper cannot drive it and these cases lived in a shell script
+# with grep-based checks. A scenario carrying a `webhook:` block instead starts
+# the pipeline, waits for the port, fires the listed requests, and asserts each
+# response code before the usual journal assertions run.
+
+
+def parse_listen_address(pipeline_doc: dict[str, Any]) -> tuple[str, int]:
+    listen = (pipeline_doc.get("input") or {}).get("listenAddress") or "0.0.0.0:8080"
+    host, _, port = listen.rpartition(":")
+    return (host or "127.0.0.1").replace("0.0.0.0", "127.0.0.1"), int(port)
+
+
+def wait_for_port(host: str, port: int, timeout_s: float = 15.0) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            if sock.connect_ex((host, port)) == 0:
+                return True
+        time.sleep(0.05)
+    return False
+
+
+def sign_body(body: str, spec: dict[str, Any]) -> str:
+    """Compute the signature header value the webhook expects.
+
+    Signing here rather than pasting hex constants into scenarios keeps the
+    tampered-body and replay cases honest: the signature always matches whatever
+    body the scenario actually sends, unless it deliberately says otherwise.
+    """
+    secret = spec["secret"].encode()
+    digest = hmac.new(secret, body.encode(), hashlib.sha256).hexdigest()
+    return spec.get("prefix", "sha256=") + digest
+
+
+def send_webhook_request(url: str, req: dict[str, Any]) -> int:
+    """Fire one request and return the HTTP status code (0 when no response)."""
+    headers = dict(req.get("headers") or {})
+    body = req.get("body", "")
+    if "sign" in req:
+        sign = req["sign"]
+        signed_body = sign.get("body", body)
+        headers[sign.get("header", "X-Webhook-Signature")] = sign_body(signed_body, sign)
+
+    cmd = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+           "--max-time", str(req.get("timeout", 10)),
+           "-X", req.get("method", "POST"), url]
+    for name, value in headers.items():
+        cmd += ["-H", f"{name}: {value}"]
+    if req.get("body_file"):
+        cmd += ["--data-binary", "@" + str(REPO_ROOT / req["body_file"])]
+    else:
+        cmd += ["--data-binary", body]
+
+    out = subprocess.run(cmd, capture_output=True, text=True, check=False).stdout.strip()
+    try:
+        return int(out)
+    except ValueError:
+        return 0
+
+
+def run_webhook_scenario(
+    spec: dict[str, Any], pipeline_path: Path, pipeline_doc: dict[str, Any]
+) -> tuple[list[AssertionResult], Path]:
+    """Start the listener, drive the requests, return their assertions."""
+    webhook = spec["webhook"]
+    results: list[AssertionResult] = []
+
+    subprocess.run(
+        ["go", "build", "-o", str(REPO_ROOT / "bin" / "cannectors"), "./cmd/cannectors"],
+        cwd=REPO_ROOT, check=True,
+    )
+    log_file = Path(
+        subprocess.run(["mktemp"], capture_output=True, text=True, check=True).stdout.strip()
+    )
+    env = None
+    if spec.get("env"):
+        env = {**os.environ, **{k: str(v) for k, v in spec["env"].items()}}
+
+    with log_file.open("w") as log:
+        proc = subprocess.Popen(
+            [str(REPO_ROOT / "bin" / "cannectors"), "run", str(pipeline_path)],
+            stdout=log, stderr=subprocess.STDOUT, cwd=REPO_ROOT, env=env,
+        )
+
+    try:
+        host, port = parse_listen_address(pipeline_doc)
+        if not wait_for_port(host, port):
+            results.append(
+                AssertionResult("webhook listener started", False,
+                                f"nothing listening on {host}:{port}")
+            )
+            return results, log_file
+        results.append(AssertionResult("webhook listener started", True, f"{host}:{port}"))
+
+        path = (pipeline_doc.get("input") or {}).get("path", "/")
+        url = f"http://{host}:{port}{path}"
+
+        for req in webhook.get("requests", []):
+            label = req.get("name", req.get("method", "POST"))
+            repeat = int(req.get("repeat", 1))
+            codes = [send_webhook_request(url, req) for _ in range(repeat)]
+
+            if "expect_status" in req:
+                expected = int(req["expect_status"])
+                ok = all(c == expected for c in codes)
+                results.append(
+                    AssertionResult(f"webhook {label} -> {expected}", ok,
+                                    f"got {codes if repeat > 1 else codes[0]}")
+                )
+            if "expect_status_in" in req:
+                allowed = {int(c) for c in req["expect_status_in"]}
+                ok = all(c in allowed for c in codes)
+                results.append(
+                    AssertionResult(f"webhook {label} in {sorted(allowed)}", ok,
+                                    f"got {sorted(set(codes))}")
+                )
+            if "expect_count_status" in req:
+                # e.g. a burst must yield at least N rate-limited responses.
+                want_code = int(req["expect_count_status"]["status"])
+                at_least = int(req["expect_count_status"]["at_least"])
+                seen = sum(1 for c in codes if c == want_code)
+                results.append(
+                    AssertionResult(
+                        f"webhook {label}: at least {at_least} x {want_code}",
+                        seen >= at_least,
+                        f"got {seen} of {len(codes)} ({sorted(set(codes))})",
+                    )
+                )
+
+        # Queued work is handled after the response is written, so give the
+        # pipeline a moment before asserting on the destination journal.
+        time.sleep(float(webhook.get("settle_seconds", 1.5)))
+    finally:
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGTERM)
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    return results, log_file
 
 
 # ---------- reconciliation ---------------------------------------------------
@@ -636,6 +786,25 @@ def run_scenario(path: Path) -> ScenarioResult:
     pipeline_doc = yaml.safe_load(pipeline_path.read_text())
     pipeline_id = pipeline_doc["name"]
     timeout = int(spec.get("timeout", 30))
+
+    if "webhook" in spec:
+        # A listener never reaches "execution completed", so the status check is
+        # replaced by the request-level assertions the webhook block declares.
+        webhook_results, log_file = run_webhook_scenario(spec, pipeline_path, pipeline_doc)
+        result.log_path = log_file
+        result.pipeline_status = result.expected_status
+        for ar in webhook_results:
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
+        for idx, assertion in enumerate(spec.get("assertions", [])):
+            ar = evaluate_assertion(idx, assertion, log_file)
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
+        return result
 
     log_file = run_pipeline_once(pipeline_path, timeout=timeout, env=spec.get("env"))
     result.log_path = log_file

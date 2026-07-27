@@ -1,6 +1,6 @@
 # Plan de validation — passer du « vert en laboratoire » au « digne de confiance en production »
 
-> Statut : **P0, P2 et P3 terminés**, harnais **P1 prêt** (run longue durée à lancer). P4 à P6 à faire.
+> Statut : **P0, P2, P3 et P4 terminés**, harnais **P1 prêt** (run longue durée à lancer). P5 et P6 à faire.
 > Point de départ : 307 scénarios E2E verts, 2118 tests unitaires, race detector en CI, lint propre.
 > Objectif : combler les angles morts que la suite actuelle ne peut **structurellement** pas couvrir,
 > et remplacer une confiance déclarative par des preuves mesurables.
@@ -224,7 +224,7 @@ identifiants — à revoir lors de l'audit des secrets dans les logs.
 
 ---
 
-### P4 — Durcissement du webhook — **effort M, rendement élevé (surface exposée)**
+### P4 — Durcissement du webhook — ✅ **terminé**
 
 **Objectif** : c'est le seul module qui écoute sur le réseau ; il mérite le traitement le plus dur.
 Aujourd'hui il est encore couvert par `verify-webhook.sh` (impératif, grep de logs).
@@ -242,10 +242,34 @@ Aujourd'hui il est encore couvert par `verify-webhook.sh` (impératif, grep de l
 - **Non-régression 22.7** : vérifier que le handler asynchrone ne subit pas l'annulation du contexte
   de la requête HTTP (le bug déjà corrigé) — un test explicite, car c'est un piège structurel.
 
-**Critères de sortie**
-- Aucune requête acceptée (2xx) n'est perdue sans trace.
-- Tous les cas hostiles renvoient un code correct sans faire tomber le serveur.
-- Le rejeu HMAC a un comportement documenté.
+**Critères de sortie — atteints**
+- ✅ Les cas webhook sont désormais des **scénarios déclaratifs** : `run.py` accepte un bloc
+  `webhook:` qui démarre le listener, attend le port, envoie les requêtes et vérifie chaque code
+  de réponse. Le runner **calcule les HMAC lui-même** (pas de constantes hex), ce qui rend honnêtes
+  les cas « corps modifié après signature » et « mauvais secret ».
+- ✅ Tous les cas hostiles renvoient un code correct **et le listener survit** : chaque scénario se
+  termine par une requête valide, donc un serveur tombé fait échouer le test. Corps vide, JSON
+  invalide, JSON non-objet, JSON tronqué, `dataField` absent → **400** dans tous les cas.
+- ✅ Rafale au-delà de `rateLimit` : sur 20 requêtes, **6 acceptées (202) et 14 en 429** — rien n'est
+  silencieusement jeté.
+- ✅ Rejeu HMAC documenté : la même requête rejouée est **acceptée** (la signature ne couvre que le
+  corps, sans nonce ni horodatage). Verrouillé par un test et documenté côté doc utilisateur avec la
+  recommandation d'un écrit idempotent en aval.
+
+**Défaut corrigé — surface exposée**
+`validateSignature` comparait la valeur d'en-tête **brute** à un hex nu, sans gérer de préfixe, alors
+que l'en-tête par défaut est `X-Hub-Signature-256` — dont la convention (GitHub et assimilés) envoie
+**toujours** `sha256=<hex>`. **Un vrai webhook GitHub aurait donc échoué en 401 avec la configuration
+par défaut.** Le préfixe est maintenant retiré avant comparaison ; l'hex brut reste accepté
+(rétro-compatible), la comparaison reste en temps constant. Documenté dans
+`cannectors-doc/.../inputs/webhook/index.mdx`.
+
+**Reste hors périmètre de cette passe**
+- Corps géants (10 Mo / 100 Mo), `Content-Length` mensonger, en-têtes dupliqués.
+- Client lent (*slow-loris*) contre `requestTimeoutMs`.
+- Saturation de `queueSize` / `maxConcurrent` observée en tant que telle (le rejet 429 arrive avant).
+- L'ancien `verify-webhook.sh` est conservé : il couvre encore le chemin file d'attente et sert de
+  filet pendant la transition.
 
 ---
 

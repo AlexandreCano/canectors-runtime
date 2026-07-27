@@ -1,0 +1,28 @@
+name: webhook-hostile-payloads
+description: "Malformed payloads are rejected with a client error and never take the listener down."
+pipeline: test-lab/pipelines/webhook-simple.yaml
+setup:
+  reset_db: false
+webhook:
+  requests:
+    - name: empty body
+      body: ''
+      expect_status: 400
+    - name: body that is not JSON
+      body: 'not-json-at-all'
+      expect_status: 400
+    - name: JSON that is not an object
+      body: '"just a string"'
+      expect_status: 400
+    - name: JSON truncated mid-array
+      body: '{"orders": [{"id": "X"'
+      expect_status: 400
+    - name: dataField absent from the payload
+      body: '{"something_else": []}'
+      expect_status: 400
+    # The listener must still be healthy after all of the above.
+    - name: valid payload after the hostile ones
+      body: '{"orders": [{"id": "WH-ALIVE"}]}'
+      expect_status: 200
+assertions:
+  - log_not_contains: "panic:"

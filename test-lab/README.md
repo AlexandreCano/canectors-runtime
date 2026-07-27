@@ -223,6 +223,41 @@ TLS uses WireMock's HTTPS listener on port 18443 with its bundled self-signed ce
 which is how the lab checks that the runtime validates certificates rather than trusting
 whatever it is handed.
 
+## Webhook scenarios
+
+A webhook input is a server, not a scheduled job: it never "completes", so the
+scheduled-run helper cannot drive it. A scenario carrying a `webhook:` block instead
+starts the pipeline, waits for the port, fires the listed requests, checks each response
+code, then runs the usual journal assertions.
+
+```yaml
+webhook:
+  settle_seconds: 1.5        # optional: wait before asserting on the journal
+  requests:
+    - name: signed payload
+      body: '{"orders": [{"id": "WH-1"}]}'
+      sign: { secret: lab-secret, header: X-Webhook-Signature, prefix: "sha256=" }
+      expect_status: 200
+    - name: burst
+      body: '{"orders": [{"id": "WH-2"}]}'
+      repeat: 20
+      expect_count_status: { status: 429, at_least: 1 }
+    - name: tampered
+      body: '{"id": "changed"}'
+      sign: { secret: lab-secret, body: '{"id": "original"}' }   # sign a different body
+      expect_status: 401
+```
+
+The runner computes the HMAC itself rather than carrying hex constants, which is what
+keeps the tampered-body and wrong-secret cases honest: the signature always matches the
+body actually sent unless the scenario says otherwise. `expect_status_in` accepts a set,
+`expect_count_status` asserts how many responses of a burst carried a given code.
+
+Covered today: valid signatures in both spellings, missing, invalid, tampered and
+wrong-secret signatures, replay, empty and malformed bodies, a payload without the
+configured `dataField`, and a burst beyond the rate limit. Every hostile case is followed
+by a valid request, so a listener taken down by one of them fails the scenario.
+
 ## Crash testing (state integrity and delivery semantics)
 
 `run.py` always stops a pipeline politely, so `test-lab/scripts/crash.py` covers the hard
