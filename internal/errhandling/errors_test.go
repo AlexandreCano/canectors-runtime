@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -209,6 +210,31 @@ func TestClassifyNetworkError(t *testing.T) {
 		}
 		if !err.Retryable {
 			t.Error("URL errors should be retryable")
+		}
+	})
+
+	// A classified network error is logged and surfaced to users, so the URL it
+	// carries must not bring credentials along. The cause has to survive though:
+	// stripping it is what made every transport failure read alike.
+	t.Run("URL error hides secrets but keeps the cause", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  "Get",
+			URL: "https://user:hunter2@api.example.com/feed?api_key=s3cret",
+			Err: errors.New("x509: certificate signed by unknown authority"),
+		}
+
+		message := ClassifyNetworkError(urlErr).Message
+
+		for _, secret := range []string{"hunter2", "s3cret", "api_key"} {
+			if strings.Contains(message, secret) {
+				t.Errorf("message leaked %q: %s", secret, message)
+			}
+		}
+		if !strings.Contains(message, "certificate signed by unknown authority") {
+			t.Errorf("message dropped the cause: %s", message)
+		}
+		if !strings.Contains(message, "https://api.example.com/feed") {
+			t.Errorf("message lost the endpoint: %s", message)
 		}
 	})
 

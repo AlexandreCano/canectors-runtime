@@ -5,6 +5,10 @@ import (
 	"encoding/hex"
 	"sync"
 	"time"
+
+	// singleflight collapses concurrent misses on the same credentials into one
+	// token request, which a plain mutex would only do by serializing callers.
+	"golang.org/x/sync/singleflight"
 )
 
 // Scheduled pipelines rebuild their modules on every tick, so each run used to
@@ -18,6 +22,9 @@ import (
 // the same client. It stays in memory only, and the key is hashed so no secret
 // is retained in a map key.
 var sharedTokenCache = &tokenCache{entries: map[string]tokenCacheEntry{}}
+
+// tokenFetchGroup dedupes in-flight token requests per credentials key.
+var tokenFetchGroup singleflight.Group
 
 type tokenCacheEntry struct {
 	token  string
