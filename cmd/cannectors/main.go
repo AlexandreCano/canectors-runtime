@@ -422,6 +422,11 @@ func runWebhookPipeline(pipeline *connector.Pipeline) {
 	}
 
 	executor := runtime.NewExecutorWithModules(nil, filterModules, outputModule, dryRun)
+	// The webhook builds its modules once and serves every delivery with them, so
+	// the executor must not close them between requests. Without this a database
+	// output answered the first delivery and then failed every later one with
+	// "sql: database is closed".
+	executor.RetainModules()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -92,8 +92,25 @@ type Executor struct {
 	outputModule  output.Module
 	dryRun        bool
 
+	// retainModules records that the caller owns the modules and reuses them
+	// across executions, so this executor must not close them. By default an
+	// executor is handed modules built for a single run and releases them when
+	// that run ends.
+	retainModules bool
+
 	// State persistence
 	stateStore *persistence.StateStore
+}
+
+// RetainModules tells the executor that the caller owns the modules and will
+// close them itself, so they must survive an execution.
+//
+// It exists because closing a module the caller intends to reuse is not a leak,
+// it is a break: a database output whose pool is closed answers every later
+// execution with "sql: database is closed". Any caller that builds modules once
+// and executes more than once must set this.
+func (e *Executor) RetainModules() {
+	e.retainModules = true
 }
 
 // NewExecutorWithModules creates a new pipeline executor with all modules configured.
@@ -416,7 +433,9 @@ func (e *Executor) ExecuteWithContext(ctx context.Context, pipeline *connector.P
 
 	// Setup output module cleanup (deferred to end of execution)
 	if e.outputModule != nil {
-		defer e.closeModule(pipeline.ID, "output", e.outputModule, traceID)
+		if !e.retainModules {
+			defer e.closeModule(pipeline.ID, "output", e.outputModule, traceID)
+		}
 	}
 
 	// Setup state persistence if input module supports it
@@ -525,7 +544,11 @@ func (e *Executor) executePipelineStages(
 	// This releases network resources (HTTP connections, connection pools) promptly,
 	// before filter and output execution begins. Fetched records remain in memory.
 	// For HTTP Polling modules, this closes idle connections in the connection pool.
-	if e.inputModule != nil {
+	//
+	// Skipped when the caller retains the modules: releasing the input here would
+	// leave the next execution with a closed pool, and clearing the reference
+	// would leave it with no input at all.
+	if e.inputModule != nil && !e.retainModules {
 		e.closeModule(pipeline.ID, "input", e.inputModule, traceID)
 		e.inputModule = nil // Prevent double-close
 	}
