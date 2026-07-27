@@ -50,6 +50,10 @@ type oauth2Handler struct {
 	mu          sync.RWMutex
 	cachedToken string
 	tokenExpiry time.Time
+
+	// cacheKey identifies these credentials in the process-wide token cache,
+	// which survives the per-tick rebuilding of pipeline modules.
+	cacheKey string
 }
 
 // newOAuth2Handler creates a new OAuth2 client credentials authentication handler.
@@ -71,12 +75,14 @@ func newOAuth2Handler(config *connector.AuthConfig, httpClient *http.Client) (*o
 		}
 	}
 
+	scopes := strings.Fields(creds.Scope)
 	return &oauth2Handler{
 		tokenURL:     creds.TokenURL,
 		clientID:     creds.ClientID,
 		clientSecret: creds.ClientSecret,
-		scopes:       strings.Fields(creds.Scope),
+		scopes:       scopes,
 		httpClient:   client,
+		cacheKey:     tokenCacheKey(creds.TokenURL, creds.ClientID, creds.ClientSecret, scopes),
 	}, nil
 }
 
@@ -137,6 +143,16 @@ func (h *oauth2Handler) getValidToken(ctx context.Context) (string, error) {
 	}
 	h.mu.RUnlock()
 
+	// This handler has no token, but another one built for the same credentials
+	// may already hold a valid one. Scheduled runs rebuild their modules every
+	// tick, so without this every execution would fetch a fresh token.
+	if token, expiry, ok := sharedTokenCache.get(h.cacheKey); ok {
+		h.mu.Lock()
+		h.cachedToken, h.tokenExpiry = token, expiry
+		h.mu.Unlock()
+		return token, nil
+	}
+
 	// Need to refresh token (write lock)
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -154,6 +170,7 @@ func (h *oauth2Handler) getValidToken(ctx context.Context) (string, error) {
 
 	h.cachedToken = token
 	h.tokenExpiry = expiry
+	sharedTokenCache.put(h.cacheKey, token, expiry)
 
 	return token, nil
 }
@@ -264,6 +281,7 @@ func (h *oauth2Handler) InvalidateToken() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cachedToken = ""
+	sharedTokenCache.invalidate(h.cacheKey)
 	h.tokenExpiry = time.Time{}
 }
 

@@ -318,7 +318,8 @@ L'audit a trouvé une vraie fuite : des identifiants placés dans l'URL
 d'appel**. Tests ajoutés dans `internal/httpclient/error_test.go`. Tous les autres emplacements
 étaient déjà propres : bearer, basic, api-key, secret OAuth2, token en query, mot de passe DSN.
 
-**🔴 FINDING NON CORRIGÉ — un script emballé rend le process inarrêtable**
+**✅ FINDING CORRIGÉ — un script emballé rendait le process inarrêtable**
+*(description d'origine conservée ci-dessous ; correctif au bout)*
 Un filtre `script` contenant `while (true) {}` (idem allocation massive ou récursion infinie) :
 - tourne indéfiniment en consommant **~91 % d'un cœur** ;
 - **reçoit** SIGTERM (« Received terminated signal ») mais **n'achève jamais son arrêt** :
@@ -329,16 +330,55 @@ progressifs bloqués. Le mécanisme d'interruption existe pourtant (`context.Aft
 `runtime.Interrupt` dans `internal/modules/filter/script.go`) et le scheduler appelle bien `s.cancel()`
 — **le contexte reçu par le filtre n'est donc pas celui qui est annulé**. Tracer et corriger ce chemin
 touche l'arrêt et l'exécution : délibérément laissé au user plutôt qu'improvisé.
-*Pistes* : (a) garantir que le contexte d'exécution des filtres dérive du contexte annulable du
-scheduler ; (b) ajouter un timeout d'exécution par script (option de module), ce qui borne le risque
-même si (a) régresse.
+**Cause racine trouvée** : `PipelineExecutorAdapter` (cmd/cannectors/main.go) n'implémentait que
+`Execute(pipeline)`. Le scheduler fait `s.executor.(ContextExecutor)` et **retombe silencieusement**
+sur `Execute` quand l'assertion échoue — or `Executor.Execute` appelle
+`ExecuteWithContext(context.Background(), …)`. **Toute exécution planifiée tournait donc sous un
+contexte non annulable.** Le mécanisme d'interruption fonctionnait parfaitement (prouvé par un test
+unitaire isolé) : il ne recevait simplement jamais l'annulation.
 
-**🟡 FINDING NON CORRIGÉ — aucun cache des tokens OAuth2**
+**Correctif** : l'adaptateur implémente `ExecuteWithContext` et propage le contexte jusqu'au runtime ;
+`Execute` délègue avec `context.Background()` pour compatibilité. Une **assertion de compilation**
+(`var _ scheduler.ContextExecutor = (*PipelineExecutorAdapter)(nil)`) empêche ce mode dégradé
+silencieux de revenir.
+
+**Résultats** : le script emballé s'arrête en **105 ms** après SIGTERM (au lieu de jamais).
+**Bonus non prévu** : le trace ID du scheduler se propage enfin dans le runtime — les lignes
+`scheduled pipeline execution starting` et `execution started` portaient jusqu'ici des IDs
+**différents**, ce qui cassait la corrélation des logs. Régression verrouillée par
+`internal/modules/filter/script_interrupt_test.go`.
+
+**✅ FINDING CORRIGÉ — aucun cache des tokens OAuth2**
 Un token annoncé valide **3600 s** est redemandé **à chaque exécution** (8 demandes pour 8 appels,
 mesuré). Un pipeline pollant toutes les 15 s ferait ~5 760 demandes de token par jour pour rien —
 beaucoup de fournisseurs (Auth0, Okta…) limitent agressivement ce endpoint. Conséquence pour les tests :
 le scénario `auth-oauth2-refresh` prouve que l'authentification tient dans la durée, mais **ne peut pas
 distinguer** « renouvelé à l'expiration » de « redemandé systématiquement ».
+
+**Cause racine — plus large que l'OAuth2** : le cache de tokens existait bien (`cachedToken`,
+`tokenExpiryBuffer`) mais **par instance de handler**, et *chaque tick reconstruit tous les modules*
+(`factory.Create*Module` dans l'adaptateur). Tous les caches repartent donc froids à chaque exécution.
+Mesuré au-delà de l'OAuth2 : le **cache LRU d'`http_call` est lui aussi réinitialisé** — 18 appels
+d'enrichissement pour 6 exécutions, soit 3 par tick au lieu de 3 au total.
+
+**Correctif (ciblé)** : `internal/auth/oauth2_tokencache.go` ajoute un cache de tokens **à l'échelle
+du process**, clé = SHA-256 de (tokenUrl, clientId, clientSecret, scopes) — un secret pivoté produit
+donc une clé différente, et aucun secret n'est conservé lisible en mémoire. Mesure : **8 exécutions →
+1 seule demande de token** (contre 8 avant). Le renouvellement à expiration reste actif (vérifié avec
+`expires_in: 1`). Tests dans `oauth2_tokencache_test.go`.
+
+**🟡 RESTE OUVERT — les modules sont reconstruits à chaque tick**
+Le correctif ci-dessus traite le symptôme le plus coûteux (endpoint de token martelé, souvent
+rate-limité). La cause structurelle demeure : à chaque exécution planifiée, les modules input/filter/
+output sont recréés, ce qui réinitialise les caches LRU d'`http_call`/`sql_call` et fait tourner les
+pools de connexions. Corriger cela (construire les modules une fois par pipeline et les réutiliser)
+est un changement d'architecture — état des modules, sûreté concurrente, sémantique de `Close` — qui
+mérite sa propre branche et sa propre revue.
+
+*Note : ce comportement n'est pas démontrable par un scénario déclaratif, le runner tuant le pipeline
+après la première exécution. Preuve reproductible à la main :
+`timeout 8 ./bin/cannectors run test-lab/pipelines/auth-input-oauth2.yaml` puis compter les requêtes
+dans le journal WireMock.*
 
 ---
 
