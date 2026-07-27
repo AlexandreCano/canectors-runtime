@@ -1,0 +1,10 @@
+name: volume-1000
+description: "Reconciliation holds at 1 000 records — every fetched record reaches the destination."
+pipeline: test-lab/pipelines/volume-1000.yaml
+expect_status: success
+timeout: 60
+records_expected: 1000
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

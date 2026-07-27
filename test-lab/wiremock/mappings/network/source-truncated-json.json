@@ -1,0 +1,10 @@
+{
+  "name": "network-source-truncated-json",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/truncated-json" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"data\": [{\"id\": \"TRUNC-1\"}, {\"id\": \"TRUNC-2\""
+  }
+}

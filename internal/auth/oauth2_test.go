@@ -713,6 +713,7 @@ func TestOAuth2Handler_PreviewAuth_UsesCachedToken(t *testing.T) {
 }
 
 func TestOAuth2Handler_PreviewAuth_ExpiredToken(t *testing.T) {
+	resetSharedTokenCache(t)
 	// An expired cached token must be treated as absent by PreviewAuth (no refetch).
 	config := &connector.AuthConfig{
 		Type: "oauth2",
@@ -731,10 +732,7 @@ func TestOAuth2Handler_PreviewAuth_ExpiredToken(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *oauth2Handler, got %T", handler)
 	}
-	oauth.mu.Lock()
-	oauth.cachedToken = "stale-token"
-	oauth.tokenExpiry = time.Now().Add(-1 * time.Minute)
-	oauth.mu.Unlock()
+	sharedTokenCache.put(oauth.cacheKey, "stale-token", time.Now().Add(-1*time.Minute))
 
 	previewer, ok := handler.(PreviewAuthHandler)
 	if !ok {

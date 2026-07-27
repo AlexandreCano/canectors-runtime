@@ -1,0 +1,19 @@
+name: doc-cursor-boolean-ends
+version: 1.0.0
+description: A nextCursorField pointing at a boolean reads as no cursor and ends pagination.
+tags: [test-lab, doc-derived, pagination]
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/doc/cursor-boolean
+  dataField: data
+  pagination:
+    type: cursor
+    param: cursor
+    nextCursorField: has_more
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/matrix/sink
+  method: POST
+  headers: { Content-Type: application/json }

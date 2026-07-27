@@ -1,0 +1,6 @@
+{
+  "name": "network-source-empty-response",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/empty-response" },
+  "response": { "fault": "EMPTY_RESPONSE" }
+}

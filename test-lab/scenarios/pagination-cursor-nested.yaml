@@ -4,6 +4,7 @@ description: >
   already supports dot-notation, so nextCursorField should too — fetch both pages.
 pipeline: test-lab/pipelines/pagination-cursor-nested.yaml
 expect_status: success
+records_expected: 4
 assertions:
   - http_count_eq:
       method: GET

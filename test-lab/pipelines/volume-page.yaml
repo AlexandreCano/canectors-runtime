@@ -1,0 +1,23 @@
+name: volume-page
+version: 1.0.0
+description: 3 000 records over 3 pages (page strategy) — no page may be lost.
+tags:
+  - test-lab
+  - volume
+  - reconciliation
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/volume/paginated-page
+  dataField: data
+  pagination:
+    type: page
+    param: page
+    totalPagesField: total_pages
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/volume/sink
+  method: POST
+  headers:
+    Content-Type: application/json

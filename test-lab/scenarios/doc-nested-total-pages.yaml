@@ -1,0 +1,13 @@
+name: doc-nested-total-pages
+description: "Documented: totalPagesField accepts a dot path, so meta.total_pages drives the page loop."
+pipeline: test-lab/pipelines/doc-nested-total-pages.yaml
+expect_status: success
+records_expected: 2
+setup:
+  reset_db: false
+assertions:
+  - http_count_eq: { method: GET, path: /source/doc/nested-total-pages, query: { page: "1" }, expected: 1 }
+  - http_count_eq: { method: GET, path: /source/doc/nested-total-pages, query: { page: "2" }, expected: 1 }
+  # Two pages exactly: a nested total_pages that failed to resolve would keep
+  # paging to the internal cap.
+  - http_count_eq: { method: GET, path: /source/doc/nested-total-pages, expected: 2 }

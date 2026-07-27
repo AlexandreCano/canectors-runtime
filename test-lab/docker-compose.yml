@@ -47,11 +47,19 @@ services:
     container_name: cannectors-test-lab-wiremock
     ports:
       - "18080:8080"
+      # HTTPS with WireMock's own self-signed certificate, so the lab can check
+      # that the runtime actually validates certificates instead of trusting
+      # anything it is handed.
+      - "18443:8443"
     volumes:
       - ./wiremock/mappings:/home/wiremock/mappings:ro
       - ./wiremock/__files:/home/wiremock/__files:ro
     command:
       - "--local-response-templating"
+      # Enables the HTTPS listener with WireMock's bundled self-signed
+      # certificate, used by the TLS scenarios.
+      - "--https-port"
+      - "8443"
       - "--verbose"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/__admin/mappings >/dev/null || wget -q -O - http://localhost:8080/__admin/mappings >/dev/null || exit 1"]

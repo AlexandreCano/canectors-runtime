@@ -1,0 +1,1 @@
+{"name":"source-volume-offset-0","priority":1,"request":{"method":"GET","urlPath":"/source/volume/paginated-offset","queryParameters":{"offset":{"equalTo":"0"},"limit":{"equalTo":"1000"}}},"response":{"status":200,"headers":{"Content-Type":"application/json"},"bodyFileName":"source/volume-offset-0.json"}}

@@ -153,6 +153,196 @@ empty `mysql_dest_customers` for output scenarios. Scenarios that write to it tr
 table in `setup.commands` so re-runs stay deterministic. Queries in pipelines always use the
 canonical `$1, $2, …` placeholders — the runtime translates them to `?` for MySQL and SQLite.
 
+## Reconciliation (record-loss invariant)
+
+Silent record loss is the worst failure mode for a pipeline runtime: the run reports
+`success`, nothing is logged, and records simply never arrive. Both cursor-pagination
+defects found by the first campaign had that shape. Per-scenario assertions only catch
+the cases someone thought of, so `run.py` reconciles counts on **every** scenario, with
+no per-scenario configuration:
+
+| Check | What it proves |
+|---|---|
+| `filter->output` | The output stage received every record the filter stage produced. |
+| `output accounts for every record` | An `httpRequest` output's `records_sent + records_failed` matches what it was handed. |
+| `sent->wire (no loss)` | The destination actually received at least as many records as the output claims it sent — summed across request bodies, so a batch counts its array length. |
+
+The wire check is deliberately one-sided: fewer records on the wire than sent is loss,
+which is what we hunt. **More** is normal — a retried request replays its whole batch,
+so delivery is at-least-once. Those runs report `replayed=N`, which quantifies the
+duplication.
+
+An output whose `onError` is `skip` or `log` drops offending records on purpose, so the
+stage checks relax to "no gain" automatically — no opt-out needed. A scenario can still
+set `reconcile: false` if its filters legitimately change counts in a way the runner
+cannot infer.
+
+### Declared totals catch loss on the input side
+
+The invariants above are all internal, and a truncated pagination loop is *internally
+consistent*: fetch 1 000 of 3 000 records and every downstream count agrees. Catching
+that needs an external expectation, so scenarios declare one:
+
+```yaml
+records_expected: 3000    # the fixtures hold exactly this many records
+```
+
+This is the check that would have caught the numeric-cursor defect on day one. The
+`volume-*` and `pagination-*` scenarios all declare their totals.
+
+## Volume fixtures
+
+`test-lab/scripts/generate-volume-fixtures.py` writes the large WireMock bodies used by
+the `volume-*` scenarios: single responses of 1 000 and 10 000 records, plus 3 pages of
+1 000 for each pagination strategy (3 000 records per strategy). The outputs are committed
+so a fresh clone works; rerun the script only when changing the volumes.
+
+## Network fault scenarios
+
+WireMock can break the transport, not just return error codes, so the `net-*` scenarios
+cover what a real network does and localhost never does. The stubs live in
+`wiremock/mappings/network/`.
+
+| Scenario | Fault | Must produce |
+|---|---|---|
+| `net-source-empty-response` | connection closed with no data | transport error |
+| `net-source-connection-reset` | `CONNECTION_RESET_BY_PEER` | transport error |
+| `net-source-malformed-chunk` | body truncated mid-stream | `reading response body` |
+| `net-source-random-then-close` | random bytes then close | transport error |
+| `net-source-truncated-json` | JSON cut off mid-array | `unexpected end of JSON input` |
+| `net-source-slow-timeout` | 3 s delay against `timeoutMs: 500` | `request timeout` |
+| `net-source-dns-failure` | host does not resolve | error naming the host |
+| `net-source-tls-selfsigned` | HTTPS with a self-signed certificate | `failed to verify certificate` |
+| `net-dest-*` | same faults on the destination | error, nothing counted as sent |
+
+The point of every one of them is the same: a broken transport must **fail**, never look
+like an empty-but-successful fetch. A truncated JSON body in particular must be rejected
+rather than yielding the records that happened to arrive before the cut.
+
+TLS uses WireMock's HTTPS listener on port 18443 with its bundled self-signed certificate,
+which is how the lab checks that the runtime validates certificates rather than trusting
+whatever it is handed.
+
+## Webhook scenarios
+
+A webhook input is a server, not a scheduled job: it never "completes", so the
+scheduled-run helper cannot drive it. A scenario carrying a `webhook:` block instead
+starts the pipeline, waits for the port, fires the listed requests, checks each response
+code, then runs the usual journal assertions.
+
+```yaml
+webhook:
+  settle_seconds: 1.5        # optional: wait before asserting on the journal
+  requests:
+    - name: signed payload
+      body: '{"orders": [{"id": "WH-1"}]}'
+      sign: { secret: lab-secret, header: X-Webhook-Signature, prefix: "sha256=" }
+      expect_status: 200
+    - name: burst
+      body: '{"orders": [{"id": "WH-2"}]}'
+      repeat: 20
+      expect_count_status: { status: 429, at_least: 1 }
+    - name: tampered
+      body: '{"id": "changed"}'
+      sign: { secret: lab-secret, body: '{"id": "original"}' }   # sign a different body
+      expect_status: 401
+```
+
+The runner computes the HMAC itself rather than carrying hex constants, which is what
+keeps the tampered-body and wrong-secret cases honest: the signature always matches the
+body actually sent unless the scenario says otherwise. `expect_status_in` accepts a set,
+`expect_count_status` asserts how many responses of a burst carried a given code.
+
+Covered today: valid signatures in both spellings, missing, invalid, tampered and
+wrong-secret signatures, replay, empty and malformed bodies, a payload without the
+configured `dataField`, and a burst beyond the rate limit. Every hostile case is followed
+by a valid request, so a listener taken down by one of them fails the scenario.
+
+## Doc-derived scenarios
+
+The `doc-*` scenarios are written from `cannectors-doc` as the only source: read a page,
+turn each promise it makes into an assertion, and see what has no test behind it. The
+method keeps finding gaps precisely because it does not start from the code, so it cannot
+inherit the code's assumptions.
+
+Its track record so far: it surfaced the missing `${VAR}` substitution, and a pass over the
+pagination page produced three claims nobody had tested — `limit` without `limitParam` being
+silently ignored, `totalPagesField` accepting a dot path, and a `nextCursorField` pointing at
+a boolean ending the loop rather than being coerced. The authentication page also claims
+tokens are cached, which was false until that was fixed.
+
+## Secret audit
+
+The documentation states that resolved secrets are never logged. That is a claim about
+every code path that formats a message, so `test-lab/scripts/secret-audit.py` checks it
+mechanically: each credential slot gets a unique sentinel value, the pipeline is driven
+through `validate`, `validate --verbose`, `run --dry-run`, `run` and `run --verbose`, and
+the captured output is searched for those sentinels.
+
+```bash
+test-lab/scripts/secret-audit.py          # PASS means no sentinel was ever printed
+test-lab/scripts/secret-audit.py --keep   # keep the generated fixtures to inspect
+```
+
+Slots covered: bearer token, basic password, api key, OAuth2 client secret, output bearer,
+credentials embedded in the endpoint URL, a token in a query parameter, and the database
+password inside a DSN.
+
+It earns its keep: the first run found credentials in a `user:password@host` endpoint being
+logged in clear text, which came down to `SanitizeURL` stripping the query but keeping the
+userinfo.
+
+## Crash testing (state integrity and delivery semantics)
+
+`run.py` always stops a pipeline politely, so `test-lab/scripts/crash.py` covers the hard
+case: it SIGKILLs a run at a chosen log marker, then inspects what survived.
+
+```bash
+test-lab/scripts/crash.py                       # every kill point
+test-lab/scripts/crash.py --point after-output  # one of them
+```
+
+Kill points are markers rather than sleeps: `mid-flight`, `after-fetch`, `after-output`.
+For each, the harness reports whether the state file is readable, how many records the
+destination had received, and what a restart delivers. It fails only on a corrupt state
+file or a lost record.
+
+Results so far: the state file is always valid JSON after a `SIGKILL` (the write is
+atomic — temp file then rename), and no record is lost.
+
+The pipeline behind it, `crash-state-id.yaml`, reads a source that **honours `after_id`**:
+a fresh run gets three events, a caught-up run gets none. That detail matters — against
+the static stub used by the other state scenarios, every restart replays the same records
+and the "duplicates" measured would be an artefact of the lab rather than the runtime.
+
+<!-- Honest limitation, worth keeping in view -->
+A duplicate count of 0 does **not** mean exactly-once. Delivery is at-least-once: a retry
+replays the whole batch, which `run.py` reports as `replayed=N`. A crash between delivery
+and the state write duplicates too, but an execution takes a few milliseconds end to end,
+so a marker-based kill lands either side of that window rather than inside it. Proving it
+would need a test hook that delays the state write.
+
+## Soak testing (leak detection)
+
+`test-lab/scripts/soak.py` runs one pipeline on its schedule for hours and reports whether
+resident memory, file descriptors, threads or database connections grow instead of
+plateauing. It also measures CRON drift and counts error lines.
+
+```bash
+make test-lab-soak                                   # 2 h on volume-1000
+make test-lab-soak DURATION=24h INTERVAL=60s
+make test-lab-soak PIPELINE=test-lab/pipelines/db-input-basic.yaml DURATION=8h
+test-lab/scripts/soak.py --analyse test-lab/soak/<run>   # re-read a finished run
+```
+
+Samples land in `test-lab/soak/<timestamp>/` (git-ignored) as `samples.csv` plus the
+pipeline log. The verdict compares the median of the last quarter of the run against the
+second quarter, so a pool filling or a cache warming early does not read as a leak.
+
+The binary exposes no pprof endpoint, so measurements come from `/proc`. That is enough to
+see a trend; wiring `net/http/pprof` into the CLI would give per-allocation detail and is
+a runtime change deliberately left out of the harness.
+
 ## Generated combinatorial layer
 
 Most of the suite is generated. `test-lab/generate-matrix.py` holds a declarative
@@ -429,6 +619,8 @@ assertions:
   - log_not_contains: "panic:"
 env:                              # optional: vars exported to the pipeline process
   LAB_BEARER_TOKEN: lab-bearer-token
+records_expected: 3000            # optional: total the input must fetch (see Reconciliation)
+reconcile: false                  # optional: opt out of the loss invariant (rarely needed)
 ```
 
 `env:` exists so scenarios can exercise `${VAR}` substitution and

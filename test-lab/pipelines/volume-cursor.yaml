@@ -1,0 +1,23 @@
+name: volume-cursor
+version: 1.0.0
+description: 3 000 records over 3 cursor iterations — no page may be lost.
+tags:
+  - test-lab
+  - volume
+  - reconciliation
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/volume/paginated-cursor
+  dataField: data
+  pagination:
+    type: cursor
+    param: cursor
+    nextCursorField: next_cursor
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/volume/sink
+  method: POST
+  headers:
+    Content-Type: application/json

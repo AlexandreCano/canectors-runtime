@@ -1,0 +1,22 @@
+name: db-output-sql-injection
+version: 1.0.0
+description: A record value containing SQL must be bound as a parameter, never executed.
+tags:
+  - test-lab
+  - database
+  - output
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/sql-injection/customers
+filters: []
+output:
+  type: database
+  connectionString: postgres://cannectors_test:cannectors_test@localhost:15432/cannectors_test?sslmode=disable
+  query: "INSERT INTO dest_customers (external_id, email, full_name, segment, source_updated_at, synced_at) VALUES ($1, $2, $3, $4, $5, NOW())"
+  parameters:
+    - record.externalId
+    - record.email
+    - record.fullName
+    - record.segment
+    - record.sourceUpdatedAt

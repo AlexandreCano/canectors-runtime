@@ -3,7 +3,8 @@ package httpclient
 import (
 	"fmt"
 	"net/http"
-	"net/url"
+
+	"github.com/cannectors/runtime/internal/urlsan"
 )
 
 // Error represents an HTTP error (status >= 400) emitted by a module.
@@ -54,21 +55,14 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("http error %d (%s) from %s: %s", e.StatusCode, e.Status, endpoint, e.Message)
 }
 
-// SanitizeURL returns the URL with query parameters and fragment stripped.
-// Used to avoid leaking credentials embedded in query params into error
-// messages and logs. If the URL cannot be parsed, returns a safe placeholder
-// rather than the raw (potentially sensitive) value.
+// SanitizeURL strips query parameters, fragment, and embedded credentials from
+// a URL before it reaches an error message or a log line.
+//
+// It stays exported here because most of the runtime reaches for it through
+// httpclient, but the implementation lives in urlsan so errhandling — which
+// httpclient imports — can use the very same one.
 func SanitizeURL(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "[invalid URL]"
-	}
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
+	return urlsan.Sanitize(raw)
 }
 
 // GetRetryAfter returns the raw Retry-After header value when present, or an

@@ -4,6 +4,7 @@ description: >
   the input must follow it exactly like a string cursor and fetch all 3 pages.
 pipeline: test-lab/pipelines/pagination-cursor-numeric.yaml
 expect_status: success
+records_expected: 6
 assertions:
   - http_count_eq:
       method: GET

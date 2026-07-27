@@ -1,0 +1,20 @@
+name: webhook-rate-limit
+description: "A burst beyond rateLimit is throttled with 429 rather than silently dropped, and the listener stays up."
+pipeline: test-lab/pipelines/webhook-queue.yaml
+setup:
+  reset_db: false
+webhook:
+  requests:
+    # The pipeline allows 5 requests per second with a burst of 5. Twenty
+    # back-to-back requests must therefore hit the limiter.
+    - name: burst of 20
+      body: '{"orders": [{"id": "WH-BURST"}]}'
+      repeat: 20
+      expect_count_status: { status: 429, at_least: 1 }
+    # Whatever the limiter rejected, the listener must still serve afterwards.
+    - name: request after the burst
+      body: '{"orders": [{"id": "WH-AFTER"}]}'
+      timeout: 15
+      expect_status_in: [200, 429]
+assertions:
+  - log_not_contains: "panic:"

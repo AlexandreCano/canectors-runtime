@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+
+	"github.com/cannectors/runtime/internal/urlsan"
 )
 
 // ErrorCategory represents the type/category of an error.
@@ -254,10 +256,16 @@ func ClassifyNetworkError(err error) *ClassifiedError {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		return &ClassifiedError{
-			Category:    CategoryNetwork,
-			Retryable:   true,
-			StatusCode:  0,
-			Message:     fmt.Sprintf("URL error: %s %s", urlErr.Op, urlErr.URL),
+			Category:   CategoryNetwork,
+			Retryable:  true,
+			StatusCode: 0,
+			// The wrapped cause is what tells a certificate failure apart from a
+			// connection reset or an EOF. Without it every transport problem
+			// reads as the same "URL error: Get <url>" line, which costs hours
+			// when diagnosing a live pipeline.
+			Message: fmt.Sprintf(
+				"URL error: %s %s: %v", urlErr.Op, urlsan.Sanitize(urlErr.URL), urlErr.Err,
+			),
 			OriginalErr: err,
 		}
 	}

@@ -1,0 +1,10 @@
+{
+  "name": "network-source-tls-ok",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/tls" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "data": [ { "id": "TLS-1" } ] }
+  }
+}

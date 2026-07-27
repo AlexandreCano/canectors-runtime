@@ -1,0 +1,6 @@
+{
+  "name": "network-source-random-then-close",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/random-then-close" },
+  "response": { "fault": "RANDOM_DATA_THEN_CLOSE" }
+}

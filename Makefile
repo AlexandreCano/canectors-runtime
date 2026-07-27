@@ -160,6 +160,12 @@ test-lab-run: ## Run the full test-lab E2E suite, including webhook scenarios. F
 		python3 test-lab/run.py && bash test-lab/scripts/verify-webhook.sh; \
 	fi
 
+.PHONY: test-lab-soak
+test-lab-soak: ## Soak one pipeline to look for leaks. PIPELINE=path DURATION=2h INTERVAL=30s
+	python3 test-lab/scripts/soak.py \
+		"$(or $(PIPELINE),test-lab/pipelines/volume-1000.yaml)" \
+		--duration "$(or $(DURATION),2h)" --interval "$(or $(INTERVAL),30s)"
+
 ##@ Code Quality
 
 .PHONY: fmt

@@ -1,0 +1,18 @@
+{
+  "name": "source-state-events-filtered-fresh",
+  "priority": 5,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/state/events-filtered",
+    "queryParameters": { "after_id": { "absent": true } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "events": [
+      {"event": {"id": "EVT-100"}, "name": "first"},
+      {"event": {"id": "EVT-101"}, "name": "second"},
+      {"event": {"id": "EVT-102"}, "name": "third"}
+    ] }
+  }
+}

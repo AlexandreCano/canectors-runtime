@@ -1,0 +1,20 @@
+name: net-dest-empty-response
+version: 1.0.0
+description: "Destination fault — empty-response."
+tags:
+  - test-lab
+  - network
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/matrix/record
+  dataField: data
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/network/destination/empty-response
+  method: POST
+  headers:
+    Content-Type: application/json
+  retry:
+    maxAttempts: 0

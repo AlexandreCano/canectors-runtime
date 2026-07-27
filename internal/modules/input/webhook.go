@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -666,6 +667,12 @@ func (w *Webhook) validateSignature(r *http.Request, body []byte) error {
 	if receivedSig == "" {
 		return ErrMissingSignature
 	}
+
+	// Providers that populate X-Hub-Signature-256 — the default header here —
+	// prefix the digest with its algorithm, as in "sha256=<hex>". Accept that
+	// form as well as a bare hex digest, otherwise the default configuration
+	// rejects every request from the ecosystem the default header comes from.
+	receivedSig = strings.TrimPrefix(receivedSig, "sha256=")
 
 	// Compute expected signature
 	mac := hmac.New(sha256.New, []byte(w.signature.Secret))

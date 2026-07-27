@@ -4,6 +4,7 @@ description: >
   requests should carry that page-size param, exactly like offset does with limit.
 pipeline: test-lab/pipelines/pagination-cursor.yaml
 expect_status: success
+records_expected: 6
 assertions:
   # limitParam/limit must be emitted on cursor requests (offset already does this).
   - http_count_ge:

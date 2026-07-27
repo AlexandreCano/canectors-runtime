@@ -4,6 +4,7 @@ description: >
   query param (after_id) and the page param. The stubs only match when both are present.
 pipeline: test-lab/pipelines/state-pagination.yaml
 expect_status: success
+records_expected: 3
 setup:
   reset_state: true
   reset_db: false

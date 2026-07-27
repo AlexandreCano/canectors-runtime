@@ -1,0 +1,10 @@
+name: volume-10000
+description: "Reconciliation holds at 10 000 records in a single response."
+pipeline: test-lab/pipelines/volume-10000.yaml
+expect_status: success
+timeout: 60
+records_expected: 10000
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

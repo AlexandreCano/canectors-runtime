@@ -1,0 +1,13 @@
+name: webhook-simple
+description: "An unauthenticated webhook accepts a payload and forwards it to the destination."
+pipeline: test-lab/pipelines/webhook-simple.yaml
+setup:
+  reset_db: false
+webhook:
+  requests:
+    - name: valid payload
+      body: '{"orders": [{"id": "WH-1"}]}'
+      headers: { Content-Type: application/json }
+      expect_status: 200
+assertions:
+  - log_not_contains: "panic:"

@@ -14,11 +14,15 @@ Exit code: 0 if every scenario passes, 1 otherwise.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
 import shlex
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -267,6 +271,340 @@ def parse_pipeline_status(log_file: Path, pipeline_id: str) -> str:
     return status
 
 
+# ---------- webhook scenarios ------------------------------------------------
+#
+# A webhook input is a server, not a scheduled job: it never "completes", so the
+# scheduled-run helper cannot drive it and these cases lived in a shell script
+# with grep-based checks. A scenario carrying a `webhook:` block instead starts
+# the pipeline, waits for the port, fires the listed requests, and asserts each
+# response code before the usual journal assertions run.
+
+
+def parse_listen_address(pipeline_doc: dict[str, Any]) -> tuple[str, int]:
+    listen = (pipeline_doc.get("input") or {}).get("listenAddress") or "0.0.0.0:8080"
+    host, _, port = listen.rpartition(":")
+    return (host or "127.0.0.1").replace("0.0.0.0", "127.0.0.1"), int(port)
+
+
+def wait_for_port(host: str, port: int, timeout_s: float = 15.0) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            if sock.connect_ex((host, port)) == 0:
+                return True
+        time.sleep(0.05)
+    return False
+
+
+def sign_body(body: str, spec: dict[str, Any]) -> str:
+    """Compute the signature header value the webhook expects.
+
+    Signing here rather than pasting hex constants into scenarios keeps the
+    tampered-body and replay cases honest: the signature always matches whatever
+    body the scenario actually sends, unless it deliberately says otherwise.
+    """
+    secret = spec["secret"].encode()
+    digest = hmac.new(secret, body.encode(), hashlib.sha256).hexdigest()
+    return spec.get("prefix", "sha256=") + digest
+
+
+def send_webhook_request(url: str, req: dict[str, Any]) -> int:
+    """Fire one request and return the HTTP status code (0 when no response)."""
+    headers = dict(req.get("headers") or {})
+    body = req.get("body", "")
+    if "sign" in req:
+        sign = req["sign"]
+        signed_body = sign.get("body", body)
+        headers[sign.get("header", "X-Webhook-Signature")] = sign_body(signed_body, sign)
+
+    cmd = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+           "--max-time", str(req.get("timeout", 10)),
+           "-X", req.get("method", "POST"), url]
+    for name, value in headers.items():
+        cmd += ["-H", f"{name}: {value}"]
+    if req.get("body_file"):
+        cmd += ["--data-binary", "@" + str(REPO_ROOT / req["body_file"])]
+    else:
+        cmd += ["--data-binary", body]
+
+    out = subprocess.run(cmd, capture_output=True, text=True, check=False).stdout.strip()
+    try:
+        return int(out)
+    except ValueError:
+        return 0
+
+
+def run_webhook_scenario(
+    spec: dict[str, Any], pipeline_path: Path, pipeline_doc: dict[str, Any]
+) -> tuple[list[AssertionResult], Path]:
+    """Start the listener, drive the requests, return their assertions."""
+    webhook = spec["webhook"]
+    results: list[AssertionResult] = []
+
+    subprocess.run(
+        ["go", "build", "-o", str(REPO_ROOT / "bin" / "cannectors"), "./cmd/cannectors"],
+        cwd=REPO_ROOT, check=True,
+    )
+    log_file = Path(
+        subprocess.run(["mktemp"], capture_output=True, text=True, check=True).stdout.strip()
+    )
+    env = None
+    if spec.get("env"):
+        env = {**os.environ, **{k: str(v) for k, v in spec["env"].items()}}
+
+    with log_file.open("w") as log:
+        proc = subprocess.Popen(
+            [str(REPO_ROOT / "bin" / "cannectors"), "run", str(pipeline_path)],
+            stdout=log, stderr=subprocess.STDOUT, cwd=REPO_ROOT, env=env,
+        )
+
+    try:
+        host, port = parse_listen_address(pipeline_doc)
+        if not wait_for_port(host, port):
+            results.append(
+                AssertionResult("webhook listener started", False,
+                                f"nothing listening on {host}:{port}")
+            )
+            return results, log_file
+        results.append(AssertionResult("webhook listener started", True, f"{host}:{port}"))
+
+        path = (pipeline_doc.get("input") or {}).get("path", "/")
+        url = f"http://{host}:{port}{path}"
+
+        for req in webhook.get("requests", []):
+            label = req.get("name", req.get("method", "POST"))
+            repeat = int(req.get("repeat", 1))
+            codes = [send_webhook_request(url, req) for _ in range(repeat)]
+
+            if "expect_status" in req:
+                expected = int(req["expect_status"])
+                ok = all(c == expected for c in codes)
+                results.append(
+                    AssertionResult(f"webhook {label} -> {expected}", ok,
+                                    f"got {codes if repeat > 1 else codes[0]}")
+                )
+            if "expect_status_in" in req:
+                allowed = {int(c) for c in req["expect_status_in"]}
+                ok = all(c in allowed for c in codes)
+                results.append(
+                    AssertionResult(f"webhook {label} in {sorted(allowed)}", ok,
+                                    f"got {sorted(set(codes))}")
+                )
+            if "expect_count_status" in req:
+                # e.g. a burst must yield at least N rate-limited responses.
+                want_code = int(req["expect_count_status"]["status"])
+                at_least = int(req["expect_count_status"]["at_least"])
+                seen = sum(1 for c in codes if c == want_code)
+                results.append(
+                    AssertionResult(
+                        f"webhook {label}: at least {at_least} x {want_code}",
+                        seen >= at_least,
+                        f"got {seen} of {len(codes)} ({sorted(set(codes))})",
+                    )
+                )
+
+        # Queued work is handled after the response is written, so give the
+        # pipeline a moment before asserting on the destination journal.
+        time.sleep(float(webhook.get("settle_seconds", 1.5)))
+    finally:
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGTERM)
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    return results, log_file
+
+
+# ---------- reconciliation ---------------------------------------------------
+#
+# Silent record loss is the worst failure mode for a pipeline runtime: the run
+# reports success, nothing is logged, and records simply never arrive. Both
+# cursor-pagination defects found by the first coverage campaign were of that
+# shape. Per-scenario assertions only catch the cases someone thought of, so the
+# runner also reconciles counts on every scenario:
+#
+#   - stage-to-stage: the output stage must account for every record the filter
+#     stage handed it, and an httpRequest output must send + fail exactly that
+#     many. Loss inside the pipeline is caught without any scenario config.
+#   - wire: the records the destination actually received (summed across request
+#     bodies) must match what the output claims it sent.
+#   - declared total (`records_expected`): the input must fetch the number of
+#     records the lab fixtures hold. This is the only check that catches loss on
+#     the *input* side — a truncated pagination loop is internally consistent, so
+#     no invariant can spot it without an external expectation.
+
+
+@dataclass
+class Execution:
+    """Counters parsed out of one pipeline execution in the log."""
+
+    input_records: int | None = None
+    filter_records: int | None = None
+    output_records: int | None = None
+    records_sent: int | None = None
+    records_failed: int | None = None
+    status: str = ""
+
+
+def parse_executions(log_file: Path) -> list[Execution]:
+    """Split the log into executions and pull the record counters from each.
+
+    The lab pipelines use a one-second CRON, so a log can hold several
+    executions before the helper SIGTERMs the process; counters are therefore
+    grouped per execution rather than summed blindly.
+    """
+    executions: list[Execution] = []
+    current: Execution | None = None
+    with log_file.open() as f:
+        for line in f:
+            if not line.startswith("{"):
+                continue
+            try:
+                evt = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            msg = evt.get("msg", "")
+            if msg == "execution started":
+                current = Execution()
+                executions.append(current)
+                continue
+            if current is None:
+                continue
+            if msg == "stage completed":
+                stage = evt.get("stage")
+                count = evt.get("record_count")
+                if stage == "input":
+                    current.input_records = count
+                elif stage == "filter":
+                    current.filter_records = count
+                elif stage == "output":
+                    current.output_records = count
+            elif msg == "output send completed":
+                current.records_sent = evt.get("records_sent")
+                current.records_failed = evt.get("records_failed")
+            elif msg == "execution completed":
+                current.status = evt.get("status", "")
+    return executions
+
+
+def count_wire_records(spec: dict[str, Any]) -> int:
+    """Records the destination actually received, across matching requests.
+
+    A batch request carries a JSON array, so its length is the record count; a
+    single-mode request carries one record. Anything unparseable counts as one
+    so the check errs toward reporting a mismatch rather than hiding one.
+    """
+    journal = http_get("/__admin/requests")
+    total = 0
+    for req in journal.get("requests", []):
+        if not request_matches(req, spec):
+            continue
+        body = (req.get("request", {}) or {}).get("body") or ""
+        try:
+            parsed = json.loads(body)
+        except (json.JSONDecodeError, TypeError):
+            total += 1
+            continue
+        total += len(parsed) if isinstance(parsed, list) else 1
+    return total
+
+
+def reconcile_assertions(
+    log_file: Path,
+    pipeline_doc: dict[str, Any],
+    records_expected: int | None,
+    expected_status: str = "success",
+) -> list[AssertionResult]:
+    """Build the reconciliation results for one scenario run."""
+    results: list[AssertionResult] = []
+    executions = parse_executions(log_file)
+    if not executions:
+        # A scenario that is expected to fail may die before any execution runs
+        # (an unresolved ${VAR} aborts at startup), which is not a loss.
+        if expected_status == "success":
+            return [
+                AssertionResult(
+                    label="reconcile", ok=False, detail="no execution found in the pipeline log"
+                )
+            ]
+        return []
+
+    output = pipeline_doc.get("output") or {}
+    # An output with onError skip/log drops offending records on purpose, so the
+    # output stage handling fewer records than the filter stage is expected.
+    tolerates_drop = str(output.get("onError", "")).lower() in {"skip", "log"}
+
+    successful = [e for e in executions if e.status == "success"]
+
+    for idx, ex in enumerate(successful):
+        label_suffix = f" (execution {idx + 1})" if len(successful) > 1 else ""
+        if ex.filter_records is not None and ex.output_records is not None:
+            if tolerates_drop:
+                ok = ex.output_records <= ex.filter_records
+                label = f"reconcile filter->output (onError drops allowed){label_suffix}"
+            else:
+                ok = ex.filter_records == ex.output_records
+                label = f"reconcile filter->output{label_suffix}"
+            results.append(
+                AssertionResult(
+                    label=label,
+                    ok=ok,
+                    detail=f"filter={ex.filter_records}, output={ex.output_records}",
+                )
+            )
+        if ex.records_sent is not None and ex.filter_records is not None:
+            accounted = ex.records_sent + (ex.records_failed or 0)
+            ok = accounted <= ex.filter_records if tolerates_drop else accounted == ex.filter_records
+            results.append(
+                AssertionResult(
+                    label=f"reconcile output accounts for every record{label_suffix}",
+                    ok=ok,
+                    detail=(
+                        f"sent={ex.records_sent}, failed={ex.records_failed}, "
+                        f"expected={ex.filter_records}"
+                    ),
+                )
+            )
+
+    if output.get("type") == "httpRequest" and successful:
+        sent_total = sum(e.records_sent or 0 for e in successful)
+        endpoint = output.get("endpoint") or ""
+        path = endpoint.split("://", 1)[-1]
+        path = path[path.index("/") :] if "/" in path else ""
+        # A templated endpoint resolves per record, so the path is not knowable
+        # from the config alone; skip the wire check rather than guess.
+        if path and "{{" not in path and sent_total:
+            wire = count_wire_records({"path": path})
+            # The check is one-sided on purpose: fewer records on the wire than
+            # the output claims to have sent is loss, which is what we hunt.
+            # More is normal — a retried request replays its whole batch, so
+            # delivery is at-least-once. Counting duplicates is P3's subject.
+            duplicated = f", replayed={wire - sent_total}" if wire > sent_total else ""
+            results.append(
+                AssertionResult(
+                    label="reconcile sent->wire (no loss)",
+                    ok=wire >= sent_total,
+                    detail=f"sent={sent_total}, received by destination={wire}{duplicated}",
+                )
+            )
+
+    if records_expected is not None:
+        for idx, ex in enumerate(executions):
+            if ex.input_records is None:
+                continue
+            suffix = f" (execution {idx + 1})" if len(executions) > 1 else ""
+            results.append(
+                AssertionResult(
+                    label=f"reconcile input total{suffix}",
+                    ok=ex.input_records == records_expected,
+                    detail=f"fetched={ex.input_records}, expected={records_expected}",
+                )
+            )
+    return results
+
+
 # ---------- assertion engine -------------------------------------------------
 
 
@@ -445,8 +783,28 @@ def run_scenario(path: Path) -> ScenarioResult:
         print(red(f"  {result.error}"))
         return result
 
-    pipeline_id = yaml.safe_load(pipeline_path.read_text())["name"]
+    pipeline_doc = yaml.safe_load(pipeline_path.read_text())
+    pipeline_id = pipeline_doc["name"]
     timeout = int(spec.get("timeout", 30))
+
+    if "webhook" in spec:
+        # A listener never reaches "execution completed", so the status check is
+        # replaced by the request-level assertions the webhook block declares.
+        webhook_results, log_file = run_webhook_scenario(spec, pipeline_path, pipeline_doc)
+        result.log_path = log_file
+        result.pipeline_status = result.expected_status
+        for ar in webhook_results:
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
+        for idx, assertion in enumerate(spec.get("assertions", [])):
+            ar = evaluate_assertion(idx, assertion, log_file)
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
+        return result
 
     log_file = run_pipeline_once(pipeline_path, timeout=timeout, env=spec.get("env"))
     result.log_path = log_file
@@ -465,6 +823,28 @@ def run_scenario(path: Path) -> ScenarioResult:
         marker = green("ok") if ar.ok else red("FAIL")
         suffix = f"  {dim(ar.detail)}" if ar.detail else ""
         print(f"  {marker} {ar.label}{suffix}")
+
+    # Reconciliation runs on every scenario unless it opts out. Scenarios whose
+    # filters intentionally change the record count (drop, onError=skip) set
+    # `reconcile: false`; a declared `records_expected` still applies.
+    if spec.get("reconcile", True):
+        for ar in reconcile_assertions(
+            log_file, pipeline_doc, spec.get("records_expected"), result.expected_status
+        ):
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
+    elif spec.get("records_expected") is not None:
+        for ar in reconcile_assertions(
+            log_file, pipeline_doc, spec["records_expected"], result.expected_status
+        ):
+            if not ar.label.startswith("reconcile input total"):
+                continue
+            result.assertions.append(ar)
+            marker = green("ok") if ar.ok else red("FAIL")
+            suffix = f"  {dim(ar.detail)}" if ar.detail else ""
+            print(f"  {marker} {ar.label}{suffix}")
 
     return result
 

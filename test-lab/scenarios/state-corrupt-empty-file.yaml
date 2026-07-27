@@ -1,0 +1,15 @@
+name: state-corrupt-empty-file
+description: "A zero-byte state file — the shape a power loss can leave behind — is rejected, not silently honoured."
+pipeline: test-lab/pipelines/state-id.yaml
+expect_status: success
+records_expected: 3
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - ": > test-lab/state/state-id.json"
+assertions:
+  - log_contains: "failed to unmarshal state"
+  - log_contains: "continuing without persistence"
+  - http_count_ge: { method: POST, path: /destination/state/id, body_contains: "EVT-100", expected: 1 }
+  - log_not_contains: "panic:"

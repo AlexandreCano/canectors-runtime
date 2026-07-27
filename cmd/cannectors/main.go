@@ -479,8 +479,25 @@ type PipelineExecutorAdapter struct {
 	dryRun bool
 }
 
-// Execute runs a pipeline using the runtime executor.
+// Execute runs a pipeline using the runtime executor, without a caller context.
+// Prefer ExecuteWithContext: a background context cannot be canceled, so a
+// shutdown cannot interrupt work already in flight.
 func (a *PipelineExecutorAdapter) Execute(pipeline *connector.Pipeline) (*connector.ExecutionResult, error) {
+	return a.ExecuteWithContext(context.Background(), pipeline)
+}
+
+// ExecuteWithContext runs a pipeline and threads the caller's context all the
+// way into the runtime.
+//
+// The scheduler type-asserts its executor for this method and silently falls
+// back to Execute when it is absent. While it was absent, every scheduled run
+// executed under context.Background(): SIGTERM could not interrupt a module
+// already running — a script stuck in a loop kept a core busy until SIGKILL —
+// and the trace ID minted per tick never reached the runtime, so the scheduler
+// and execution log lines carried different ids.
+func (a *PipelineExecutorAdapter) ExecuteWithContext(
+	ctx context.Context, pipeline *connector.Pipeline,
+) (*connector.ExecutionResult, error) {
 	inputModule, err := factory.CreateInputModule(pipeline.Input)
 	if err != nil {
 		return &connector.ExecutionResult{
@@ -530,8 +547,13 @@ func (a *PipelineExecutorAdapter) Execute(pipeline *connector.Pipeline) (*connec
 	stateStore := persistence.NewStateStore("")
 	executor.SetStateStore(stateStore)
 
-	return executor.Execute(pipeline)
+	return executor.ExecuteWithContext(ctx, pipeline)
 }
 
 // Verify PipelineExecutorAdapter implements scheduler.Executor
 var _ scheduler.Executor = (*PipelineExecutorAdapter)(nil)
+
+// ContextExecutor is the interface the scheduler prefers. Asserting it at
+// compile time matters: the scheduler falls back to the context-free Execute
+// silently, so losing this method would quietly disable cancellation again.
+var _ scheduler.ContextExecutor = (*PipelineExecutorAdapter)(nil)

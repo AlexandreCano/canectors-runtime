@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cannectors/runtime/internal/httpclient"
@@ -46,10 +45,15 @@ type oauth2Handler struct {
 	scopes       []string
 	httpClient   *http.Client
 
-	// Token cache protected by mutex for thread-safety
-	mu          sync.RWMutex
-	cachedToken string
-	tokenExpiry time.Time
+	// cacheKey identifies these credentials in the process-wide token cache,
+	// which holds the whole of this handler's token state.
+	//
+	// The handler deliberately keeps no copy of its own. It used to, and the
+	// two could disagree: invalidating a revoked token through one handler
+	// emptied the shared cache while every other handler built on the same
+	// credentials went on presenting the revoked token until its own expiry.
+	// One place to read, one place to invalidate.
+	cacheKey string
 }
 
 // newOAuth2Handler creates a new OAuth2 client credentials authentication handler.
@@ -71,12 +75,14 @@ func newOAuth2Handler(config *connector.AuthConfig, httpClient *http.Client) (*o
 		}
 	}
 
+	scopes := strings.Fields(creds.Scope)
 	return &oauth2Handler{
 		tokenURL:     creds.TokenURL,
 		clientID:     creds.ClientID,
 		clientSecret: creds.ClientSecret,
-		scopes:       strings.Fields(creds.Scope),
+		scopes:       scopes,
 		httpClient:   client,
+		cacheKey:     tokenCacheKey(creds.TokenURL, creds.ClientID, creds.ClientSecret, scopes),
 	}, nil
 }
 
@@ -108,12 +114,8 @@ func (h *oauth2Handler) ApplyAuth(ctx context.Context, req *http.Request) error 
 // ErrPreviewUnavailable is returned so the caller can fall back to masking
 // rather than silently fetching a fresh token from tokenUrl.
 func (h *oauth2Handler) PreviewAuth(_ context.Context, req *http.Request) error {
-	h.mu.RLock()
-	token := h.cachedToken
-	expiry := h.tokenExpiry
-	h.mu.RUnlock()
-
-	if token == "" || !time.Now().Before(expiry) {
+	token, _, ok := sharedTokenCache.get(h.cacheKey)
+	if !ok {
 		return ErrPreviewUnavailable
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -125,37 +127,40 @@ func (h *oauth2Handler) Type() string {
 	return "oauth2"
 }
 
-// getValidToken returns a valid token, refreshing if necessary.
-// Thread-safe implementation using RWMutex.
+// getValidToken returns a valid token, fetching one only when the shared cache
+// has none. Scheduled runs rebuild their modules every tick, so a handler is
+// routinely brand new while the token it needs is already in hand.
+//
+// Concurrent misses on the same credentials are collapsed into a single fetch
+// by singleflight rather than by a lock held across the network call: a handler
+// serving parallel webhook deliveries would otherwise send one token request
+// per delivery, against endpoints providers rate-limit aggressively.
 func (h *oauth2Handler) getValidToken(ctx context.Context) (string, error) {
-	// Try to use cached token (read lock)
-	h.mu.RLock()
-	if h.cachedToken != "" && time.Now().Before(h.tokenExpiry) {
-		token := h.cachedToken
-		h.mu.RUnlock()
+	if token, _, ok := sharedTokenCache.get(h.cacheKey); ok {
 		return token, nil
 	}
-	h.mu.RUnlock()
 
-	// Need to refresh token (write lock)
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Double-check after acquiring write lock (another goroutine may have refreshed)
-	if h.cachedToken != "" && time.Now().Before(h.tokenExpiry) {
-		return h.cachedToken, nil
-	}
-
-	// Obtain new token
-	token, expiry, err := h.fetchToken(ctx)
+	token, err, _ := tokenFetchGroup.Do(h.cacheKey, func() (any, error) {
+		// A caller that waited on an in-flight fetch reaches this only when it
+		// won the race to start one, so re-check before paying for a request.
+		if cached, _, ok := sharedTokenCache.get(h.cacheKey); ok {
+			return cached, nil
+		}
+		fetched, expiry, fetchErr := h.fetchToken(ctx)
+		if fetchErr != nil {
+			return "", fetchErr
+		}
+		sharedTokenCache.put(h.cacheKey, fetched, expiry)
+		return fetched, nil
+	})
 	if err != nil {
 		return "", err
 	}
-
-	h.cachedToken = token
-	h.tokenExpiry = expiry
-
-	return token, nil
+	value, ok := token.(string)
+	if !ok {
+		return "", fmt.Errorf("oauth2: token fetch returned %T, want string", token)
+	}
+	return value, nil
 }
 
 // tokenResponse represents the OAuth2 token endpoint response.
@@ -261,16 +266,15 @@ func (h *oauth2Handler) fetchToken(ctx context.Context) (string, time.Time, erro
 //   - Empty token: Returns validation error
 //   - Errors never contain credential values (clientId, clientSecret) for security
 func (h *oauth2Handler) InvalidateToken() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.cachedToken = ""
-	h.tokenExpiry = time.Time{}
+	sharedTokenCache.invalidate(h.cacheKey)
 }
 
 // TokenExpiry returns the current token expiry time.
 // Returns zero time if no token is cached.
 func (h *oauth2Handler) TokenExpiry() time.Time {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.tokenExpiry
+	_, expiry, ok := sharedTokenCache.get(h.cacheKey)
+	if !ok {
+		return time.Time{}
+	}
+	return expiry
 }

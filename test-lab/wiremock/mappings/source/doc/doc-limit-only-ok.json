@@ -1,0 +1,14 @@
+{
+  "name": "doc-limit-only-ok",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/doc/limit-only",
+    "queryParameters": { "per_page": { "absent": true } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "total_pages": 1, "data": [ { "id": "LIMIT-ONLY-1" } ] }
+  }
+}

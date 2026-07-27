@@ -1,0 +1,20 @@
+name: volume-10000
+version: 1.0.0
+description: 10 000 records in a single response — reconciliation at volume.
+tags:
+  - test-lab
+  - volume
+  - reconciliation
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/volume/10000
+  dataField: data
+
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/volume/sink
+  method: POST
+  headers:
+    Content-Type: application/json

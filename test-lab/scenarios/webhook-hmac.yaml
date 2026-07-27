@@ -1,0 +1,48 @@
+name: webhook-hmac
+description: "HMAC validation accepts both signature spellings and rejects every tampered or missing one."
+pipeline: test-lab/pipelines/webhook-hmac.yaml
+setup:
+  reset_db: false
+webhook:
+  requests:
+    # The default header for this feature is X-Hub-Signature-256, whose ecosystem
+    # always sends sha256=<hex>. Both spellings must work.
+    - name: signature with sha256= prefix
+      body: '{"orders": [{"id": "WH-PREFIX"}]}'
+      sign: { secret: lab-secret, header: X-Webhook-Signature, prefix: "sha256=" }
+      expect_status: 200
+    - name: bare hex signature
+      body: '{"orders": [{"id": "WH-BARE"}]}'
+      sign: { secret: lab-secret, header: X-Webhook-Signature, prefix: "" }
+      expect_status: 200
+    - name: missing signature
+      body: '{"orders": [{"id": "WH-NOSIG"}]}'
+      expect_status: 401
+    - name: invalid signature
+      body: '{"orders": [{"id": "WH-BADSIG"}]}'
+      headers: { X-Webhook-Signature: "sha256=deadbeef" }
+      expect_status: 401
+    - name: body tampered after signing
+      body: '{"orders": [{"id": "WH-TAMPERED"}]}'
+      sign:
+        secret: lab-secret
+        header: X-Webhook-Signature
+        body: '{"orders": [{"id": "WH-ORIGINAL"}]}'
+      expect_status: 401
+    - name: signature from the wrong secret
+      body: '{"orders": [{"id": "WH-WRONGKEY"}]}'
+      sign: { secret: not-the-lab-secret, header: X-Webhook-Signature }
+      expect_status: 401
+    # Replay is accepted: an HMAC over the body alone carries no nonce or
+    # timestamp, so the same request can be sent twice. Locked here so the
+    # property stays visible rather than being assumed either way.
+    - name: replayed request
+      body: '{"orders": [{"id": "WH-REPLAY"}]}'
+      sign: { secret: lab-secret, header: X-Webhook-Signature }
+      repeat: 2
+      expect_status: 200
+assertions:
+  - log_not_contains: "panic:"
+  # Rejected payloads must never reach the destination.
+  - http_count_eq_zero: { method: POST, path: /destination/webhook/orders, body_contains: "WH-TAMPERED" }
+  - http_count_eq_zero: { method: POST, path: /destination/webhook/orders, body_contains: "WH-BADSIG" }

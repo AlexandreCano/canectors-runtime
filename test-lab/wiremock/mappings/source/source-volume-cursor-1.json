@@ -1,0 +1,1 @@
+{"name":"source-volume-cursor-1","priority":5,"request":{"method":"GET","urlPath":"/source/volume/paginated-cursor"},"response":{"status":200,"headers":{"Content-Type":"application/json"},"bodyFileName":"source/volume-cursor-1.json"}}

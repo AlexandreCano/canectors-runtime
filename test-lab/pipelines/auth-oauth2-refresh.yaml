@@ -1,0 +1,24 @@
+name: auth-oauth2-refresh
+version: 1.0.0
+description: OAuth2 token expires after one second, so a long-lived run must fetch a new one.
+tags:
+  - test-lab
+  - auth
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/auth/oauth2/protected
+  dataField: items
+  authentication:
+    type: oauth2
+    credentials:
+      tokenUrl: http://localhost:18080/auth/oauth2/token-shortlived
+      clientId: lab-client-id
+      clientSecret: lab-client-secret
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/auth/destination/public
+  method: POST
+  headers:
+    Content-Type: application/json

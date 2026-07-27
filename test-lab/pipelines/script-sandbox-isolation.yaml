@@ -1,0 +1,29 @@
+name: script-sandbox-isolation
+version: 1.0.0
+description: The script engine exposes no host I/O — require, fetch and process are undefined.
+tags:
+  - test-lab
+  - script
+  - security
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/matrix/record
+  dataField: data
+filters:
+  - type: script
+    script: |
+      function transform(record) {
+        record.no_require = (typeof require === "undefined");
+        record.no_fetch = (typeof fetch === "undefined");
+        record.no_process = (typeof process === "undefined");
+        record.no_xhr = (typeof XMLHttpRequest === "undefined");
+        record.no_global_this_fs = (typeof globalThis.fs === "undefined");
+        return record;
+      }
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/matrix/sink
+  method: POST
+  headers:
+    Content-Type: application/json

@@ -1,0 +1,14 @@
+name: db-output-sql-injection
+description: "A record value containing SQL is bound as a parameter, stored verbatim, and never executed."
+pipeline: test-lab/pipelines/db-output-sql-injection.yaml
+expect_status: success
+setup:
+  reset_db: true
+assertions:
+  # The table the payload tries to drop is still there, with the row inserted.
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id='INJ-001'", expected: "1" }
+  # The payload was stored as data, not interpreted.
+  - sql_eq:
+      query: "SELECT full_name FROM dest_customers WHERE external_id='INJ-001'"
+      expected: "Robert'); DROP TABLE dest_customers; --"
+  - log_not_contains: "panic:"

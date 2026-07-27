@@ -1,0 +1,12 @@
+name: net-source-random-then-close
+description: "Random bytes followed by a close fail the run."
+pipeline: test-lab/pipelines/net-source-random-then-close.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "network error"
+  # A transport failure must never look like an empty but successful fetch:
+  # nothing may reach the destination.
+  - http_count_eq_zero: { method: POST, path: /destination/network/sink }
+  - log_not_contains: "panic:"
