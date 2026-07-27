@@ -1,0 +1,12 @@
+name: doc-cursor-boolean-ends
+description: "Documented: a nextCursorField pointing at a boolean reads as no cursor and stops the loop."
+pipeline: test-lab/pipelines/doc-cursor-boolean-ends.yaml
+expect_status: success
+records_expected: 1
+setup:
+  reset_db: false
+assertions:
+  # has_more: true must not be coerced into the string "true" and followed as a
+  # cursor, which would spin the loop up to the page cap.
+  - http_count_eq: { method: GET, path: /source/doc/cursor-boolean, expected: 1 }
+  - http_count_eq_zero: { method: GET, path: /source/doc/cursor-boolean, query: { cursor: "true" } }

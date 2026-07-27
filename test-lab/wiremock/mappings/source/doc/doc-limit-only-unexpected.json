@@ -1,0 +1,10 @@
+{
+  "name": "doc-limit-only-unexpected",
+  "priority": 5,
+  "request": { "method": "GET", "urlPath": "/source/doc/limit-only" },
+  "response": {
+    "status": 400,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "a page-size parameter was sent even though limitParam is unset" }
+  }
+}

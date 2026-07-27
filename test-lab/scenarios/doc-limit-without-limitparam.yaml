@@ -1,0 +1,12 @@
+name: doc-limit-without-limitparam
+description: "Documented: limit without limitParam is silently ignored, so no page-size parameter is sent."
+pipeline: test-lab/pipelines/doc-limit-without-limitparam.yaml
+expect_status: success
+records_expected: 1
+setup:
+  reset_db: false
+assertions:
+  # The stub only answers when no page-size parameter is present; the catch-all
+  # returns 400 if one shows up.
+  - http_count_ge: { method: GET, path: /source/doc/limit-only, status: 200, expected: 1 }
+  - http_count_eq_zero: { method: GET, path: /source/doc/limit-only, status: 400 }

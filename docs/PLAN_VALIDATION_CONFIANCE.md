@@ -1,6 +1,7 @@
 # Plan de validation — passer du « vert en laboratoire » au « digne de confiance en production »
 
-> Statut : **P0, P2, P3, P4 et P5 terminés**, harnais **P1 prêt** (run longue durée à lancer). P6 à faire.
+> Statut : **P0 et P2 à P6 terminés**, harnais **P1 prêt** (run longue durée à lancer).
+> Reste P7 (pilote réel), qui est une activité opérationnelle et non une branche.
 > Point de départ : 307 scénarios E2E verts, 2118 tests unitaires, race detector en CI, lint propre.
 > Objectif : combler les angles morts que la suite actuelle ne peut **structurellement** pas couvrir,
 > et remplacer une confiance déclarative par des preuves mesurables.
@@ -382,7 +383,7 @@ dans le journal WireMock.*
 
 ---
 
-### P6 — Casser les angles morts corrélés — **effort M, rendement moyen mais unique**
+### P6 — Casser les angles morts corrélés — ✅ **terminé**
 
 **Objectif** : trouver ce qu'une lecture du code ne peut pas révéler, parce que les tests ont été
 écrits d'après ce même code.
@@ -397,10 +398,32 @@ dans le journal WireMock.*
   écrire des scénarios depuis les promesses documentées. C'est ce qui a révélé le gap `${VAR}` — méthode
   à systématiser (elle a déjà prouvé son rendement).
 
-**Critères de sortie**
-- Corpus de fuzzing en CI, sans crash.
-- ≥ 5 propriétés vérifiées sur les transforms.
-- Une passe complète « doc → tests » sur au moins deux pages (auth, pagination).
+**Critères de sortie — atteints**
+- ✅ **Fuzzing en CI** : 7 cibles lancées 30 s chacune à chaque push
+  (`.github/workflows/ci.yml`), avec remontée du corpus fautif en artefact si une entrée casse.
+  Localement : 251 k exécutions sur le parseur de config, 300 k sur le compilateur SQL, 100 à 240 k
+  par propriété — **aucun crash, aucun blocage**.
+- ✅ **6 propriétés vérifiées** sur les transforms (`mapping_properties_test.go`) : idempotence de
+  `trim`, idempotence de `uppercase`/`lowercase`, aller-retour `split`/`join` (à trim près),
+  aller-retour entier via `toString`/`toInt`, équivalence stricte de `toInt` avec `strconv.Atoi`,
+  `toArray` qui n'enveloppe qu'une fois, `replace` sans correspondance = identité.
+- ✅ **Passe « doc → tests »** sur les pages pagination et authentification.
+
+**Ce que la méthode a produit**
+- Une **propriété fausse de ma part**, attrapée immédiatement : j'avais posé
+  `uppercase(lowercase(s)) == uppercase(s)`. Faux en Unicode — « İstanbul » minusculisé donne un
+  « i » suivi d'un point combinant, qui remajusculise en « ISTANBUL ». Idem pour ß → SS. C'est le
+  pliage de casse standard de Go, pas un défaut ; la propriété a été remplacée par l'idempotence,
+  qui est vraie, et le piège est documenté dans le test.
+- **Trois promesses documentées sans aucun test**, désormais couvertes :
+  `limit` sans `limitParam` est silencieusement ignoré ; `totalPagesField` accepte un chemin pointé
+  (seuls `dataField` et `nextCursorField` l'étaient) ; un `nextCursorField` pointant sur un booléen
+  vaut « pas de curseur » et arrête la boucle — exactement le garde-fou choisi en retirant la
+  coercition des booléens.
+- **Confirmation de la valeur de la méthode** : la page authentification affirme que Cannectors
+  « acquires a token on first use, **caches it** ». Cette phrase était **fausse jusqu'au correctif
+  P5**. Une passe « doc → tests » menée plus tôt aurait pointé le trou directement — c'est le même
+  mécanisme qui avait révélé l'absence de substitution `${VAR}`.
 
 ---
 

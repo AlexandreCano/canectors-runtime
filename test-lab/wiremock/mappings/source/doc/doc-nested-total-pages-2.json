@@ -1,0 +1,14 @@
+{
+  "name": "doc-nested-total-pages-2",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/doc/nested-total-pages",
+    "queryParameters": { "page": { "equalTo": "2" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "meta": { "total_pages": 2 }, "data": [ { "id": "NTP-2" } ] }
+  }
+}

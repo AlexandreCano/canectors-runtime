@@ -258,6 +258,19 @@ wrong-secret signatures, replay, empty and malformed bodies, a payload without t
 configured `dataField`, and a burst beyond the rate limit. Every hostile case is followed
 by a valid request, so a listener taken down by one of them fails the scenario.
 
+## Doc-derived scenarios
+
+The `doc-*` scenarios are written from `cannectors-doc` as the only source: read a page,
+turn each promise it makes into an assertion, and see what has no test behind it. The
+method keeps finding gaps precisely because it does not start from the code, so it cannot
+inherit the code's assumptions.
+
+Its track record so far: it surfaced the missing `${VAR}` substitution, and a pass over the
+pagination page produced three claims nobody had tested — `limit` without `limitParam` being
+silently ignored, `totalPagesField` accepting a dot path, and a `nextCursorField` pointing at
+a boolean ending the loop rather than being coerced. The authentication page also claims
+tokens are cached, which was false until that was fixed.
+
 ## Secret audit
 
 The documentation states that resolved secrets are never logged. That is a claim about

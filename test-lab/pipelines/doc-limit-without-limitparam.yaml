@@ -1,0 +1,20 @@
+name: doc-limit-without-limitparam
+version: 1.0.0
+description: limit set without limitParam — the docs say it is silently ignored.
+tags: [test-lab, doc-derived, pagination]
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/doc/limit-only
+  dataField: data
+  pagination:
+    type: page
+    param: page
+    limit: 100
+    totalPagesField: total_pages
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/matrix/sink
+  method: POST
+  headers: { Content-Type: application/json }

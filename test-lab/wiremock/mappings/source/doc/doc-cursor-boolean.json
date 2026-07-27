@@ -1,0 +1,10 @@
+{
+  "name": "doc-cursor-boolean",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/source/doc/cursor-boolean" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "has_more": true, "data": [ { "id": "BOOLCUR-1" } ] }
+  }
+}
