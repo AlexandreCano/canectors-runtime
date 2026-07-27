@@ -1,0 +1,20 @@
+name: net-source-tls-selfsigned
+version: 1.0.0
+description: "Source over HTTPS with a self-signed certificate."
+tags:
+  - test-lab
+  - network
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: https://localhost:18443/network/source/tls
+  dataField: data
+  retry:
+    maxAttempts: 0
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/network/sink
+  method: POST
+  headers:
+    Content-Type: application/json

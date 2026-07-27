@@ -1,0 +1,11 @@
+name: net-dest-empty-response
+description: "A destination that fails with empty-response makes the run fail; no record is counted as delivered."
+pipeline: test-lab/pipelines/net-dest-empty-response.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "network error"
+  # The output must not report records as sent when the transport failed.
+  - log_not_contains: '"records_sent":1'
+  - log_not_contains: "panic:"

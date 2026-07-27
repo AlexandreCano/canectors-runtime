@@ -1,0 +1,20 @@
+name: net-dest-malformed-chunk
+version: 1.0.0
+description: "Destination fault — malformed-chunk."
+tags:
+  - test-lab
+  - network
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/matrix/record
+  dataField: data
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/network/destination/malformed-chunk
+  method: POST
+  headers:
+    Content-Type: application/json
+  retry:
+    maxAttempts: 0

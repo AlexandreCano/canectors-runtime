@@ -1,0 +1,12 @@
+name: net-source-malformed-chunk
+description: "A malformed chunk mid-body fails while reading the response."
+pipeline: test-lab/pipelines/net-source-malformed-chunk.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "reading response body"
+  # A transport failure must never look like an empty but successful fetch:
+  # nothing may reach the destination.
+  - http_count_eq_zero: { method: POST, path: /destination/network/sink }
+  - log_not_contains: "panic:"

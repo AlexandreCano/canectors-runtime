@@ -1,0 +1,6 @@
+{
+  "name": "network-source-connection-reset",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/connection-reset" },
+  "response": { "fault": "CONNECTION_RESET_BY_PEER" }
+}

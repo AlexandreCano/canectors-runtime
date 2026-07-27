@@ -1,0 +1,20 @@
+name: net-source-truncated-json
+version: 1.0.0
+description: "Source returns a JSON body cut off mid-array."
+tags:
+  - test-lab
+  - network
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/network/source/truncated-json
+  dataField: data
+  retry:
+    maxAttempts: 0
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/network/sink
+  method: POST
+  headers:
+    Content-Type: application/json

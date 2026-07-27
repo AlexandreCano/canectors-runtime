@@ -1,0 +1,6 @@
+{
+  "name": "network-dest-empty-response",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/network/destination/empty-response" },
+  "response": { "fault": "EMPTY_RESPONSE" }
+}

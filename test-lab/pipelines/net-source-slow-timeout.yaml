@@ -1,0 +1,21 @@
+name: net-source-slow-timeout
+version: 1.0.0
+description: "Source is slower than timeoutMs."
+tags:
+  - test-lab
+  - network
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/network/source/slow
+  dataField: data
+  timeoutMs: 500
+  retry:
+    maxAttempts: 0
+filters: []
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/network/sink
+  method: POST
+  headers:
+    Content-Type: application/json

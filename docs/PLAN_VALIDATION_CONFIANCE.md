@@ -1,6 +1,6 @@
 # Plan de validation — passer du « vert en laboratoire » au « digne de confiance en production »
 
-> Statut : **P0 terminé**, P1 à P6 à faire. Détail par phase ci-dessous.
+> Statut : **P0 et P2 terminés**, harnais **P1 prêt** (run longue durée à lancer). P3 à P6 à faire.
 > Point de départ : 307 scénarios E2E verts, 2118 tests unitaires, race detector en CI, lint propre.
 > Objectif : combler les angles morts que la suite actuelle ne peut **structurellement** pas couvrir,
 > et remplacer une confiance déclarative par des preuves mesurables.
@@ -97,7 +97,7 @@ Le runtime logge déjà ce qu'il faut : `input fetch completed{record_count}`,
 
 ---
 
-### P1 — Volume et endurance — **effort M, rendement élevé**
+### P1 — Volume et endurance — 🟡 **harnais prêt, run longue durée à lancer**
 
 **Objectif** : savoir ce qui se passe au-delà de 5 records et de 1 seconde.
 
@@ -113,15 +113,28 @@ Le runtime logge déjà ce qu'il faut : `input fetch completed{record_count}`,
   effet de `requestMode: single` sur 10 k records (10 k requêtes — durée, sockets).
 - Pool DB sur la durée : `maxOpenConns`/`connMaxLifetimeSeconds` respectés après des heures.
 
-**Critères de sortie**
+**Harnais livré** : `test-lab/scripts/soak.py` (+ `make test-lab-soak DURATION=24h`). Il échantillonne
+RSS, descripteurs, threads et connexions Postgres, mesure la dérive CRON, compte les lignes d'erreur,
+puis compare le dernier quart du run au deuxième quart (une croissance au démarrage — pool qui se
+remplit, cache qui chauffe — ne compte donc pas comme fuite). Verdict PASS/FAIL en sortie.
+
+**Note d'implémentation** : le binaire n'expose pas de pprof, les mesures viennent donc de `/proc`.
+C'est suffisant pour voir une tendance ; brancher `net/http/pprof` sur le CLI donnerait le détail par
+allocation — changement runtime volontairement écarté du harnais.
+
+**Premier signal (run court de validation, 121 s)** : 122 exécutions × 1 000 records, RSS plat à
+~27,5 Mo, descripteurs et threads constants, dérive CRON p50=0 ms / max=1 ms, 0 erreur. Encourageant,
+mais sans valeur sur les fuites lentes — d'où le run de 24 h.
+
+**Critères de sortie — restants**
 - 24 h de run sans croissance monotone du heap ni des goroutines.
 - Aucune fuite de connexion (compteur stable côté Postgres/MySQL).
-- Dérive CRON documentée et bornée.
+- Dérive CRON documentée et bornée sur 24 h.
 - Un chiffre publié : « records/s soutenu » et « mémoire par 10 k records ».
 
 ---
 
-### P2 — Conditions réseau réelles — **effort M, rendement élevé**
+### P2 — Conditions réseau réelles — ✅ **terminé**
 
 **Objectif** : quitter le localhost parfait. Une partie est **gratuite** : WireMock sait déjà simuler
 des pannes réseau (`EMPTY_RESPONSE`, `MALFORMED_RESPONSE_CHUNK`, `RANDOM_DATA_THEN_CLOSE`,
@@ -139,10 +152,22 @@ des pannes réseau (`EMPTY_RESPONSE`, `MALFORMED_RESPONSE_CHUNK`, `RANDOM_DATA_T
 - Optionnel si besoin de plus de finesse : **toxiproxy** entre le binaire et WireMock (bande passante
   limitée, coupures périodiques, paquets réordonnés).
 
-**Critères de sortie**
-- Chaque type de panne produit un `status: error` avec un message identifiant la cause.
-- **Aucun cas où une réponse tronquée est traitée comme un succès** (c'est le risque majeur ici).
-- Comportement TLS documenté (validation active par défaut).
+**Critères de sortie — atteints**
+- ✅ 11 scénarios `net-*` : réponse vide, reset TCP, chunk malformé, octets aléatoires puis fermeture,
+  JSON tronqué, latence > `timeoutMs`, DNS introuvable, TLS auto-signé — côté source **et** destination.
+- ✅ **Aucune panne n'est traitée comme un succès.** Le cas le plus critique est vérifié : un corps JSON
+  coupé en plein tableau est rejeté (`unexpected end of JSON input`) au lieu de livrer les records
+  partiels déjà reçus.
+- ✅ TLS : le runtime **valide bien les certificats** — un certificat auto-signé est rejeté. Le lab
+  publie le listener HTTPS de WireMock sur 18443 pour le prouver.
+
+**Défaut corrigé en chemin** : `ClassifyNetworkError` construisait le message des erreurs URL avec
+`"URL error: <op> <url>"` en **jetant la cause** (`urlErr.Err`). Un certificat invalide, un reset TCP et
+un EOF produisaient donc trois logs identiques — des heures de diagnostic perdues en production. Le
+message inclut désormais la cause, et l'URL est assainie (query, fragment **et** identifiants
+`user:pass@` retirés) via un helper local, `errhandling` ne pouvant pas importer `httpclient`
+(cycle d'import). À noter pour P5 : `httpclient.SanitizeURL` retire la query mais **conserve** les
+identifiants — à revoir lors de l'audit des secrets dans les logs.
 
 ---
 

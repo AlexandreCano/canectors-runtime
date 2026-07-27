@@ -1,0 +1,11 @@
+{
+  "name": "network-source-slow",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/slow" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "data": [ { "id": "SLOW-1" } ] },
+    "fixedDelayMilliseconds": 3000
+  }
+}

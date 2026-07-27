@@ -1,0 +1,12 @@
+name: net-source-truncated-json
+description: "A JSON body cut off mid-array is rejected, not partially accepted."
+pipeline: test-lab/pipelines/net-source-truncated-json.yaml
+expect_status: error
+setup:
+  reset_db: false
+assertions:
+  - log_contains: "unexpected end of JSON input"
+  # A transport failure must never look like an empty but successful fetch:
+  # nothing may reach the destination.
+  - http_count_eq_zero: { method: POST, path: /destination/network/sink }
+  - log_not_contains: "panic:"

@@ -1,0 +1,6 @@
+{
+  "name": "network-source-malformed-chunk",
+  "priority": 1,
+  "request": { "method": "GET", "urlPath": "/network/source/malformed-chunk" },
+  "response": { "fault": "MALFORMED_RESPONSE_CHUNK" }
+}

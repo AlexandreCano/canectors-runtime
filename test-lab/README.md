@@ -197,6 +197,53 @@ the `volume-*` scenarios: single responses of 1 000 and 10 000 records, plus 3 p
 1 000 for each pagination strategy (3 000 records per strategy). The outputs are committed
 so a fresh clone works; rerun the script only when changing the volumes.
 
+## Network fault scenarios
+
+WireMock can break the transport, not just return error codes, so the `net-*` scenarios
+cover what a real network does and localhost never does. The stubs live in
+`wiremock/mappings/network/`.
+
+| Scenario | Fault | Must produce |
+|---|---|---|
+| `net-source-empty-response` | connection closed with no data | transport error |
+| `net-source-connection-reset` | `CONNECTION_RESET_BY_PEER` | transport error |
+| `net-source-malformed-chunk` | body truncated mid-stream | `reading response body` |
+| `net-source-random-then-close` | random bytes then close | transport error |
+| `net-source-truncated-json` | JSON cut off mid-array | `unexpected end of JSON input` |
+| `net-source-slow-timeout` | 3 s delay against `timeoutMs: 500` | `request timeout` |
+| `net-source-dns-failure` | host does not resolve | error naming the host |
+| `net-source-tls-selfsigned` | HTTPS with a self-signed certificate | `failed to verify certificate` |
+| `net-dest-*` | same faults on the destination | error, nothing counted as sent |
+
+The point of every one of them is the same: a broken transport must **fail**, never look
+like an empty-but-successful fetch. A truncated JSON body in particular must be rejected
+rather than yielding the records that happened to arrive before the cut.
+
+TLS uses WireMock's HTTPS listener on port 18443 with its bundled self-signed certificate,
+which is how the lab checks that the runtime validates certificates rather than trusting
+whatever it is handed.
+
+## Soak testing (leak detection)
+
+`test-lab/scripts/soak.py` runs one pipeline on its schedule for hours and reports whether
+resident memory, file descriptors, threads or database connections grow instead of
+plateauing. It also measures CRON drift and counts error lines.
+
+```bash
+make test-lab-soak                                   # 2 h on volume-1000
+make test-lab-soak DURATION=24h INTERVAL=60s
+make test-lab-soak PIPELINE=test-lab/pipelines/db-input-basic.yaml DURATION=8h
+test-lab/scripts/soak.py --analyse test-lab/soak/<run>   # re-read a finished run
+```
+
+Samples land in `test-lab/soak/<timestamp>/` (git-ignored) as `samples.csv` plus the
+pipeline log. The verdict compares the median of the last quarter of the run against the
+second quarter, so a pool filling or a cache warming early does not read as a leak.
+
+The binary exposes no pprof endpoint, so measurements come from `/proc`. That is enough to
+see a trend; wiring `net/http/pprof` into the CLI would give per-allocation detail and is
+a runtime change deliberately left out of the harness.
+
 ## Generated combinatorial layer
 
 Most of the suite is generated. `test-lab/generate-matrix.py` holds a declarative
