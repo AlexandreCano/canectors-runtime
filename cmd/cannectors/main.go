@@ -407,28 +407,30 @@ func runWebhookPipeline(pipeline *connector.Pipeline) {
 		os.Exit(ExitValidationError)
 	}
 
-	inputModule, err := factory.CreateInputModule(pipeline.Input)
+	// Same construction as the scheduled path, so both release their modules the
+	// same way. Whoever builds a chain that outlives an execution owns closing it.
+	modules, err := buildModuleSet(pipeline)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create input module: %v\n", err)
+		fmt.Fprintf(os.Stderr, "✗ Failed to create pipeline modules: %v\n", err)
 		os.Exit(ExitRuntimeError)
 	}
-	webhook, ok := inputModule.(*input.Webhook)
+	// releaseModules hands back the database pools and closes the sql_call
+	// filters. It has to be called explicitly rather than deferred: every exit
+	// from this function goes through os.Exit, which does not run defers.
+	releaseModules := func() {
+		if closeErr := modules.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "⚠ Failed to close pipeline modules: %v\n", closeErr)
+		}
+	}
+
+	webhook, ok := modules.input.(*input.Webhook)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "✗ webhook input module type assertion failed")
-		os.Exit(ExitRuntimeError)
-	}
-	filterModules, err := factory.CreateFilterModules(pipeline.Filters)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create filter modules: %v\n", err)
-		os.Exit(ExitRuntimeError)
-	}
-	outputModule, err := factory.CreateOutputModule(pipeline.Output)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create output module: %v\n", err)
+		releaseModules()
 		os.Exit(ExitRuntimeError)
 	}
 
-	executor := runtime.NewExecutorWithModules(nil, filterModules, outputModule, dryRun)
+	executor := runtime.NewExecutorWithModules(nil, modules.filters, modules.output, dryRun)
 	// The webhook builds its modules once and serves every delivery with them, so
 	// the executor must not close them between requests. Without this a database
 	// output answered the first delivery and then failed every later one with
@@ -470,9 +472,12 @@ func runWebhookPipeline(pipeline *connector.Pipeline) {
 	case startErr := <-errCh:
 		if startErr != nil {
 			fmt.Fprintf(os.Stderr, "✗ Webhook server error: %v\n", startErr)
+			releaseModules()
 			os.Exit(ExitRuntimeError)
 		}
 	}
+
+	releaseModules()
 
 	if !quiet {
 		fmt.Println("✓ Webhook stopped gracefully")
