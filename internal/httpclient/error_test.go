@@ -114,6 +114,17 @@ func TestSanitizeURL(t *testing.T) {
 		{"with fragment", "https://api.example.com/x#token=abc", "https://api.example.com/x"},
 		{"with both", "https://api.example.com/x?k=v#f=1", "https://api.example.com/x"},
 		{"invalid", "://not a url", "[invalid URL]"},
+		{
+			"credentials in the url",
+			"https://user:hunter2@api.example.com/x",
+			"https://api.example.com/x",
+		},
+		{
+			"credentials and query together",
+			"https://user:hunter2@api.example.com/x?api_key=secret",
+			"https://api.example.com/x",
+		},
+		{"user without password", "https://user@api.example.com/x", "https://api.example.com/x"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

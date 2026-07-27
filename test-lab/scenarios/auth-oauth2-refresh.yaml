@@ -1,0 +1,24 @@
+name: auth-oauth2-refresh
+description: "Authentication keeps working across executions when the token expires after one second."
+pipeline: test-lab/pipelines/auth-oauth2-refresh.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  # A token is obtained and the protected endpoint accepts it.
+  - http_count_ge:
+      method: POST
+      path: /auth/oauth2/token-shortlived
+      body_contains: "grant_type=client_credentials"
+      expected: 1
+  - http_count_ge:
+      method: GET
+      path: /auth/oauth2/protected
+      headers: { Authorization: "Bearer lab-oauth2-access-token" }
+      status: 200
+      expected: 1
+  - http_count_eq_zero: { method: GET, path: /auth/oauth2/protected, status: 401 }
+  # Note: tokens are not cached — one is fetched per execution regardless of
+  # expires_in — so this scenario cannot distinguish "refreshed on expiry" from
+  # "always refetched". See docs/PLAN_VALIDATION_CONFIANCE.md (P5).
+  - log_not_contains: "panic:"

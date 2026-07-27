@@ -68,6 +68,10 @@ func SanitizeURL(raw string) string {
 	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
+	// Credentials embedded in the URL (http://user:password@host) are a secret
+	// like any other. Without this, every endpoint log line printed them in
+	// clear text — the query string was stripped but the password was not.
+	parsed.User = nil
 	return parsed.String()
 }
 

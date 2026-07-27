@@ -1,6 +1,6 @@
 # Plan de validation — passer du « vert en laboratoire » au « digne de confiance en production »
 
-> Statut : **P0, P2, P3 et P4 terminés**, harnais **P1 prêt** (run longue durée à lancer). P5 et P6 à faire.
+> Statut : **P0, P2, P3, P4 et P5 terminés**, harnais **P1 prêt** (run longue durée à lancer). P6 à faire.
 > Point de départ : 307 scénarios E2E verts, 2118 tests unitaires, race detector en CI, lint propre.
 > Objectif : combler les angles morts que la suite actuelle ne peut **structurellement** pas couvrir,
 > et remplacer une confiance déclarative par des preuves mesurables.
@@ -273,7 +273,7 @@ par défaut.** Le préfixe est maintenant retiré avant comparaison ; l'hex brut
 
 ---
 
-### P5 — Sécurité et vie longue — **effort S à M, rendement élevé sur deux points précis**
+### P5 — Sécurité et vie longue — ✅ **terminé**
 
 **Objectif** : vérifier les deux affirmations que je n'ai pas auditées, et les limites du bac à sable.
 
@@ -297,11 +297,48 @@ par défaut.** Le préfixe est maintenant retiré avant comparaison ; l'hex brut
   renouvellement, et le comportement quand le refresh échoue. Jamais testé (mes tests obtiennent un
   token une seule fois).
 
-**Critères de sortie**
-- La sentinelle secrète n'apparaît nulle part dans les logs, en CI.
-- Le comportement du templating SQL est testé et documenté (pas laissé implicite).
-- Un script hostile ne peut ni bloquer indéfiniment ni sortir du bac à sable.
-- Le refresh OAuth2 est prouvé.
+**Critères de sortie — atteints, sauf un**
+- ✅ **Audit sentinelle** : `test-lab/scripts/secret-audit.py` donne à chaque emplacement de
+  credential une valeur unique, passe le pipeline par `validate`, `validate --verbose`,
+  `run --dry-run`, `run` et `run --verbose`, puis cherche ces valeurs dans toute la sortie.
+  **Verdict PASS après correctif** (voir ci-dessous).
+- ✅ **Templating SQL testé** : `db-output-sql-injection` envoie
+  `Robert'); DROP TABLE dest_customers; --` comme valeur de record. La table survit et la valeur est
+  stockée **verbatim** — les `parameters` sont bien liés, jamais interpolés.
+- ✅ **Bac à sable étanche** : `script-sandbox-isolation` vérifie que `require`, `fetch`, `process`,
+  `XMLHttpRequest` et `globalThis.fs` sont **tous indéfinis**. Aucune évasion I/O.
+- 🔴 **Un script hostile PEUT bloquer indéfiniment** — voir le finding ci-dessous. Non corrigé.
+- 🟡 Le refresh OAuth2 « fonctionne » mais ne peut pas être distingué : il n'y a **aucun cache**.
+
+**Correctif — fuite de credentials dans les logs**
+L'audit a trouvé une vraie fuite : des identifiants placés dans l'URL
+(`http://user:password@host/…`) étaient journalisés **en clair** sur `run`, `run --dry-run` et
+`run --verbose`. Cause racine unique : `httpclient.SanitizeURL` retirait la query et le fragment mais
+**conservait le userinfo**. Corrigé par `parsed.User = nil`, ce qui assainit d'un coup les **57 sites
+d'appel**. Tests ajoutés dans `internal/httpclient/error_test.go`. Tous les autres emplacements
+étaient déjà propres : bearer, basic, api-key, secret OAuth2, token en query, mot de passe DSN.
+
+**🔴 FINDING NON CORRIGÉ — un script emballé rend le process inarrêtable**
+Un filtre `script` contenant `while (true) {}` (idem allocation massive ou récursion infinie) :
+- tourne indéfiniment en consommant **~91 % d'un cœur** ;
+- **reçoit** SIGTERM (« Received terminated signal ») mais **n'achève jamais son arrêt** :
+  le scheduler journalise `cron stop context timeout - continuing with shutdown` et le process est
+  toujours vivant 6 s plus tard — **SIGKILL obligatoire**.
+En production : `systemctl stop` qui traîne, `docker stop` qui attend sa période de grâce, déploiements
+progressifs bloqués. Le mécanisme d'interruption existe pourtant (`context.AfterFunc(ctx, …)` →
+`runtime.Interrupt` dans `internal/modules/filter/script.go`) et le scheduler appelle bien `s.cancel()`
+— **le contexte reçu par le filtre n'est donc pas celui qui est annulé**. Tracer et corriger ce chemin
+touche l'arrêt et l'exécution : délibérément laissé au user plutôt qu'improvisé.
+*Pistes* : (a) garantir que le contexte d'exécution des filtres dérive du contexte annulable du
+scheduler ; (b) ajouter un timeout d'exécution par script (option de module), ce qui borne le risque
+même si (a) régresse.
+
+**🟡 FINDING NON CORRIGÉ — aucun cache des tokens OAuth2**
+Un token annoncé valide **3600 s** est redemandé **à chaque exécution** (8 demandes pour 8 appels,
+mesuré). Un pipeline pollant toutes les 15 s ferait ~5 760 demandes de token par jour pour rien —
+beaucoup de fournisseurs (Auth0, Okta…) limitent agressivement ce endpoint. Conséquence pour les tests :
+le scénario `auth-oauth2-refresh` prouve que l'authentification tient dans la durée, mais **ne peut pas
+distinguer** « renouvelé à l'expiration » de « redemandé systématiquement ».
 
 ---
 

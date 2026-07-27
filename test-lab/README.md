@@ -258,6 +258,27 @@ wrong-secret signatures, replay, empty and malformed bodies, a payload without t
 configured `dataField`, and a burst beyond the rate limit. Every hostile case is followed
 by a valid request, so a listener taken down by one of them fails the scenario.
 
+## Secret audit
+
+The documentation states that resolved secrets are never logged. That is a claim about
+every code path that formats a message, so `test-lab/scripts/secret-audit.py` checks it
+mechanically: each credential slot gets a unique sentinel value, the pipeline is driven
+through `validate`, `validate --verbose`, `run --dry-run`, `run` and `run --verbose`, and
+the captured output is searched for those sentinels.
+
+```bash
+test-lab/scripts/secret-audit.py          # PASS means no sentinel was ever printed
+test-lab/scripts/secret-audit.py --keep   # keep the generated fixtures to inspect
+```
+
+Slots covered: bearer token, basic password, api key, OAuth2 client secret, output bearer,
+credentials embedded in the endpoint URL, a token in a query parameter, and the database
+password inside a DSN.
+
+It earns its keep: the first run found credentials in a `user:password@host` endpoint being
+logged in clear text, which came down to `SanitizeURL` stripping the query but keeping the
+userinfo.
+
 ## Crash testing (state integrity and delivery semantics)
 
 `run.py` always stops a pipeline politely, so `test-lab/scripts/crash.py` covers the hard

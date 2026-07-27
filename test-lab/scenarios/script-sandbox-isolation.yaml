@@ -1,0 +1,13 @@
+name: script-sandbox-isolation
+description: "The script engine exposes no host I/O: require, fetch, process and XMLHttpRequest are all undefined."
+pipeline: test-lab/pipelines/script-sandbox-isolation.yaml
+expect_status: success
+setup:
+  reset_db: false
+assertions:
+  - http_count_ge: { method: POST, path: /destination/matrix/sink, body_contains: '"no_require":true', expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/matrix/sink, body_contains: '"no_fetch":true', expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/matrix/sink, body_contains: '"no_process":true', expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/matrix/sink, body_contains: '"no_xhr":true', expected: 1 }
+  - http_count_ge: { method: POST, path: /destination/matrix/sink, body_contains: '"no_global_this_fs":true', expected: 1 }
+  - log_not_contains: "panic:"

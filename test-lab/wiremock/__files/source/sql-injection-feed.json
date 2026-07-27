@@ -1,0 +1,9 @@
+[
+  {
+    "externalId": "INJ-001",
+    "email": "injection@example.test",
+    "fullName": "Robert'); DROP TABLE dest_customers; --",
+    "segment": "premium",
+    "sourceUpdatedAt": "2026-02-01T08:00:00Z"
+  }
+]
