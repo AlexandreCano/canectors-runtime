@@ -1,0 +1,26 @@
+name: webhook-db-output
+description: "A webhook with a database output must keep working past the first request, not close its pool."
+pipeline: test-lab/pipelines/webhook-db-output.yaml
+setup:
+  reset_db: true
+webhook:
+  settle_seconds: 2
+  requests:
+    # Three separate deliveries. The output module is built once and shared, so
+    # closing its connection pool after the first one breaks every later request.
+    - name: first delivery
+      body: '{"orders": [{"id": "WHDB-1", "email": "whdb1@example.test", "name": "One", "segment": "a"}]}'
+      headers: { Content-Type: application/json }
+      expect_status: 200
+    - name: second delivery
+      body: '{"orders": [{"id": "WHDB-2", "email": "whdb2@example.test", "name": "Two", "segment": "b"}]}'
+      headers: { Content-Type: application/json }
+      expect_status: 200
+    - name: third delivery
+      body: '{"orders": [{"id": "WHDB-3", "email": "whdb3@example.test", "name": "Three", "segment": "c"}]}'
+      headers: { Content-Type: application/json }
+      expect_status: 200
+assertions:
+  - sql_eq: { query: "SELECT COUNT(*) FROM dest_customers WHERE external_id LIKE 'WHDB-%'", expected: "3" }
+  - log_not_contains: "database is closed"
+  - log_not_contains: "panic:"
