@@ -2,6 +2,7 @@ name: soap-polling-cursor
 description: SOAP cursor pagination walks 3 iterations via a nested NextCursor path and forwards all 5 orders.
 pipeline: test-lab/pipelines/soap-polling-cursor.yaml
 expect_status: success
+records_expected: 5
 setup:
   reset_db: false
 assertions:

@@ -1,0 +1,10 @@
+name: volume-cursor
+description: "Cursor pagination at volume — 3 iterations of 1 000 must all arrive."
+pipeline: test-lab/pipelines/volume-cursor.yaml
+expect_status: success
+timeout: 60
+records_expected: 3000
+setup:
+  reset_db: false
+assertions:
+  - log_not_contains: "panic:"

@@ -19,13 +19,18 @@ PIPELINE="$1"
 TIMEOUT="${2:-20}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BIN="$REPO_ROOT/cannectors"
-if [[ ! -x "$BIN" ]]; then
-  BIN="$REPO_ROOT/bin/cannectors"
-fi
-if [[ ! -x "$BIN" ]]; then
-  (cd "$REPO_ROOT" && go build -o cannectors ./cmd/cannectors)
-  BIN="$REPO_ROOT/cannectors"
+
+# Always rebuild into a single canonical path before running. Picking an
+# existing binary instead used to silently validate stale code: a leftover
+# ./cannectors shadowed rebuilds that went to ./bin/cannectors, so scenarios
+# passed against an old build. Go caches aggressively, so an unchanged tree
+# rebuilds in well under a second.
+BIN="$REPO_ROOT/bin/cannectors"
+if [[ -z "${CANNECTORS_SKIP_BUILD:-}" ]]; then
+  (cd "$REPO_ROOT" && go build -o "$BIN" ./cmd/cannectors)
+elif [[ ! -x "$BIN" ]]; then
+  echo "CANNECTORS_SKIP_BUILD is set but $BIN does not exist" >&2
+  exit 70
 fi
 
 LOG_FILE="$(mktemp)"

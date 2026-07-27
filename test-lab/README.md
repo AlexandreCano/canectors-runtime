@@ -153,6 +153,50 @@ empty `mysql_dest_customers` for output scenarios. Scenarios that write to it tr
 table in `setup.commands` so re-runs stay deterministic. Queries in pipelines always use the
 canonical `$1, $2, …` placeholders — the runtime translates them to `?` for MySQL and SQLite.
 
+## Reconciliation (record-loss invariant)
+
+Silent record loss is the worst failure mode for a pipeline runtime: the run reports
+`success`, nothing is logged, and records simply never arrive. Both cursor-pagination
+defects found by the first campaign had that shape. Per-scenario assertions only catch
+the cases someone thought of, so `run.py` reconciles counts on **every** scenario, with
+no per-scenario configuration:
+
+| Check | What it proves |
+|---|---|
+| `filter->output` | The output stage received every record the filter stage produced. |
+| `output accounts for every record` | An `httpRequest` output's `records_sent + records_failed` matches what it was handed. |
+| `sent->wire (no loss)` | The destination actually received at least as many records as the output claims it sent — summed across request bodies, so a batch counts its array length. |
+
+The wire check is deliberately one-sided: fewer records on the wire than sent is loss,
+which is what we hunt. **More** is normal — a retried request replays its whole batch,
+so delivery is at-least-once. Those runs report `replayed=N`, which quantifies the
+duplication.
+
+An output whose `onError` is `skip` or `log` drops offending records on purpose, so the
+stage checks relax to "no gain" automatically — no opt-out needed. A scenario can still
+set `reconcile: false` if its filters legitimately change counts in a way the runner
+cannot infer.
+
+### Declared totals catch loss on the input side
+
+The invariants above are all internal, and a truncated pagination loop is *internally
+consistent*: fetch 1 000 of 3 000 records and every downstream count agrees. Catching
+that needs an external expectation, so scenarios declare one:
+
+```yaml
+records_expected: 3000    # the fixtures hold exactly this many records
+```
+
+This is the check that would have caught the numeric-cursor defect on day one. The
+`volume-*` and `pagination-*` scenarios all declare their totals.
+
+## Volume fixtures
+
+`test-lab/scripts/generate-volume-fixtures.py` writes the large WireMock bodies used by
+the `volume-*` scenarios: single responses of 1 000 and 10 000 records, plus 3 pages of
+1 000 for each pagination strategy (3 000 records per strategy). The outputs are committed
+so a fresh clone works; rerun the script only when changing the volumes.
+
 ## Generated combinatorial layer
 
 Most of the suite is generated. `test-lab/generate-matrix.py` holds a declarative
@@ -429,6 +473,8 @@ assertions:
   - log_not_contains: "panic:"
 env:                              # optional: vars exported to the pipeline process
   LAB_BEARER_TOKEN: lab-bearer-token
+records_expected: 3000            # optional: total the input must fetch (see Reconciliation)
+reconcile: false                  # optional: opt out of the loss invariant (rarely needed)
 ```
 
 `env:` exists so scenarios can exercise `${VAR}` substitution and

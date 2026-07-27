@@ -2,6 +2,7 @@ name: pagination-offset
 description: Offset pagination — 3 pages (offset 0/2/4, limit 2, total 6), all 6 orders forwarded.
 pipeline: test-lab/pipelines/pagination-offset.yaml
 expect_status: success
+records_expected: 6
 assertions:
   - http_count_eq:
       method: GET

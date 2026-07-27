@@ -2,6 +2,7 @@ name: pagination-cursor
 description: Cursor pagination — 3 string-cursor iterations of 2 inventory rows, all 6 forwarded.
 pipeline: test-lab/pipelines/pagination-cursor.yaml
 expect_status: success
+records_expected: 6
 assertions:
   # Three source iterations: initial (no cursor) + two follow-up cursors.
   - http_count_eq:
