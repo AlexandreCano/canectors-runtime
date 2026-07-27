@@ -223,6 +223,36 @@ TLS uses WireMock's HTTPS listener on port 18443 with its bundled self-signed ce
 which is how the lab checks that the runtime validates certificates rather than trusting
 whatever it is handed.
 
+## Crash testing (state integrity and delivery semantics)
+
+`run.py` always stops a pipeline politely, so `test-lab/scripts/crash.py` covers the hard
+case: it SIGKILLs a run at a chosen log marker, then inspects what survived.
+
+```bash
+test-lab/scripts/crash.py                       # every kill point
+test-lab/scripts/crash.py --point after-output  # one of them
+```
+
+Kill points are markers rather than sleeps: `mid-flight`, `after-fetch`, `after-output`.
+For each, the harness reports whether the state file is readable, how many records the
+destination had received, and what a restart delivers. It fails only on a corrupt state
+file or a lost record.
+
+Results so far: the state file is always valid JSON after a `SIGKILL` (the write is
+atomic — temp file then rename), and no record is lost.
+
+The pipeline behind it, `crash-state-id.yaml`, reads a source that **honours `after_id`**:
+a fresh run gets three events, a caught-up run gets none. That detail matters — against
+the static stub used by the other state scenarios, every restart replays the same records
+and the "duplicates" measured would be an artefact of the lab rather than the runtime.
+
+<!-- Honest limitation, worth keeping in view -->
+A duplicate count of 0 does **not** mean exactly-once. Delivery is at-least-once: a retry
+replays the whole batch, which `run.py` reports as `replayed=N`. A crash between delivery
+and the state write duplicates too, but an execution takes a few milliseconds end to end,
+so a marker-based kill lands either side of that window rather than inside it. Proving it
+would need a test hook that delays the state write.
+
 ## Soak testing (leak detection)
 
 `test-lab/scripts/soak.py` runs one pipeline on its schedule for hours and reports whether

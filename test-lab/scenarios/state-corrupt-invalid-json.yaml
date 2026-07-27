@@ -1,0 +1,18 @@
+name: state-corrupt-invalid-json
+description: "A state file holding invalid JSON is rejected; the run continues with a full re-read."
+pipeline: test-lab/pipelines/state-id.yaml
+expect_status: success
+records_expected: 3
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "printf '%s' 'not-json-at-all' > test-lab/state/state-id.json"
+assertions:
+  # The state is rejected and the run continues without it, which means a full
+  # re-read of the source: loud in the log, but the pipeline still reports
+  # success, so status-only monitoring would not notice.
+  - log_contains: "failed to unmarshal state"
+  - log_contains: "continuing without persistence"
+  - http_count_ge: { method: POST, path: /destination/state/id, body_contains: "EVT-100", expected: 1 }
+  - log_not_contains: "panic:"

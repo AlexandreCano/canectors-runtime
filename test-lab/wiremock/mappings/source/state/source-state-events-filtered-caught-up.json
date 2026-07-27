@@ -1,0 +1,14 @@
+{
+  "name": "source-state-events-filtered-caught-up",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/source/state/events-filtered",
+    "queryParameters": { "after_id": { "equalTo": "EVT-102" } }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "events": [] }
+  }
+}

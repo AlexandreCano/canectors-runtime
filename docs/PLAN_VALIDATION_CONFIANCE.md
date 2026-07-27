@@ -1,6 +1,6 @@
 # Plan de validation — passer du « vert en laboratoire » au « digne de confiance en production »
 
-> Statut : **P0 et P2 terminés**, harnais **P1 prêt** (run longue durée à lancer). P3 à P6 à faire.
+> Statut : **P0, P2 et P3 terminés**, harnais **P1 prêt** (run longue durée à lancer). P4 à P6 à faire.
 > Point de départ : 307 scénarios E2E verts, 2118 tests unitaires, race detector en CI, lint propre.
 > Objectif : combler les angles morts que la suite actuelle ne peut **structurellement** pas couvrir,
 > et remplacer une confiance déclarative par des preuves mesurables.
@@ -171,7 +171,7 @@ identifiants — à revoir lors de l'audit des secrets dans les logs.
 
 ---
 
-### P3 — Crash, reprise et sémantique de livraison — **effort M, rendement élevé**
+### P3 — Crash, reprise et sémantique de livraison — ✅ **terminé**
 
 **Objectif** : répondre à « que se passe-t-il si ça meurt au mauvais moment ? » — aujourd'hui inconnu.
 
@@ -193,10 +193,34 @@ identifiants — à revoir lors de l'audit des secrets dans les logs.
   doublons. Écrire noir sur blanc la garantie réelle (*at-least-once* très probablement) et la
   documenter côté `cannectors-doc`.
 
-**Critères de sortie**
-- Aucun crash ne laisse un fichier d'état illisible.
-- Le comportement sur état corrompu est explicite et testé.
-- La garantie de livraison est écrite dans la doc et adossée à un test.
+**Critères de sortie — atteints**
+- ✅ Aucun crash ne laisse un fichier d'état illisible. `test-lab/scripts/crash.py` envoie un
+  **SIGKILL** à trois points (`mid-flight`, `after-fetch`, `after-output`) : l'état est toujours du
+  JSON valide (ou absent), jamais tronqué — l'écriture atomique tient. **Zéro record perdu.**
+- ✅ État corrompu explicite et testé : 3 scénarios (`state-corrupt-invalid-json`,
+  `state-corrupt-wrong-type`, `state-corrupt-empty-file`). Comportement réel = **fail-open** :
+  l'état est rejeté, le pipeline continue **sans persistance** (donc relecture complète de la
+  source) en journalisant `failed to load state ... continuing without persistence`. Le run
+  rapporte quand même `success` : une supervision basée sur le statut ne verrait rien passer.
+- ✅ Garantie de livraison documentée dans `cannectors-doc/content/docs/concepts/state-persistence.mdx`
+  (section « Delivery guarantee and crashes ») et adossée au harnais.
+
+**Limite méthodologique assumée**
+- Le harnais mesure **0 doublon**, ce qui ne prouve **pas** l'exactly-once. La livraison est
+  at-least-once par conception : un retry rejoue tout le batch (déjà mesuré en P0 via `replayed=N`).
+  La fenêtre de duplication propre au crash (entre livraison et écriture de l'état) existe mais
+  dure quelques millisecondes : un kill sur marqueur de log tombe de part et d'autre, jamais dedans.
+  La prouver exigerait un hook de test retardant l'écriture d'état — changement runtime écarté ici.
+- **Piège de montage évité** : la première mesure donnait « 3 doublons » à chaque point… parce que le
+  stub source des scénarios `state-*` est **statique** et ignore `after_id`. Le harnais utilise
+  désormais `crash-state-id.yaml`, dont la source honore le curseur ; sinon les doublons mesurés
+  étaient un artefact du laboratoire, pas une propriété du runtime.
+
+**Reste hors périmètre de cette passe**
+- Runs concurrents du même pipeline sur le même `storagePath` (dernier écrivain gagne ? verrou ?) —
+  à caractériser.
+- Durabilité sur coupure d'alimentation (pas de `fsync` avant le `rename`) — documentée côté doc
+  utilisateur, non testée (demanderait de simuler une perte d'alimentation).
 
 ---
 

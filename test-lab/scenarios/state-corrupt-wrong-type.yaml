@@ -1,0 +1,15 @@
+name: state-corrupt-wrong-type
+description: "A state file whose lastId has the wrong JSON type is rejected the same way as invalid JSON."
+pipeline: test-lab/pipelines/state-id.yaml
+expect_status: success
+records_expected: 3
+setup:
+  reset_state: true
+  reset_db: false
+  commands:
+    - "echo '{\"pipelineId\":\"state-id\",\"lastId\":12345}' > test-lab/state/state-id.json"
+assertions:
+  - log_contains: "failed to unmarshal state"
+  - log_contains: "continuing without persistence"
+  - http_count_ge: { method: POST, path: /destination/state/id, body_contains: "EVT-100", expected: 1 }
+  - log_not_contains: "panic:"
