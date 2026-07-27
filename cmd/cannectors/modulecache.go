@@ -46,8 +46,10 @@ func (m *moduleSet) Close() error {
 	if m.output != nil {
 		record(m.output.Close())
 	}
+	// filter.Module has no Close: only the ones holding a resource implement it
+	// (sql_call and its connection pool), so the assertion is how they are found.
 	for _, f := range m.filters {
-		if closer, ok := any(f).(interface{ Close() error }); ok {
+		if closer, ok := f.(interface{ Close() error }); ok {
 			record(closer.Close())
 		}
 	}

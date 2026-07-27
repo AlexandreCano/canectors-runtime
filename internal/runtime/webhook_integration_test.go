@@ -3,11 +3,14 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/cannectors/runtime/internal/modules/input"
+	"github.com/cannectors/runtime/internal/modules/output"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
@@ -96,5 +99,91 @@ func TestWebhook_ExecutorIntegration(t *testing.T) {
 
 	if !waitForRecords(outputModule, 2, 2*time.Second) {
 		t.Fatalf("Timed out waiting for 2 records, got %d", len(outputModule.sentRecords))
+	}
+}
+
+// concurrentOutputModule records everything it is sent and whether it was closed,
+// safely under parallel Send calls.
+type concurrentOutputModule struct {
+	mu      sync.Mutex
+	records []map[string]any
+	closed  bool
+}
+
+func (m *concurrentOutputModule) Send(_ context.Context, records []map[string]any) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		// What a real database output does once its pool is handed back.
+		return 0, errors.New("output is closed")
+	}
+	m.records = append(m.records, records...)
+	return len(records), nil
+}
+
+func (m *concurrentOutputModule) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	return nil
+}
+
+func (m *concurrentOutputModule) snapshot() (int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.records), m.closed
+}
+
+var _ output.Module = (*concurrentOutputModule)(nil)
+
+// TestExecutor_RetainedModulesSurviveConcurrentExecutions covers the webhook
+// path as it actually runs: one Executor and one set of modules, serving
+// deliveries from several worker goroutines at once.
+//
+// It pins the two things that path depends on. The modules must still be open
+// when the last delivery lands — before RetainModules, the executor closed the
+// output at the end of the first execution and every later delivery failed with
+// "sql: database is closed" (removing the RetainModules call below reproduces
+// exactly that). And the Executor itself must tolerate parallel executions,
+// since nothing gives each delivery its own. Run with -race.
+func TestExecutor_RetainedModulesSurviveConcurrentExecutions(t *testing.T) {
+	pipeline := &connector.Pipeline{
+		ID:      "webhook-pipeline",
+		Name:    "Webhook Pipeline",
+		Version: "1.0.0",
+		Enabled: true,
+	}
+
+	outputModule := &concurrentOutputModule{}
+	executor := NewExecutorWithModules(nil, nil, outputModule, false)
+	executor.RetainModules()
+
+	const deliveries = 24
+	var wg sync.WaitGroup
+	errs := make([]error, deliveries)
+
+	for i := range deliveries {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = executor.ExecuteWithRecordsContext(
+				context.Background(), pipeline, []map[string]any{{"id": i}},
+			)
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("delivery %d failed: %v", i, err)
+		}
+	}
+
+	sent, closed := outputModule.snapshot()
+	if closed {
+		t.Error("the retained output was closed by an execution; later deliveries would fail")
+	}
+	if sent != deliveries {
+		t.Errorf("output received %d records, want %d", sent, deliveries)
 	}
 }

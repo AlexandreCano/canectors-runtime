@@ -2,6 +2,7 @@ package filter
 
 import (
 	"context"
+	"sync"
 	"testing"
 )
 
@@ -71,6 +72,65 @@ func TestScript_GlobalsPersistWithinOneExecution(t *testing.T) {
 		want := i + 1
 		if got := record["seen"]; got != int64(want) && got != float64(want) {
 			t.Errorf("record %d: seen = %v (%T), want %d", i, got, got, want)
+		}
+	}
+}
+
+// TestScript_ConcurrentExecutionsOnOneModule covers the webhook path, where the
+// gap between reuse and isolation actually shows.
+//
+// Deliveries are served by maxConcurrent workers calling into the *same* module
+// instance, so Process runs in parallel on it. A goja.Runtime is not
+// goroutine-safe: a runtime hoisted onto the module would corrupt state or panic
+// here, and the sequential isolation test above would not notice — it only ever
+// runs one execution at a time. Run with -race.
+func TestScript_ConcurrentExecutionsOnOneModule(t *testing.T) {
+	module, err := NewScriptFromConfig(ScriptConfig{
+		Script: `
+			var callCount = 0;
+			function transform(record) {
+				callCount++;
+				record.callCount = callCount;
+				record.doubled = record.value * 2;
+				return record;
+			}`,
+	})
+	if err != nil {
+		t.Fatalf("NewScriptFromConfig() error = %v", err)
+	}
+
+	const deliveries = 32
+	var wg sync.WaitGroup
+	results := make([][]map[string]any, deliveries)
+	errs := make([]error, deliveries)
+
+	for i := range deliveries {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = module.Process(
+				context.Background(), []map[string]any{{"value": i}},
+			)
+		}()
+	}
+	wg.Wait()
+
+	for i := range deliveries {
+		if errs[i] != nil {
+			t.Fatalf("delivery %d: Process() error = %v", i, errs[i])
+		}
+		if len(results[i]) != 1 {
+			t.Fatalf("delivery %d: got %d records, want 1", i, len(results[i]))
+		}
+		record := results[i][0]
+		// Each delivery got its own runtime, so no counter was shared.
+		if got := record["callCount"]; got != int64(1) && got != 1.0 {
+			t.Errorf("delivery %d: callCount = %v, want 1 — a runtime was shared "+
+				"between concurrent executions", i, got)
+		}
+		// And no delivery saw another's record.
+		if got := record["doubled"]; got != int64(i*2) && got != float64(i*2) {
+			t.Errorf("delivery %d: doubled = %v (%T), want %d", i, got, got, i*2)
 		}
 	}
 }
