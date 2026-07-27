@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -386,6 +387,12 @@ func runScheduledPipeline(pipeline *connector.Pipeline, schedule string) {
 		os.Exit(ExitRuntimeError)
 	}
 
+	// The modules outlive an execution now, so they are released here instead:
+	// database pools are handed back rather than dropped when the process exits.
+	if err := executorAdapter.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠ Failed to close pipeline modules: %v\n", err)
+	}
+
 	if !quiet {
 		fmt.Println("✓ Scheduler stopped gracefully")
 	}
@@ -482,6 +489,16 @@ func runVersion(_ *cobra.Command, _ []string) {
 // PipelineExecutorAdapter adapts the runtime.Executor for use with the scheduler.
 type PipelineExecutorAdapter struct {
 	dryRun bool
+
+	// modules holds each pipeline's chain for the life of the process. dryRun is
+	// fixed per adapter, so the pipeline id alone identifies a chain.
+	modules moduleCache
+}
+
+// Close releases every module the adapter built. Called on shutdown so database
+// pools are handed back rather than dropped when the process exits.
+func (a *PipelineExecutorAdapter) Close() error {
+	return a.modules.Close()
 }
 
 // Execute runs a pipeline using the runtime executor, without a caller context.
@@ -503,56 +520,45 @@ func (a *PipelineExecutorAdapter) Execute(pipeline *connector.Pipeline) (*connec
 func (a *PipelineExecutorAdapter) ExecuteWithContext(
 	ctx context.Context, pipeline *connector.Pipeline,
 ) (*connector.ExecutionResult, error) {
-	inputModule, err := factory.CreateInputModule(pipeline.Input)
+	modules, err := a.modules.get(pipeline)
 	if err != nil {
+		code := "MODULE_CREATION_FAILED"
+		var buildErr *moduleBuildError
+		if errors.As(err, &buildErr) {
+			code = buildErr.Code()
+		}
 		return &connector.ExecutionResult{
 			PipelineID:  pipeline.ID,
 			Status:      "error",
 			StartedAt:   time.Now(),
 			CompletedAt: time.Now(),
 			Error: &connector.ExecutionError{
-				Code:    "INPUT_CREATION_FAILED",
-				Message: err.Error(),
-			},
-		}, err
-	}
-	filterModules, err := factory.CreateFilterModules(pipeline.Filters)
-	if err != nil {
-		_ = inputModule.Close()
-		return &connector.ExecutionResult{
-			PipelineID:  pipeline.ID,
-			Status:      "error",
-			StartedAt:   time.Now(),
-			CompletedAt: time.Now(),
-			Error: &connector.ExecutionError{
-				Code:    "FILTER_CREATION_FAILED",
-				Message: err.Error(),
-			},
-		}, err
-	}
-	outputModule, err := factory.CreateOutputModule(pipeline.Output)
-	if err != nil {
-		_ = inputModule.Close()
-		return &connector.ExecutionResult{
-			PipelineID:  pipeline.ID,
-			Status:      "error",
-			StartedAt:   time.Now(),
-			CompletedAt: time.Now(),
-			Error: &connector.ExecutionError{
-				Code:    "OUTPUT_CREATION_FAILED",
+				Code:    code,
 				Message: err.Error(),
 			},
 		}, err
 	}
 
-	executor := runtime.NewExecutorWithModules(inputModule, filterModules, outputModule, a.dryRun)
+	executor := runtime.NewExecutorWithModules(
+		modules.input, modules.filters, modules.output, a.dryRun,
+	)
+	// The cache owns these modules and the next tick will reuse them, so the
+	// executor must leave them open.
+	executor.RetainModules()
 
 	// Configure state persistence if input module supports it
 	// Create stateStore with default path (input module will use its own if it has custom storagePath)
 	stateStore := persistence.NewStateStore("")
 	executor.SetStateStore(stateStore)
 
-	return executor.ExecuteWithContext(ctx, pipeline)
+	result, execErr := executor.ExecuteWithContext(ctx, pipeline)
+	if execErr != nil {
+		// A failed execution may have left a module unusable — a closed pool, a
+		// source that changed shape. Dropping the chain restores the self-healing
+		// the per-tick rebuild used to provide for free.
+		a.modules.evict(pipeline.ID)
+	}
+	return result, execErr
 }
 
 // Verify PipelineExecutorAdapter implements scheduler.Executor
