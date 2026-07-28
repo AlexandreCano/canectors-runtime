@@ -283,14 +283,19 @@ func (e *Executor) executeOutput(ctx context.Context, pipelineID string, records
 		return outputResult{recordsSent: recordsSent, recordsFailed: len(records) - recordsSent, err: err}
 	}
 
+	// The output can succeed while sending fewer records than it was given:
+	// onError skip/log drops the failing record (single mode) or the failing
+	// batch (batch mode) and keeps going. Those records did fail, so derive the
+	// count instead of assuming zero.
 	logger.Debug("output module completed",
 		slog.String(logger.TraceIDField, traceID),
 		slog.String("pipeline_id", pipelineID),
 		slog.String("stage", "output"),
 		slog.Int("records_sent", recordsSent),
+		slog.Int("records_failed", len(records)-recordsSent),
 		slog.Duration("duration", outputDuration),
 	)
-	return outputResult{recordsSent: recordsSent, recordsFailed: 0, err: nil}
+	return outputResult{recordsSent: recordsSent, recordsFailed: len(records) - recordsSent, err: nil}
 }
 
 // executeDryRunPreview generates request previews for dry-run mode.
@@ -819,13 +824,16 @@ func (e *Executor) executeOutputWithResult(ctx context.Context, pipeline *connec
 	}
 	logger.LogStageEnd(stageCtx, outputRes.recordsSent, outputDuration, nil)
 	result.RecordsProcessed = outputRes.recordsSent
+	result.RecordsFailed = outputRes.recordsFailed
 	return outputDuration, nil
 }
 
 // finalizeSuccessWithMetrics marks the execution as successful and logs completion with detailed metrics.
+// RecordsFailed is left as the output stage computed it: a run where onError
+// skip/log dropped records or batches is still a success, but it did not send
+// everything and must not report zero failures.
 func (e *Executor) finalizeSuccessWithMetrics(result *connector.ExecutionResult, startedAt time.Time, pipeline *connector.Pipeline, timings stageTimings, traceID string) {
 	result.Status = StatusSuccess
-	result.RecordsFailed = 0
 	result.CompletedAt = time.Now()
 	result.Error = nil
 
@@ -854,7 +862,7 @@ func (e *Executor) finalizeSuccessWithMetrics(result *connector.ExecutionResult,
 		FilterDuration:   timings.filterDuration,
 		OutputDuration:   timings.outputDuration,
 		RecordsProcessed: recordsProcessed,
-		RecordsFailed:    0,
+		RecordsFailed:    result.RecordsFailed,
 		RecordsPerSecond: recordsPerSecond,
 		AvgRecordTime:    avgRecordTime,
 	}

@@ -49,6 +49,7 @@ Validate one example:
 | [41-soap-polling-cursor.yaml](41-soap-polling-cursor.yaml) | Cursor pagination in a SOAP body |
 | [42-soap-call-enrichment.yaml](42-soap-call-enrichment.yaml) | SOAP enrichment filter with cache and append |
 | [43-soap-output-batch.yaml](43-soap-output-batch.yaml) | Batched SOAP output |
+| [43b-soap-output-batch-size.yaml](43b-soap-output-batch-size.yaml) | Batched SOAP output split into requests of 50 records |
 | [44-soap-output-mtom-emission.yaml](44-soap-output-mtom-emission.yaml) | SOAP MTOM attachment emission |
 | [44b-soap-input-mtom-reception.yaml](44b-soap-input-mtom-reception.yaml) | SOAP MTOM attachment reception |
 | [45-soap-output-wssecurity-passwordtext.yaml](45-soap-output-wssecurity-passwordtext.yaml) | WS-Security UsernameToken PasswordText |

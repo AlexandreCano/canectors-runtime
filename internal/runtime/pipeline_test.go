@@ -2558,3 +2558,41 @@ func TestExecutor_Execute_LogsExecutionEnd(t *testing.T) {
 		t.Error("Expected to find 'execution completed' log entry with proper structure")
 	}
 }
+
+// partialOutputModule reports fewer sent records than it was given without
+// returning an error — what an output does under onError skip/log when it drops
+// a record (single mode) or a whole batch (batch mode).
+type partialOutputModule struct {
+	sent int
+}
+
+func (m *partialOutputModule) Send(_ context.Context, _ []map[string]any) (int, error) {
+	return m.sent, nil
+}
+
+func (m *partialOutputModule) Close() error { return nil }
+
+var _ output.Module = (*partialOutputModule)(nil)
+
+// TestExecutor_Execute_PartialSendReportsFailedRecords locks that a successful
+// run which sent only part of its records reports the remainder as failed
+// rather than zero: the count must survive finalizeSuccessWithMetrics.
+func TestExecutor_Execute_PartialSendReportsFailedRecords(t *testing.T) {
+	inputData := []map[string]any{{"id": "1"}, {"id": "2"}, {"id": "3"}}
+	mockInput := NewMockInputModule(inputData, nil)
+	executor := NewExecutorWithModules(mockInput, nil, &partialOutputModule{sent: 1}, false)
+
+	result, err := executor.Execute(&connector.Pipeline{ID: "partial", Name: "Partial", Enabled: true})
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+	if result.Status != StatusSuccess {
+		t.Errorf("Status = %q, want %q", result.Status, StatusSuccess)
+	}
+	if result.RecordsProcessed != 1 {
+		t.Errorf("RecordsProcessed = %d, want 1", result.RecordsProcessed)
+	}
+	if result.RecordsFailed != 2 {
+		t.Errorf("RecordsFailed = %d, want 2 (3 given, 1 sent)", result.RecordsFailed)
+	}
+}

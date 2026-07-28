@@ -227,3 +227,29 @@ func TestSOAPRetryDefaultsInherited(t *testing.T) {
 		}
 	}
 }
+
+// TestSchemaSOAPRequestBatchSize locks the batchSize contract on soapRequest.
+func TestSchemaSOAPRequestBatchSize(t *testing.T) {
+	cases := []struct {
+		name      string
+		batchSize string
+		wantValid bool
+	}{
+		{"fifty ok", "50", true},
+		{"one ok", "1", true},
+		{"zero rejected", "0", false},
+		{"negative rejected", "-1", false},
+		{"fractional rejected", "1.5", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := fmt.Sprintf(
+				`{"type":"soapRequest","endpoint":"https://e/x","operation":"Op","body":"<Op/>","requestMode":"batch","batchSize":%s}`,
+				tc.batchSize,
+			)
+			if got := validateOutput(t, out); got != tc.wantValid {
+				t.Fatalf("valid=%v want %v (batchSize=%s)", got, tc.wantValid, tc.batchSize)
+			}
+		})
+	}
+}

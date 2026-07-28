@@ -140,3 +140,29 @@ func TestSchemaHTTPRequestKeysStrict(t *testing.T) {
 		})
 	}
 }
+
+// TestSchemaHTTPRequestBatchSize locks the batchSize contract: a positive
+// integer only. The batch-mode-only rule is a runtime check (the module build
+// rejects it alongside requestMode 'single'), not a schema one.
+func TestSchemaHTTPRequestBatchSize(t *testing.T) {
+	cases := []struct {
+		name      string
+		batchSize string
+		wantValid bool
+	}{
+		{"fifty ok", "50", true},
+		{"one ok", "1", true},
+		{"zero rejected", "0", false},
+		{"negative rejected", "-1", false},
+		{"fractional rejected", "1.5", false},
+		{"string rejected", `"50"`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := fmt.Sprintf(`{"type":"httpRequest","endpoint":"https://e/x","requestMode":"batch","batchSize":%s}`, tc.batchSize)
+			if got := validateOutput(t, out); got != tc.wantValid {
+				t.Fatalf("valid=%v want %v (batchSize=%s)", got, tc.wantValid, tc.batchSize)
+			}
+		})
+	}
+}
