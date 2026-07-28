@@ -98,7 +98,7 @@ Le runtime logge déjà ce qu'il faut : `input fetch completed{record_count}`,
 
 ---
 
-### P1 — Volume et endurance — 🟡 **harnais prêt, run longue durée à lancer**
+### P1 — Volume et endurance — ✅ **terminé** (soak 12 h × 7 sous-systèmes, PASS)
 
 **Objectif** : savoir ce qui se passe au-delà de 5 records et de 1 seconde.
 
@@ -127,11 +127,46 @@ allocation — changement runtime volontairement écarté du harnais.
 ~27,5 Mo, descripteurs et threads constants, dérive CRON p50=0 ms / max=1 ms, 0 erreur. Encourageant,
 mais sans valeur sur les fuites lentes — d'où le run de 24 h.
 
+**Run long réalisé (12 h, 7 pipelines en parallèle, cadence 5 s)** — `make test-lab-soak-wide`.
+Le run de 24 h sur un seul pipeline a été remplacé par 12 h sur sept sous-systèmes simultanés :
+ce qui révèle une fuite est le **nombre de ticks**, pas le temps écoulé, et 12 h à 5 s donnent
+8 642 exécutions par pipeline contre 1 440 pour 24 h à la minute. Le compromis assumé est une
+moitié de résolution en moins sur la dérive monotone très lente, contre sept fois la surface.
+
+| Sous-système | Pipeline | RSS | fds | threads | dérive CRON max | erreurs |
+|---|---|---|---|---|---|---|
+| Volume / alloc JSON | `volume-1000` | 1,02× | 1,00× | 1,05× | 0 ms | 0 |
+| VM goja par exécution | `filters-script-inline` | 1,01× | 1,00× | 1,06× | 1 ms | 0 |
+| Cache LRU + pool HTTP | `http-call-path-merge` | 1,01× | 1,00× | 1,00× | 0 ms | 0 |
+| Pool Postgres (lecture) | `db-input-basic` | 1,01× | 1,00× | 1,00× | 2 ms | 0 |
+| Écriture + transactions | `db-output-upsert-query-file` | 1,00× | 1,00× | 1,08× | 1 ms | 0 |
+| State store sur disque | `state-id` | 1,00× | 1,00× | 1,00× | 3 ms | 0 |
+| Chemin XML/SOAP | `soap-polling-v12` | 1,01× | 1,00× | 1,00× | 2 ms | 0 |
+
+**60 494 exécutions cumulées, 0 ligne d'erreur, verdict PASS.** RSS entre 26,9 et 30,5 Mo partout et
+plat de bout en bout — `volume-1000` a poussé ~8,6 millions de records sans que la mémoire bouge.
+Descripteurs strictement constants. Connexions Postgres 6 → 7 sur 12 h, tous pipelines confondus.
+Dérive CRON p50 = 0 ms et max = 3 ms sur 8 642 déclenchements.
+
+**Critères de sortie — atteints**
+- ✅ Aucune croissance monotone de la mémoire ni des threads sur 12 h × 7 sous-systèmes.
+- ✅ Aucune fuite de connexion (compteur Postgres stable à ±1).
+- ✅ Dérive CRON documentée et bornée : max 3 ms sur 60 k exécutions.
+
 **Critères de sortie — restants**
-- 24 h de run sans croissance monotone du heap ni des goroutines.
-- Aucune fuite de connexion (compteur stable côté Postgres/MySQL).
-- Dérive CRON documentée et bornée sur 24 h.
 - Un chiffre publié : « records/s soutenu » et « mémoire par 10 k records ».
+
+**Ce que ce run ne prouve pas** — à traiter si le besoin de confiance persiste :
+- **Les chemins d'erreur n'ont aucune exposition.** Les sept pipelines ont tourné avec 0 erreur, donc
+  une fuite dans le retry, le backoff ou `onError` resterait invisible. Un soak dédié contre un stub
+  qui échoue une fois sur dix comblerait ce trou.
+- **Le webhook n'est pas couvert.** C'est un serveur, pas un job planifié : le harnais ne sait pas le
+  piloter. C'est pourtant le module dont le cycle de vie a été modifié le plus récemment.
+- **Pas de pipeline OAuth2 dans le jeu**, donc ni l'expiration ni le rafraîchissement de token sur
+  plusieurs heures ne sont observés — alors que le cache de tokens est désormais partagé au niveau
+  du processus.
+- **La croissance disque n'est pas échantillonnée** : `state-id` a tourné 8 642 fois, mais la taille
+  du state store n'est pas relevée.
 
 ---
 

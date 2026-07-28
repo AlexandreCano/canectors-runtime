@@ -18,19 +18,6 @@ import (
 // mitigate DoS attacks with pathological inputs.
 const MaxSuccessExpressionLength = 10000
 
-// normalizeRequestMode validates and normalizes the requestMode field
-// (Story 24.12 AC15). Empty defaults to defaultRequestMode.
-func normalizeRequestMode(mode string) (string, error) {
-	switch mode {
-	case "":
-		return defaultRequestMode, nil
-	case "batch", "single":
-		return mode, nil
-	default:
-		return "", fmt.Errorf("httpRequest invalid requestMode %q: must be 'batch' or 'single'", mode)
-	}
-}
-
 // validateRequestKeyEntries validates each key entry independently of
 // presence (Story 24.12 AC16): keys are optional but, when present, must be
 // well-formed.

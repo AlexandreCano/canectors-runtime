@@ -21,8 +21,14 @@ const maxBodyPreviewSize = 1 * 1024 * 1024
 // requests. Used in dry-run mode.
 //
 // Returns one preview per request that would be made:
-//   - Batch mode (requestMode="batch"): returns 1 preview for all records.
+//   - Batch mode (requestMode="batch"): 1 preview for all records, or one
+//     preview per batch of batchSize records when batchSize is set.
 //   - Single record mode (requestMode="single"): returns N previews.
+//
+// Known limitation: a batch preview always shows the default JSON array of the
+// batch's records. When a body template is configured, Send renders that
+// template instead (against the batch's first record), so the previewed body
+// does not match what would be sent.
 //
 // By default, authentication headers are masked. Set opts.ShowCredentials
 // to true to display actual credential values (debugging only).
@@ -30,39 +36,55 @@ func (h *HTTPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 	if len(records) == 0 {
 		return []RequestPreview{}, nil
 	}
-	if h.request.RequestMode == "single" {
+	if h.request.RequestMode == requestModeSingle {
 		return h.previewSingleRecordMode(records, opts)
 	}
 	return h.previewBatchMode(records, opts)
 }
 
+// previewBatchMode builds one preview per request sendBatchMode would emit,
+// using the same chunking helper so a dry-run cannot understate the number of
+// requests.
 func (h *HTTPRequestModule) previewBatchMode(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {
+	batches := chunkRecords(records, h.request.BatchSize)
+	previews := make([]RequestPreview, 0, len(batches))
+	for _, batch := range batches {
+		preview, err := h.previewOneBatch(batch, opts)
+		if err != nil {
+			return nil, err
+		}
+		previews = append(previews, preview)
+	}
+	return previews, nil
+}
+
+func (h *HTTPRequestModule) previewOneBatch(records []map[string]any, opts PreviewOptions) (RequestPreview, error) {
 	endpoint, err := h.resolveEndpointForBatch(h.endpoint, records)
 	if err != nil {
-		return nil, err
+		return RequestPreview{}, err
 	}
 	bodyPreview, err := formatJSONPreview(records)
 	if err != nil {
-		return nil, fmt.Errorf("formatting body preview: %w", err)
+		return RequestPreview{}, fmt.Errorf("formatting body preview: %w", err)
 	}
 	var batchHeaders map[string]string
 	if len(records) > 0 {
 		batchHeaders, err = h.extractHeadersFromRecord(records[0])
 		if err != nil {
-			return nil, err
+			return RequestPreview{}, err
 		}
 	}
 	headers, err := h.buildPreviewHeaders(batchHeaders, opts)
 	if err != nil {
-		return nil, err
+		return RequestPreview{}, err
 	}
-	return []RequestPreview{{
+	return RequestPreview{
 		Endpoint:    endpoint,
 		Method:      h.method,
 		Headers:     headers,
 		BodyPreview: bodyPreview,
 		RecordCount: len(records),
-	}}, nil
+	}, nil
 }
 
 func (h *HTTPRequestModule) previewSingleRecordMode(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {

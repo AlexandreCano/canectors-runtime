@@ -51,6 +51,11 @@
 							"description": "Request mode: 'batch' (all records in one request, default) or 'single' (one request per record).",
 							"enum": [ "batch", "single" ],
 							"default": "batch"
+						},
+						"batchSize": {
+							"type": "integer",
+							"description": "Maximum number of records per request when requestMode is 'batch'. Records are split into consecutive batches, one request each. When omitted, all records are sent in a single request. Invalid with requestMode 'single'.",
+							"minimum": 1
 						}
 					}
 				}
@@ -75,6 +80,11 @@
 							"description": "Request mode: 'batch' (all records in one request, default) or 'single' (one request per record).",
 							"enum": [ "batch", "single" ],
 							"default": "batch"
+						},
+						"batchSize": {
+							"type": "integer",
+							"description": "Maximum number of records per request when requestMode is 'batch'. Records are split into consecutive batches, one request each; the body template sees record.records / record.recordCount for the current batch only. When omitted, all records are sent in a single request. Invalid with requestMode 'single'.",
+							"minimum": 1
 						}
 					}
 				}

@@ -24,6 +24,7 @@ type SOAPRequestOutputConfig struct {
 	connector.ModuleBase
 	moduleconfig.SOAPRequestBase
 	RequestMode string                  `json:"requestMode,omitempty"`
+	BatchSize   int                     `json:"batchSize,omitempty"`
 	Success     *SuccessConditionConfig `json:"success,omitempty"`
 	Retry       *connector.RetryConfig  `json:"retry,omitempty"`
 }
@@ -33,6 +34,7 @@ type SOAPRequestModule struct {
 	base              moduleconfig.SOAPRequestBase
 	timeout           time.Duration
 	requestMode       string
+	batchSize         int
 	retry             connector.RetryConfig
 	authHandler       auth.Handler
 	httpClient        *httpclient.Client
@@ -56,7 +58,11 @@ func NewSOAPRequestFromConfig(config *connector.ModuleConfig) (*SOAPRequestModul
 	if baseErr := soaputil.ValidateBase(cfg.SOAPRequestBase); baseErr != nil {
 		return nil, baseErr
 	}
-	requestMode, err := normalizeRequestMode(cfg.RequestMode)
+	requestMode, err := normalizeRequestMode(cfg.RequestMode, "soapRequest")
+	if err != nil {
+		return nil, err
+	}
+	batchSize, err := normalizeBatchSize(cfg.BatchSize, requestMode, "soapRequest")
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +90,7 @@ func NewSOAPRequestFromConfig(config *connector.ModuleConfig) (*SOAPRequestModul
 		base:              cfg.SOAPRequestBase,
 		timeout:           timeout,
 		requestMode:       requestMode,
+		batchSize:         batchSize,
 		retry:             retryConfig,
 		authHandler:       authHandler,
 		httpClient:        httpClient,
@@ -97,6 +104,7 @@ func NewSOAPRequestFromConfig(config *connector.ModuleConfig) (*SOAPRequestModul
 		slog.String("endpoint", httpclient.SanitizeURL(cfg.Endpoint)),
 		slog.String("operation", cfg.Operation),
 		slog.String("request_mode", requestMode),
+		slog.Int("batch_size", batchSize),
 		slog.Duration("timeout", timeout),
 		slog.Bool("has_auth", authHandler != nil),
 	)
@@ -108,18 +116,54 @@ func (s *SOAPRequestModule) Send(ctx context.Context, records []map[string]any) 
 	if len(records) == 0 {
 		return 0, nil
 	}
-	if s.requestMode == "single" {
+	if s.requestMode == requestModeSingle {
 		return s.sendSingle(ctx, records)
 	}
 	return s.sendBatch(ctx, records)
 }
 
+// sendBatch groups records into requests. Without batchSize that is one
+// request for everything (the historical behavior); with it, one request per
+// batch of at most batchSize records. Each batch gets its own batchRecord, so
+// the body template always sees record.records / record.recordCount scoped to
+// the batch being sent.
 func (s *SOAPRequestModule) sendBatch(ctx context.Context, records []map[string]any) (int, error) {
-	record := batchRecord(records)
-	if err := s.sendRecord(ctx, record); err != nil {
-		return 0, err
+	batches := chunkRecords(records, s.batchSize)
+	sent := 0
+	for i, batch := range batches {
+		select {
+		case <-ctx.Done():
+			return sent, ctx.Err()
+		default:
+		}
+		logger.Debug("sending soap batch",
+			slog.Int("batch_index", i),
+			slog.Int("batch_count", len(batches)),
+			slog.Int("batch_records", len(batch)),
+			slog.String("operation", s.base.Operation),
+		)
+		err := s.sendRecord(ctx, batchRecord(batch))
+		if err != nil {
+			switch s.onError {
+			case errhandling.OnErrorSkip, errhandling.OnErrorLog:
+				logger.Error("soapRequest batch failed",
+					slog.Int("batch_index", i),
+					slog.Int("batch_count", len(batches)),
+					slog.Int("batch_records", len(batch)),
+					slog.String("operation", s.base.Operation),
+					slog.String("error", err.Error()),
+					slog.String("on_error", string(s.onError)),
+				)
+				continue
+			// OnErrorFail, and any strategy added later: stop on the failing
+			// batch rather than counting its records as sent.
+			default:
+				return sent, fmt.Errorf("soapRequest batch %d: %w", i, err)
+			}
+		}
+		sent += len(batch)
 	}
-	return len(records), nil
+	return sent, nil
 }
 
 func (s *SOAPRequestModule) sendSingle(ctx context.Context, records []map[string]any) (int, error) {
@@ -224,7 +268,7 @@ func (s *SOAPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 	if len(records) == 0 {
 		return []RequestPreview{}, nil
 	}
-	if s.requestMode == "single" {
+	if s.requestMode == requestModeSingle {
 		previews := make([]RequestPreview, 0, len(records))
 		for _, record := range records {
 			preview, err := s.previewRecord(record, 1, opts)
@@ -235,11 +279,18 @@ func (s *SOAPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 		}
 		return previews, nil
 	}
-	preview, err := s.previewRecord(batchRecord(records), len(records), opts)
-	if err != nil {
-		return nil, err
+	// Same chunking as sendBatch, from the same helper: a dry-run must show one
+	// preview per request that Send would actually emit.
+	batches := chunkRecords(records, s.batchSize)
+	previews := make([]RequestPreview, 0, len(batches))
+	for _, batch := range batches {
+		preview, err := s.previewRecord(batchRecord(batch), len(batch), opts)
+		if err != nil {
+			return nil, err
+		}
+		previews = append(previews, preview)
 	}
-	return []RequestPreview{preview}, nil
+	return previews, nil
 }
 
 func (s *SOAPRequestModule) previewRecord(record map[string]any, recordCount int, opts PreviewOptions) (RequestPreview, error) {

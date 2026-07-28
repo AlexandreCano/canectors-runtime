@@ -166,6 +166,29 @@ test-lab-soak: ## Soak one pipeline to look for leaks. PIPELINE=path DURATION=2h
 		"$(or $(PIPELINE),test-lab/pipelines/volume-1000.yaml)" \
 		--duration "$(or $(DURATION),2h)" --interval "$(or $(INTERVAL),30s)"
 
+# One pipeline per subsystem, soaked side by side. Wall-clock is the budget that
+# cannot be stretched, so breadth and tick rate are what a shorter window can buy.
+#
+# Every pipeline here must be idempotent across ticks, since a soak replays it for
+# hours: db-output-insert is deliberately absent because it reinserts the same keys
+# and trips its unique constraint from the second tick on, which reads as an error
+# storm rather than as a leak. The upsert variant exercises the same driver, pool
+# and transaction path while staying replayable.
+SOAK_WIDE_PIPELINES := \
+	test-lab/pipelines/volume-1000.yaml \
+	test-lab/pipelines/filters-script-inline.yaml \
+	test-lab/pipelines/http-call-path-merge.yaml \
+	test-lab/pipelines/db-input-basic.yaml \
+	test-lab/pipelines/db-output-upsert-query-file.yaml \
+	test-lab/pipelines/state-id.yaml \
+	test-lab/pipelines/soap-polling-v12.yaml
+
+.PHONY: test-lab-soak-wide
+test-lab-soak-wide: ## Soak every subsystem at once. DURATION=12h INTERVAL=30s SCHEDULE='*/5 * * * * *'
+	python3 test-lab/scripts/soak.py $(SOAK_WIDE_PIPELINES) \
+		--duration "$(or $(DURATION),12h)" --interval "$(or $(INTERVAL),30s)" \
+		--schedule "$(or $(SCHEDULE),*/5 * * * * *)"
+
 ##@ Code Quality
 
 .PHONY: fmt

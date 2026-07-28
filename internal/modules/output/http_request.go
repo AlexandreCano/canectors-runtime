@@ -28,7 +28,6 @@ const (
 	defaultHTTPTimeout = 30 * time.Second
 	defaultUserAgent   = "Cannectors-Runtime/1.0"
 	defaultContentType = "application/json"
-	defaultRequestMode = "batch" // batch mode by default
 )
 
 // HTTP header names
@@ -60,6 +59,7 @@ type keyEntry struct {
 // RequestConfig holds request-specific configuration
 type RequestConfig struct {
 	RequestMode      string            // "batch" or "single"
+	BatchSize        int               // Max records per request in batch mode (0 = one request for all)
 	Keys             []keyEntry        // Dynamic params from record (path, query, header)
 	QueryParams      map[string]string // Static query parameters
 	BodyTemplateFile string            // Path to external template file for request body
@@ -94,6 +94,7 @@ type HTTPRequestOutputConfig struct {
 	connector.ModuleBase
 	moduleconfig.HTTPRequestBase
 	RequestMode string                   `json:"requestMode,omitempty"`
+	BatchSize   int                      `json:"batchSize,omitempty"`
 	Keys        []moduleconfig.KeyConfig `json:"keys,omitempty"`
 	Success     *SuccessConditionConfig  `json:"success,omitempty"`
 	Retry       *connector.RetryConfig   `json:"retry,omitempty"`
@@ -164,7 +165,11 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 
 	timeout := connector.GetTimeoutDuration(cfg.TimeoutMs, defaultHTTPTimeout)
 	headers := cfg.Headers
-	requestMode, err := normalizeRequestMode(cfg.RequestMode)
+	requestMode, err := normalizeRequestMode(cfg.RequestMode, "httpRequest")
+	if err != nil {
+		return nil, err
+	}
+	batchSize, err := normalizeBatchSize(cfg.BatchSize, requestMode, "httpRequest")
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +178,7 @@ func NewHTTPRequestFromConfig(config *connector.ModuleConfig) (*HTTPRequestModul
 	}
 	reqConfig := RequestConfig{
 		RequestMode:      requestMode,
+		BatchSize:        batchSize,
 		QueryParams:      cfg.QueryParams,
 		BodyTemplateFile: cfg.BodyTemplateFile,
 		bodyTemplateRaw:  cfg.Body,
@@ -332,6 +338,7 @@ func (h *HTTPRequestModule) Send(ctx context.Context, records []map[string]any) 
 		slog.String("method", h.method),
 		slog.Int("record_count", len(records)),
 		slog.String("request_mode", h.request.RequestMode),
+		slog.Int("batch_size", h.request.BatchSize),
 		slog.Bool("has_auth", h.authHandler != nil),
 	)
 
@@ -339,7 +346,7 @@ func (h *HTTPRequestModule) Send(ctx context.Context, records []map[string]any) 
 	var err error
 
 	// Choose send mode based on configuration
-	if h.request.RequestMode == "single" {
+	if h.request.RequestMode == requestModeSingle {
 		sent, err = h.sendSingleRecordMode(ctx, records)
 	} else {
 		sent, err = h.sendBatchMode(ctx, records)
@@ -372,8 +379,47 @@ func (h *HTTPRequestModule) Send(ctx context.Context, records []map[string]any) 
 	return sent, nil
 }
 
-// sendBatchMode sends all records in a single HTTP request as JSON array
+// sendBatchMode groups records into requests. Without batchSize that is one
+// request holding every record (the historical behavior); with it, one request
+// per batch of at most batchSize records. Body, endpoint and headers are all
+// resolved per batch, so a templated endpoint or header resolves against the
+// first record of its own batch.
 func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[string]any) (int, error) {
+	batches := chunkRecords(records, h.request.BatchSize)
+	sent := 0
+	for i, batch := range batches {
+		select {
+		case <-ctx.Done():
+			return sent, ctx.Err()
+		default:
+		}
+		err := h.sendOneBatch(ctx, batch, i, len(batches))
+		if err != nil {
+			switch h.onError {
+			case errhandling.OnErrorSkip, errhandling.OnErrorLog:
+				logger.Error("httpRequest batch failed",
+					slog.String("module_type", "httpRequest"),
+					slog.Int("batch_index", i),
+					slog.Int("batch_count", len(batches)),
+					slog.Int("batch_records", len(batch)),
+					slog.String("error", err.Error()),
+					slog.String("on_error", string(h.onError)),
+				)
+				continue
+			// OnErrorFail, and any strategy added later: stop on the failing
+			// batch rather than counting its records as sent.
+			default:
+				return sent, fmt.Errorf("httpRequest batch %d: %w", i, err)
+			}
+		}
+		sent += len(batch)
+	}
+	return sent, nil
+}
+
+// sendOneBatch sends a single HTTP request carrying every record of the batch.
+// batchIndex and batchCount are logged so a chunked send is observable.
+func (h *HTTPRequestModule) sendOneBatch(ctx context.Context, records []map[string]any, batchIndex, batchCount int) error {
 	requestStart := time.Now()
 
 	logger.Debug("sending records in batch mode",
@@ -381,6 +427,8 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 		slog.String("endpoint", httpclient.SanitizeURL(h.endpoint)),
 		slog.String("method", h.method),
 		slog.Int("record_count", len(records)),
+		slog.Int("batch_index", batchIndex),
+		slog.Int("batch_count", batchCount),
 	)
 
 	var body []byte
@@ -389,12 +437,15 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 	if h.request.bodyTemplateRaw != "" {
 		// Use template file: evaluate template with first record (batch context)
 		// For batch mode with template, we can only use first record's data
-		// The template should be designed accordingly
+		// The template should be designed accordingly.
+		// Known limitation: unlike soapRequest, no batchRecord is built here, so
+		// a body template cannot loop over the batch. With batchSize set, this
+		// resolves against the first record of each batch.
 		if len(records) > 0 {
 			target := h.bodyTargetFor(records[0])
 			bodyStr, renderErr := h.renderField(h.request.bodyTemplateRaw, target, records[0])
 			if renderErr != nil {
-				return 0, fmt.Errorf("evaluating body template: %w", renderErr)
+				return fmt.Errorf("evaluating body template: %w", renderErr)
 			}
 			body = []byte(bodyStr)
 
@@ -430,7 +481,7 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 				slog.Int("record_count", len(records)),
 				slog.String("error", err.Error()),
 			)
-			return 0, fmt.Errorf("%w: %w", ErrJSONMarshal, err)
+			return fmt.Errorf("%w: %w", ErrJSONMarshal, err)
 		}
 	}
 
@@ -441,7 +492,7 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 
 	endpoint, err := h.resolveEndpointForBatch(h.endpoint, records)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// Evaluate templated headers using first record in batch mode
@@ -449,7 +500,7 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 	if len(records) > 0 {
 		batchHeaders, err = h.extractHeadersFromRecord(records[0])
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 
@@ -464,17 +515,19 @@ func (h *HTTPRequestModule) sendBatchMode(ctx context.Context, records []map[str
 			slog.Duration("duration", requestDuration),
 			slog.String("error", err.Error()),
 		)
-		return 0, err
+		return err
 	}
 
 	logger.Debug("batch request completed",
 		slog.String("module_type", "httpRequest"),
 		slog.String("endpoint", httpclient.SanitizeURL(endpoint)),
 		slog.Int("records_sent", len(records)),
+		slog.Int("batch_index", batchIndex),
+		slog.Int("batch_count", batchCount),
 		slog.Duration("duration", requestDuration),
 	)
 
-	return len(records), nil
+	return nil
 }
 
 // sendSingleRecordMode sends one HTTP request per record
