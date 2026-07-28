@@ -12,6 +12,6 @@ assertions:
   # the recovered record reaches the destination
   - http_count_ge:
       method: POST
-      path: /reliability/destination/500-then-200
+      path: /reliability/destination/sink
       body_contains: "RETRY-IN-1"
       expected: 1

@@ -1,0 +1,6 @@
+{
+  "name": "reliability-dest-sink",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/reliability/destination/sink" },
+  "response": { "status": 200, "headers": { "Content-Type": "application/json" }, "jsonBody": { "ok": true } }
+}
