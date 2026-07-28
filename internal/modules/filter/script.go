@@ -77,10 +77,48 @@ type ScriptConfig struct {
 type ScriptModule struct {
 	scriptSource string
 	onError      errhandling.OnErrorStrategy
-	runtime      *goja.Runtime // Not goroutine-safe - one runtime per module instance
-	transformFn  goja.Callable
-	console      *jsConsole // JavaScript console for logging
-	interruptMu  sync.Mutex // Protects interrupt state
+
+	// program is the script compiled once. A goja.Program is immutable and safe
+	// to run on any number of runtimes, so compilation is paid at construction
+	// while each execution still gets its own runtime.
+	program  *goja.Program
+	moduleID string
+}
+
+// scriptRun is one execution's JavaScript state: a runtime of its own, the
+// transform function taken from it, and the console bound to it.
+//
+// A runtime is deliberately not kept on the module. Modules are reused — across
+// scheduled ticks, and across concurrent webhook deliveries — while a
+// goja.Runtime is not goroutine-safe and its globals would otherwise accumulate
+// from one execution to the next, turning a script that appends to a global into
+// an unbounded memory leak.
+type scriptRun struct {
+	vm          *goja.Runtime
+	transformFn goja.Callable
+	console     *jsConsole
+
+	// interruptMu pairs Interrupt with ClearInterrupt against the cancellation
+	// watcher, which runs on its own goroutine.
+	interruptMu sync.Mutex
+}
+
+// newScriptRun instantiates a runtime for a single execution.
+func (m *ScriptModule) newScriptRun() (*scriptRun, error) {
+	vm := goja.New()
+	jsConsole, err := newJSConsole(vm, m.moduleID)
+	if err != nil {
+		return nil, fmt.Errorf("script console init: %w", err)
+	}
+	if _, runErr := vm.RunProgram(m.program); runErr != nil {
+		return nil, newScriptError(ErrCodeCompilationFailed,
+			fmt.Sprintf("script evaluation failed: %v", runErr), -1, "", runErr)
+	}
+	transformFn, err := getTransformFunction(vm)
+	if err != nil {
+		return nil, err
+	}
+	return &scriptRun{vm: vm, transformFn: transformFn, console: jsConsole}, nil
 }
 
 // ScriptError carries structured context for script execution failures.
@@ -169,21 +207,22 @@ func NewScriptFromConfig(config ScriptConfig) (*ScriptModule, error) {
 		moduleID = filepath.Base(config.ScriptFile)
 	}
 
-	vm := goja.New()
-	jsConsole, err := newJSConsole(vm, moduleID)
-	if err != nil {
-		return nil, fmt.Errorf("script console init: %w", err)
-	}
-
-	// Compile and run the script
-	_, err = vm.RunString(scriptSource)
+	program, err := goja.Compile(moduleID, scriptSource, false)
 	if err != nil {
 		return nil, newScriptError(ErrCodeCompilationFailed, fmt.Sprintf("script compilation failed: %v", err), -1, "", err)
 	}
 
-	// Get and validate the transform function
-	transformFn, err := getTransformFunction(vm)
-	if err != nil {
+	module := &ScriptModule{
+		scriptSource: scriptSource,
+		onError:      onError,
+		program:      program,
+		moduleID:     moduleID,
+	}
+
+	// Instantiate once and throw it away, so a script that compiles but has no
+	// usable transform function still fails at startup rather than on the first
+	// record.
+	if _, err := module.newScriptRun(); err != nil {
 		return nil, err
 	}
 
@@ -193,13 +232,7 @@ func NewScriptFromConfig(config ScriptConfig) (*ScriptModule, error) {
 		slog.Bool("from_file", config.ScriptFile != ""),
 	)
 
-	return &ScriptModule{
-		scriptSource: scriptSource,
-		onError:      onError,
-		runtime:      vm,
-		transformFn:  transformFn,
-		console:      jsConsole,
-	}, nil
+	return module, nil
 }
 
 // resolveScriptSource returns the script source code, either from inline config or from file.
@@ -357,6 +390,12 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]any) ([
 		slog.String("on_error", string(m.onError)),
 	)
 
+	// A runtime of this execution's own: reused modules must not share one.
+	run, err := m.newScriptRun()
+	if err != nil {
+		return nil, err
+	}
+
 	// scriptFinished gates the cancellation watcher: once Process is done,
 	// the watcher must not call runtime.Interrupt anymore (otherwise a
 	// pending interrupt could leak into a subsequent Process call). Story 17.4.
@@ -368,12 +407,12 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]any) ([
 		if scriptFinished.Load() {
 			return
 		}
-		m.interruptMu.Lock()
-		defer m.interruptMu.Unlock()
+		run.interruptMu.Lock()
+		defer run.interruptMu.Unlock()
 		if scriptFinished.Load() {
 			return
 		}
-		m.runtime.Interrupt(ctx.Err().Error())
+		run.vm.Interrupt(ctx.Err().Error())
 	})
 	defer func() {
 		// Mark first, then stop and wait. If the watcher was racing, the
@@ -381,9 +420,9 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]any) ([
 		scriptFinished.Store(true)
 		stopInterrupt()
 		// Clear any pending interrupt after processing completes
-		m.interruptMu.Lock()
-		m.runtime.ClearInterrupt()
-		m.interruptMu.Unlock()
+		run.interruptMu.Lock()
+		run.vm.ClearInterrupt()
+		run.interruptMu.Unlock()
 	}()
 
 	result := make([]map[string]any, 0, len(records))
@@ -398,7 +437,7 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]any) ([
 		default:
 		}
 
-		transformedRecord, err := m.processRecord(ctx, record, recordIdx)
+		transformedRecord, err := m.processRecord(ctx, run, record, recordIdx)
 		if err != nil {
 			errorCount++
 			switch m.onError {
@@ -451,19 +490,21 @@ func (m *ScriptModule) Process(ctx context.Context, records []map[string]any) ([
 // processRecord transforms a single record using the JavaScript function.
 // Context cancellation is handled at the Process() level via context.AfterFunc.
 // The ctx parameter is used to check for context errors in the returned error.
-func (m *ScriptModule) processRecord(ctx context.Context, record map[string]any, recordIdx int) (map[string]any, error) {
+func (m *ScriptModule) processRecord(
+	ctx context.Context, run *scriptRun, record map[string]any, recordIdx int,
+) (map[string]any, error) {
 	// Set record index for console logging context
-	if m.console != nil {
-		m.console.SetRecordIndex(recordIdx)
-		defer m.console.ClearRecordIndex()
+	if run.console != nil {
+		run.console.SetRecordIndex(recordIdx)
+		defer run.console.ClearRecordIndex()
 	}
 
 	// Convert Go map to JavaScript object
-	jsRecord := m.runtime.ToValue(record)
+	jsRecord := run.vm.ToValue(record)
 
 	// Call the transform function
 	// If context is canceled, runtime.Interrupt() (set up in Process()) will cause this to return an error
-	result, err := m.transformFn(goja.Undefined(), jsRecord)
+	result, err := run.transformFn(goja.Undefined(), jsRecord)
 	if err != nil {
 		// Check if error is due to context cancellation/interruption
 		// Goja interruption may wrap the context error, so check the error message

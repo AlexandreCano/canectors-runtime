@@ -18,7 +18,9 @@ input:
 filters: []
 output:
   type: httpRequest
-  endpoint: http://localhost:18080/reliability/destination/500-then-200
+  # A neutral always-200 sink: this case is about the *input* retry, so the
+  # destination must not be able to fail the execution on its own.
+  endpoint: http://localhost:18080/reliability/destination/sink
   method: POST
   headers:
     Content-Type: application/json
