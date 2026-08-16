@@ -40,6 +40,7 @@ func PrintExecutionResult(result *connector.ExecutionResult, err error, opts Out
 		if result.RecordsFailed > 0 {
 			fmt.Printf("  Records failed: %d\n", result.RecordsFailed)
 		}
+		printErrorCounts(result.ErrorCounts)
 		if opts.Verbose {
 			fmt.Printf("  Duration: %v\n", result.CompletedAt.Sub(result.StartedAt))
 		}
@@ -47,6 +48,39 @@ func PrintExecutionResult(result *connector.ExecutionResult, err error, opts Out
 		if opts.DryRun && len(result.DryRunPreview) > 0 {
 			PrintDryRunPreview(result.DryRunPreview, opts.Verbose)
 		}
+	}
+}
+
+// printErrorCounts reports the failures that modules in onError: log mode let
+// through, broken down by category.
+//
+// Without it a run where every record failed its enrichment still prints
+// "✓ Pipeline executed successfully" and nothing else — technically true, and
+// the most misleading thing the CLI could say.
+//
+// The total counts markers, not records: one record that failed an enrichment
+// call and then a persistence call contributes two. Hence "Error markers" —
+// calling them records would overstate how many records are affected.
+//
+// Categories are sorted so the summary is stable between runs: map iteration
+// order would otherwise reshuffle the lines and make two runs look different
+// when they are not.
+func printErrorCounts(counts map[string]int) {
+	if len(counts) == 0 {
+		return
+	}
+
+	categories := make([]string, 0, len(counts))
+	total := 0
+	for category, n := range counts {
+		categories = append(categories, category)
+		total += n
+	}
+	sort.Strings(categories)
+
+	fmt.Printf("  Error markers: %d\n", total)
+	for _, category := range categories {
+		fmt.Printf("    %s: %d\n", category, counts[category])
 	}
 }
 

@@ -307,10 +307,10 @@ func ClassifyError(err error) *ClassifiedError {
 		}
 	}
 
-	// Check if already classified
-	var classified *ClassifiedError
-	if errors.As(err, &classified) {
-		return classified
+	// An explicit classification — carried in the chain, or produced by the
+	// error itself — always wins over the generic rules below.
+	if cl := explicitClassification(err); cl != nil {
+		return cl
 	}
 
 	// Check for timeout/context errors first
@@ -405,9 +405,11 @@ func GetErrorCategory(err error) ErrorCategory {
 		return CategoryUnknown
 	}
 
-	var classified *ClassifiedError
-	if errors.As(err, &classified) {
-		return classified.Category
+	// Without this, IsFatal (which reads this function) labels a SQL constraint
+	// violation "retryable" in the execution report — a failure that will never
+	// succeed on replay, announced as worth replaying.
+	if cl := explicitClassification(err); cl != nil {
+		return cl.Category
 	}
 
 	return CategoryUnknown

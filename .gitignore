@@ -53,5 +53,9 @@ tmp/
 temp/
 *.tmp
 
+# Python bytecode from the test-lab scripts
+__pycache__/
+*.pyc
+
 .github/agents/
 .claude/

@@ -3,6 +3,8 @@ package filter
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
 // parseMappingConfig validates and normalizes a single field mapping.
@@ -15,6 +17,9 @@ func parseMappingConfig(m FieldMapping, index int) (MappingConfig, error) {
 	// Validate target is provided
 	if m.Target == "" {
 		return config, fmt.Errorf("%w at index %d: mapping must have a target field", ErrInvalidMapping, index)
+	}
+	if err := errhandling.ValidateRecordTarget(m.Target); err != nil {
+		return config, fmt.Errorf("%w at index %d: %w", ErrInvalidMapping, index, err)
 	}
 
 	// Handle source field:

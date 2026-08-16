@@ -65,6 +65,12 @@ func NewSOAPCallFromConfig(config SOAPCallConfig) (*SOAPCallModule, error) {
 	if mergeStrategy == "append" && strings.TrimSpace(config.ResultKey) == "" {
 		return nil, fmt.Errorf("soap_call resultKey is required when mergeStrategy is append")
 	}
+	// resultKey writes straight into the record, so it can reach the reserved
+	// error list just as set and mapping can — and overwriting it would let a
+	// pipeline erase the runtime's own trace of what failed.
+	if reservedErr := errhandling.ValidateRecordTarget(strings.TrimSpace(config.ResultKey)); reservedErr != nil {
+		return nil, fmt.Errorf("soap_call: %w", reservedErr)
+	}
 	onError, err := errhandling.ParseOnErrorStrategy(config.OnError)
 	if err != nil {
 		return nil, err
@@ -137,23 +143,30 @@ func (m *SOAPCallModule) Process(ctx context.Context, records []map[string]any) 
 
 		enriched, err := m.processRecord(ctx, record)
 		if err != nil {
-			switch m.onError {
-			case errhandling.OnErrorFail:
+			outcome, marked := errhandling.HandleRecordError(
+				ctx,
+				m.onError,
+				record,
+				errhandling.MarkerSource{Module: "soap_call", RecordIndex: i},
+				err,
+			)
+			switch outcome {
+			case errhandling.OutcomeStop:
 				return nil, fmt.Errorf("soap_call record %d: %w", i, err)
-			case errhandling.OnErrorSkip:
+			case errhandling.OutcomeDrop:
 				logger.Warn("skipping record due to soap_call error",
 					slog.Int("record_index", i),
 					slog.String("operation", m.base.Operation),
 					slog.String("error", err.Error()),
 				)
 				continue
-			case errhandling.OnErrorLog:
+			case errhandling.OutcomeKeep:
 				logger.Error("soap_call error (continuing)",
 					slog.Int("record_index", i),
 					slog.String("operation", m.base.Operation),
 					slog.String("error", err.Error()),
 				)
-				result = append(result, record)
+				result = append(result, marked)
 				continue
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
@@ -216,4 +217,24 @@ type CacheConfig struct {
 	MaxSize    int    `json:"maxSize"`
 	TTLSeconds int    `json:"ttlSeconds"`
 	Key        string `json:"key"`
+}
+
+// ErrorClassificationConfig mirrors common-schema.json#/$defs/errorClassification.
+// It lets a pipeline restate what a protocol status code means for a given
+// module, because the default rules cannot know the API's dialect.
+type ErrorClassificationConfig struct {
+	Functional []int `json:"functional,omitempty"`
+	Technical  []int `json:"technical,omitempty"`
+}
+
+// ToOverrides converts the parsed config into the runtime type. A nil config
+// yields the zero value, which the runtime reads as "no override".
+func (c *ErrorClassificationConfig) ToOverrides() errhandling.ClassificationOverrides {
+	if c == nil {
+		return errhandling.ClassificationOverrides{}
+	}
+	return errhandling.ClassificationOverrides{
+		Functional: c.Functional,
+		Technical:  c.Technical,
+	}
 }

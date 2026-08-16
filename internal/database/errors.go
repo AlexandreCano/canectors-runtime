@@ -3,6 +3,8 @@ package database
 import (
 	"fmt"
 	"strings"
+
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
 // Error categories for database operations
@@ -47,6 +49,43 @@ func (e *DatabaseError) Unwrap() error {
 // IsRetryable returns true if the error is transient and can be retried.
 func (e *DatabaseError) IsRetryable() bool {
 	return e.Retryable
+}
+
+// Classify implements errhandling.Classifiable so a database failure keeps the
+// verdict ClassifyDatabaseError already reached.
+//
+// Without it the generic classifier unwraps straight to the raw driver error,
+// recognizes nothing in it, and falls back to "unknown, retryable" — so a
+// constraint violation, which this package has already identified as permanent,
+// would be reported to the pipeline as worth replaying (Story 26.10 AC0).
+//
+// Retryable is taken as-is: it is the decision this package made, and
+// restating it from the category would be a second answer to the same question.
+func (e *DatabaseError) Classify() *errhandling.ClassifiedError {
+	category := errhandling.CategoryUnknown
+	switch e.Category {
+	case CategoryConnection, CategoryTimeout:
+		// Both are failures to reach or hear back from the server.
+		category = errhandling.CategoryNetwork
+	case CategoryConstraint:
+		// The data broke a rule the schema enforces: functional, by definition.
+		category = errhandling.CategoryValidation
+	case CategoryQuery:
+		// A query error is either transient (deadlock) or a defect in the
+		// statement or the data. Retryable is what separates the two.
+		if e.Retryable {
+			category = errhandling.CategoryServer
+		} else {
+			category = errhandling.CategoryValidation
+		}
+	}
+
+	return &errhandling.ClassifiedError{
+		Category:    category,
+		Retryable:   e.Retryable,
+		Message:     e.Message,
+		OriginalErr: e.OriginalErr,
+	}
 }
 
 // NewDatabaseError creates a new database error with the given details.

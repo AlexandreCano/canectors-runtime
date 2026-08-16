@@ -64,6 +64,9 @@ func NewSetFromConfig(config SetConfig) (*SetModule, error) {
 	if !config.HasValue {
 		return nil, errors.New("'value' is required (use null to set the field to null)")
 	}
+	if err := errhandling.ValidateRecordTarget(config.Target); err != nil {
+		return nil, err
+	}
 
 	if _, err := errhandling.ParseOnErrorStrategy(config.OnError); err != nil {
 		return nil, err
