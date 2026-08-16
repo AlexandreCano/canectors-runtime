@@ -218,6 +218,9 @@
 					"type": "object",
 					"description": "HTTP call filter module configuration. Makes HTTP requests to external APIs for record enrichment.",
 					"properties": {
+						"errorClassification": {
+							"$ref": "common-schema.json#/$defs/errorClassification"
+						},
 						"keys": {
 							"type": "array",
 							"description": "List of key configurations for extracting values from records and using them in requests.",

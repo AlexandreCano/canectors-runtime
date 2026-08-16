@@ -586,13 +586,31 @@ func (e *Executor) executePipelineStages(
 		}
 	}
 
+	// Count the failures that filters let through in onError: log mode. The
+	// tally rides in the context so modules report each marker as they create
+	// it. Counting by scanning the surviving records instead would miss every
+	// record the pipeline routed out on the strength of its marker — a `drop`,
+	// or a `condition` branch that does not forward it — which is precisely
+	// what the marker is there to enable.
+	tally := errhandling.NewMarkerTally()
+	filterCtx := errhandling.ContextWithMarkerTally(ctx, tally)
+
 	// Execute Filter modules (returns duration measured inside)
-	filteredRecords, filterDuration, err := e.executeFiltersWithResult(ctx, pipeline, rawRecords, result, traceID)
+	filteredRecords, filterDuration, err := e.executeFiltersWithResult(filterCtx, pipeline, rawRecords, result, traceID)
 	timings.filterDuration = filterDuration
 	// rawRecords can now be garbage collected after filters start processing
 	if err != nil {
 		e.handleExecutionFailure(execCtx, startedAt, StatusError, len(rawRecords))
 		return timings, nil, err
+	}
+
+	result.ErrorCounts = tally.Counts()
+	if len(result.ErrorCounts) > 0 {
+		logger.Warn("records carry error markers from filters running in log mode",
+			slog.String(logger.TraceIDField, traceID),
+			slog.String("pipeline_id", pipeline.ID),
+			slog.Any("error_counts", result.ErrorCounts),
+		)
 	}
 
 	// Generate dry-run preview if applicable

@@ -595,6 +595,27 @@
 			"additionalProperties": false
 		},
 
+		"errorClassification": {
+			"type": "object",
+			"description": "Restates what given HTTP status codes mean for this module, for the error markers left on records by onError: log. Does NOT govern retrying — that stays with retry.retryableStatusCodes. A code listed in both lists is treated as functional.",
+			"properties": {
+				"functional": {
+					"type": "array",
+					"description": "Status codes to record as non-retryable. Their category is kept when compatible (404 stays 'not_found'), otherwise it becomes 'validation'. Use for codes this API returns as an ordinary outcome, e.g. 404 meaning 'no match'.",
+					"items": { "type": "integer", "minimum": 100, "maximum": 599 },
+					"minItems": 1
+				},
+				"technical": {
+					"type": "array",
+					"description": "Status codes to record as retryable. Their category is kept when compatible, otherwise it becomes 'server'. Use for codes this API returns for a transient condition, e.g. 409 on a lock.",
+					"items": { "type": "integer", "minimum": 100, "maximum": 599 },
+					"minItems": 1
+				}
+			},
+			"additionalProperties": false,
+			"minProperties": 1
+		},
+
 		"statePersistenceConfig": {
 			"type": "object",
 			"description": "State persistence configuration for input modules. Tracks execution state between runs.",

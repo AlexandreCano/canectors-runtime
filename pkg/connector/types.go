@@ -126,6 +126,15 @@ type ExecutionResult struct {
 	// RecordsFailed is the number of records that failed
 	RecordsFailed int `json:"recordsFailed"`
 
+	// ErrorCounts tallies the error markers left on records by modules running
+	// in onError: log mode, keyed by error category (validation, server,
+	// network, ...). Empty when nothing failed.
+	//
+	// It exists so a run that "succeeded" is not read as a run where everything
+	// worked: log mode lets records through carrying failures, and without this
+	// the summary would report them as processed and say nothing more.
+	ErrorCounts map[string]int `json:"errorCounts,omitempty"`
+
 	// Error contains error details if execution failed
 	Error *ExecutionError `json:"error,omitempty"`
 

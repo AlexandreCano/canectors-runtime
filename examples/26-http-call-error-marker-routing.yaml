@@ -1,0 +1,76 @@
+name: http-call-error-marker-routing
+version: 1.0.0
+description: Enrich records, mark failures instead of losing them, and route rejects on the marker.
+tags:
+  - http-call
+  - error-handling
+  - condition
+input:
+  type: httpPolling
+  schedule: "*/15 * * * *"
+  endpoint: https://source.example.com/api/orders
+  dataField: orders
+filters:
+  # onError: log lets the record continue and annotates it under the reserved
+  # `_errors` list, instead of dropping it without trace (skip) or stopping the
+  # whole batch for one bad record (fail).
+  - type: http_call
+    endpoint: https://profiles.example.com/api/customers/{customerId}
+    method: GET
+    onError: log
+    keys:
+      - field: customer.id
+        paramType: path
+        paramName: customerId
+    dataField: profile
+    mergeStrategy: merge
+    cache:
+      enabled: true
+      maxSize: 10000
+      ttlSeconds: 900
+      key: customer.id
+    retry:
+      maxAttempts: 3
+      delayMs: 500
+      backoffMultiplier: 2
+    # This API answers 409 while a profile is being re-indexed — a transient
+    # condition, even though 4xx codes are functional by default. Declaring it
+    # technical marks the record retryable so the next cycle picks it up.
+    # The category of a code already on the right side of the line is kept:
+    # a 404 stays `not_found`, it does not become a flat `validation`.
+    errorClassification:
+      technical:
+        - 409
+      functional:
+        - 404
+
+  # A functional failure will never succeed on replay: tag it for the dead
+  # letter path so the next cycle does not pick it up again.
+  # `_errors != nil` is the guard to write — the key is absent from records that
+  # never failed, and expr rejects len(nil).
+  - type: condition
+    expression: "_errors != nil and _errors[0].retryable == false"
+    then:
+      - type: set
+        target: routing.status
+        value: REJECTED
+    else:
+      - type: set
+        target: routing.status
+        value: OK
+
+  # Technical failures stay replayable: drop them from this run so the next
+  # cycle retries them, rather than shipping a half-enriched record downstream.
+  # They still appear in the end-of-run "Error markers" report: markers are
+  # counted where they are created, so routing a record out does not erase the
+  # failure that made you route it.
+  - type: condition
+    expression: "_errors != nil and _errors[0].retryable == true"
+    then:
+      - type: drop
+
+output:
+  type: httpRequest
+  endpoint: https://destination.example.com/api/orders/enriched
+  method: POST
+  requestMode: batch

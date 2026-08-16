@@ -79,6 +79,12 @@ func NewSQLCallFromConfig(config SQLCallConfig) (*SQLCallModule, error) {
 	if mergeStrategy == "append" && config.ResultKey == "" {
 		return nil, fmt.Errorf("sql_call: resultKey is required when mergeStrategy is 'append'")
 	}
+	// resultKey writes straight into the record, so it can reach the reserved
+	// error list just as set and mapping can — and overwriting it would let a
+	// pipeline erase the runtime's own trace of what failed.
+	if reservedErr := errhandling.ValidateRecordTarget(config.ResultKey); reservedErr != nil {
+		return nil, fmt.Errorf("sql_call: %w", reservedErr)
+	}
 
 	engine := templateEngine
 
@@ -260,8 +266,15 @@ func (m *SQLCallModule) Process(ctx context.Context, records []map[string]any) (
 
 		if err != nil {
 			errorCount++
-			switch m.onError {
-			case errhandling.OnErrorFail:
+			outcome, marked := errhandling.HandleRecordError(
+				ctx,
+				m.onError,
+				record,
+				errhandling.MarkerSource{Module: "sql_call", RecordIndex: recordIdx},
+				err,
+			)
+			switch outcome {
+			case errhandling.OutcomeStop:
 				duration := time.Since(startTime)
 				logger.Error("sql_call filter processing failed",
 					slog.String("module_type", "sql_call"),
@@ -270,7 +283,7 @@ func (m *SQLCallModule) Process(ctx context.Context, records []map[string]any) (
 					slog.String("error", err.Error()),
 				)
 				return nil, err
-			case errhandling.OnErrorSkip:
+			case errhandling.OutcomeDrop:
 				skippedCount++
 				logger.Warn("skipping record due to sql_call error",
 					slog.String("module_type", "sql_call"),
@@ -278,13 +291,13 @@ func (m *SQLCallModule) Process(ctx context.Context, records []map[string]any) (
 					slog.String("error", err.Error()),
 				)
 				continue
-			case errhandling.OnErrorLog:
+			case errhandling.OutcomeKeep:
 				logger.Error("sql_call error (continuing)",
 					slog.String("module_type", "sql_call"),
 					slog.Int("record_index", recordIdx),
 					slog.String("error", err.Error()),
 				)
-				result = append(result, record)
+				result = append(result, marked)
 				continue
 			}
 		}

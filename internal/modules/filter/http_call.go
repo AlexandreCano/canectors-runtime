@@ -69,6 +69,10 @@ type HTTPCallConfig struct {
 	MergeStrategy string `json:"mergeStrategy"`
 	// Retry defines the retry policy for the HTTP call (optional).
 	Retry *connector.RetryConfig `json:"retry,omitempty"`
+	// ErrorClassification restates what given status codes mean for this API,
+	// for the error markers left on records in onError: log mode. It does not
+	// govern retrying — that stays with retry.retryableStatusCodes.
+	ErrorClassification *moduleconfig.ErrorClassificationConfig `json:"errorClassification,omitempty"`
 }
 
 // HTTPCallModule implements a filter that makes HTTP requests and can enrich records with response data.
@@ -96,8 +100,9 @@ type HTTPCallModule struct {
 	onError          errhandling.OnErrorStrategy
 	headers          map[string]string
 	cacheTTL         time.Duration
-	cacheKey         string           // Cache key configuration (optional)
-	bodyTemplateRaw  string           // Loaded body template content
+	cacheKey         string // Cache key configuration (optional)
+	bodyTemplateRaw  string // Loaded body template content
+	overrides        errhandling.ClassificationOverrides
 	engine           *template.Engine // Jinja templating engine (shared compile cache)
 }
 
@@ -110,10 +115,55 @@ type HTTPCallError struct {
 	StatusCode  int
 	KeyValue    string
 	Details     map[string]any
+
+	// Attempts is the number of HTTP attempts performed before giving up
+	// (1 when no retry was configured or the first attempt failed fatally).
+	Attempts int
+
+	// Cause is the underlying error, kept so the classification carried by
+	// httpclient/errhandling survives the wrapping. Without it a timeout
+	// re-wrapped into an HTTPCallError with StatusCode 0 loses its network
+	// classification and reads as "unknown".
+	Cause error
 }
 
 func (e *HTTPCallError) Error() string {
 	return e.Message
+}
+
+// Unwrap exposes the underlying cause so errors.Is/As and the error classifier
+// can reach it.
+func (e *HTTPCallError) Unwrap() error { return e.Cause }
+
+// Classify implements errhandling.Classifiable for the one http_call failure
+// the generic rules get wrong: an unreadable response body.
+//
+// Nothing is said about the HTTP status here, on purpose. A failure that
+// carries a status ≥ 400 always wraps the *errhandling.ClassifiedError produced
+// by httpclient (doretry.go), and that one wins over Classifiable — it is the
+// verdict the runtime acted on, retry.retryableStatusCodes included. Restating
+// the status here would only add a branch nothing reaches.
+//
+// Every other case returns nil so classification falls back to the cause —
+// that is how a connection timeout stays a network error instead of being
+// reported as an unknown one.
+func (e *HTTPCallError) Classify() *errhandling.ClassifiedError {
+	if e.Code != ErrCodeHTTPCallJSONParse {
+		return nil
+	}
+	// The server answered, and answered something this filter cannot read.
+	// Replaying the same request gets the same body, so this is functional: the
+	// pipeline should route the record, not queue it for another cycle.
+	//
+	// No StatusCode is reported: the one this error carries is the *successful*
+	// response's (a 200 whose body turned out to be unusable), and a marker
+	// announcing `statusCode: 200` on a failed record slips past every
+	// `statusCode >= 400` condition.
+	return &errhandling.ClassifiedError{
+		Category:  errhandling.CategoryValidation,
+		Retryable: false,
+		Message:   e.Message,
+	}
 }
 
 // ErrorCode implements errhandling.ModuleError.
@@ -158,6 +208,17 @@ func newHTTPCallError(code, message string, recordIdx int, endpoint string, stat
 		KeyValue:    keyValue,
 		Details:     make(map[string]any),
 	}
+}
+
+// withCause attaches the underlying error and the attempt count to an
+// http_call error. It is a setter rather than extra parameters on
+// newHTTPCallError because only the request-execution path has a cause to
+// report, and threading two more arguments through the other seventeen call
+// sites would add noise everywhere to serve one of them.
+func (e *HTTPCallError) withCause(cause error, attempts int) *HTTPCallError {
+	e.Cause = cause
+	e.Attempts = attempts
+	return e
 }
 
 // NewHTTPCallFromConfig creates a new http_call filter module from configuration.
@@ -289,6 +350,7 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 		cacheKey:         config.Cache.Key,
 		bodyTemplateRaw:  bodyTemplateRaw,
 		engine:           engine,
+		overrides:        config.ErrorClassification.ToOverrides(),
 	}, nil
 }
 
@@ -331,8 +393,20 @@ func (m *HTTPCallModule) Process(ctx context.Context, records []map[string]any) 
 
 		if err != nil {
 			errorCount++
-			switch m.onError {
-			case errhandling.OnErrorFail:
+			outcome, marked := errhandling.HandleRecordError(
+				ctx,
+				m.onError,
+				record,
+				errhandling.MarkerSource{
+					Module:      "http_call",
+					RecordIndex: recordIdx,
+					Attempts:    httpCallAttempts(err),
+					Overrides:   m.overrides,
+				},
+				err,
+			)
+			switch outcome {
+			case errhandling.OutcomeStop:
 				duration := time.Since(startTime)
 				logger.Error("filter processing failed",
 					slog.String("module_type", "http_call"),
@@ -341,7 +415,7 @@ func (m *HTTPCallModule) Process(ctx context.Context, records []map[string]any) 
 					slog.String("error", err.Error()),
 				)
 				return nil, err
-			case errhandling.OnErrorSkip:
+			case errhandling.OutcomeDrop:
 				skippedCount++
 				logger.Warn("skipping record due to http_call error",
 					slog.String("module_type", "http_call"),
@@ -349,14 +423,15 @@ func (m *HTTPCallModule) Process(ctx context.Context, records []map[string]any) 
 					slog.String("error", err.Error()),
 				)
 				continue
-			case errhandling.OnErrorLog:
+			case errhandling.OutcomeKeep:
 				logger.Error("http_call error (continuing)",
 					slog.String("module_type", "http_call"),
 					slog.Int("record_index", recordIdx),
 					slog.String("error", err.Error()),
 				)
-				// For log mode, add the original record (not enriched)
-				result = append(result, record)
+				// The record moves on unenriched but annotated, so downstream
+				// filters and outputs can route on the failure.
+				result = append(result, marked)
 				continue
 			}
 		}
@@ -378,6 +453,17 @@ func (m *HTTPCallModule) Process(ctx context.Context, records []map[string]any) 
 	)
 
 	return result, nil
+}
+
+// httpCallAttempts reports how many HTTP attempts the failure took, or 0 when
+// the failure happened before any request was issued (key extraction, URL
+// building, template rendering) and no attempt count applies.
+func httpCallAttempts(err error) int {
+	var hce *HTTPCallError
+	if errors.As(err, &hce) {
+		return hce.Attempts
+	}
+	return 0
 }
 
 // processRecord makes an HTTP call for a single record and enriches it with the response data.
@@ -556,8 +642,18 @@ func (m *HTTPCallModule) executeHTTPRequest(ctx context.Context, keyValues map[s
 		return nil, 0, err
 	}
 
+	// OnRetry fires after every attempt, success or failure, with a 0-based
+	// index — so the last call it makes reports the total attempt count, which
+	// is what the error marker needs to report (Story 26.10 AC2).
+	//
+	// It starts at 0, not 1: the retry executor returns without calling the
+	// hook when the context is already done, and reporting "1 attempt" for a
+	// request that was never sent would be a fact the marker invented. 0 is the
+	// value httpCallAttempts already documents as "no attempt count applies".
+	attempts := 0
 	hooks := httpclient.RetryHooks{
 		OnRetry: func(attempt int, retryErr error, nextDelay time.Duration) {
+			attempts = attempt + 1
 			if retryErr != nil && nextDelay > 0 {
 				logger.Info("retrying http_call request",
 					slog.String("module_type", "http_call"),
@@ -605,13 +701,13 @@ func (m *HTTPCallModule) executeHTTPRequest(ctx context.Context, keyValues map[s
 				ErrCodeHTTPCallHTTPError,
 				fmt.Sprintf("http_call HTTP error %d: %s", statusCode, bodySnippet),
 				recordIdx, m.endpoint, statusCode, m.compositeKeyString(keyValues),
-			)
+			).withCause(err, attempts)
 		}
 		return nil, statusCode, newHTTPCallError(
 			ErrCodeHTTPCallHTTPError,
 			fmt.Sprintf("http_call HTTP request failed: %v", err),
 			recordIdx, m.endpoint, statusCode, m.compositeKeyString(keyValues),
-		)
+		).withCause(err, attempts)
 	}
 
 	body, readErr := io.ReadAll(resp.Body)

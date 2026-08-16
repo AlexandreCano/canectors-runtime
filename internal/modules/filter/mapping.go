@@ -168,6 +168,18 @@ func (e *MappingError) ErrorCode() string { return e.Code }
 // ErrorModule implements errhandling.ModuleError.
 func (e *MappingError) ErrorModule() string { return "mapping" }
 
+// Classify implements errhandling.Classifiable. A mapping failure is a
+// functional one: the transform is deterministic, so the same record fed to the
+// same mapping fails identically forever. Marking it retryable would have a
+// pipeline replay a record that can never succeed.
+func (e *MappingError) Classify() *errhandling.ClassifiedError {
+	return &errhandling.ClassifiedError{
+		Category:  errhandling.CategoryValidation,
+		Retryable: false,
+		Message:   e.Message,
+	}
+}
+
 // ErrorRecordIndex implements errhandling.ModuleError.
 func (e *MappingError) ErrorRecordIndex() int { return e.RecordIndex }
 
@@ -257,7 +269,7 @@ func NewMappingFromConfig(mappings []FieldMapping, onError string) (*MappingModu
 //  4. Applies transforms if configured
 //
 // Returns the transformed records and any error that occurred.
-func (m *MappingModule) Process(_ context.Context, records []map[string]any) ([]map[string]any, error) {
+func (m *MappingModule) Process(ctx context.Context, records []map[string]any) ([]map[string]any, error) {
 	if records == nil {
 		return []map[string]any{}, nil
 	}
@@ -280,8 +292,18 @@ func (m *MappingModule) Process(_ context.Context, records []map[string]any) ([]
 		if err != nil {
 			var mappingErr *MappingError
 			hasContext := errors.As(err, &mappingErr)
-			switch m.onError {
-			case errhandling.OnErrorFail:
+			// The marker rides on the partial result, which is what the log
+			// branch forwards — annotating the untouched input would hand
+			// downstream filters a record the mapping never produced.
+			outcome, marked := errhandling.HandleRecordError(
+				ctx,
+				m.onError,
+				targetRecord,
+				errhandling.MarkerSource{Module: "mapping", RecordIndex: recordIdx},
+				err,
+			)
+			switch outcome {
+			case errhandling.OutcomeStop:
 				duration := time.Since(startTime)
 				logger.Error("filter processing failed",
 					slog.String("module_type", "mapping"),
@@ -290,7 +312,7 @@ func (m *MappingModule) Process(_ context.Context, records []map[string]any) ([]
 					slog.String("error", err.Error()),
 				)
 				return nil, err
-			case errhandling.OnErrorSkip:
+			case errhandling.OutcomeDrop:
 				skippedCount++
 				if hasContext {
 					logger.Warn("skipping record due to mapping error",
@@ -312,7 +334,7 @@ func (m *MappingModule) Process(_ context.Context, records []map[string]any) ([]
 					)
 				}
 				continue
-			case errhandling.OnErrorLog:
+			case errhandling.OutcomeKeep:
 				if hasContext {
 					logger.Error("mapping error (continuing)",
 						slog.String("module_type", "mapping"),
@@ -332,8 +354,8 @@ func (m *MappingModule) Process(_ context.Context, records []map[string]any) ([]
 						slog.String("error", err.Error()),
 					)
 				}
-				// Continue but add partial result
-				result = append(result, targetRecord)
+				// Continue but add the partial result, annotated
+				result = append(result, marked)
 				continue
 			}
 		}

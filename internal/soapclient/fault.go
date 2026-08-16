@@ -4,6 +4,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
+
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
 // SOAPFaultError is returned when a SOAP response contains a Fault element.
@@ -21,6 +23,48 @@ func (e *SOAPFaultError) Error() string {
 		return "SOAP fault: " + e.Reason
 	}
 	return fmt.Sprintf("SOAP fault %s: %s", e.Code, e.Reason)
+}
+
+// Classify implements errhandling.Classifiable.
+//
+// A SOAP fault is an application-level answer, so its HTTP status says little:
+// SOAP 1.1 mandates 500 for every fault, including one that means "your request
+// was malformed". Left to the generic rules, a Client fault would be reported
+// as a retryable server error and replayed forever.
+//
+// The fault code carries the real distinction, and it is the one place the
+// SOAP specs agree on: Client (1.1) / Sender (1.2) blames the request,
+// Server (1.1) / Receiver (1.2) blames the service. The code is namespace
+// qualified ("soap:Client"), hence the match on the local part.
+func (e *SOAPFaultError) Classify() *errhandling.ClassifiedError {
+	classified := &errhandling.ClassifiedError{
+		Category:   errhandling.CategoryUnknown,
+		Retryable:  false,
+		StatusCode: e.StatusCode,
+		Message:    e.Reason,
+	}
+
+	switch strings.ToLower(faultCodeLocalPart(e.Code)) {
+	case "client", "sender":
+		classified.Category = errhandling.CategoryValidation
+	case "server", "receiver":
+		classified.Category = errhandling.CategoryServer
+		classified.Retryable = true
+	}
+
+	// An unrecognized fault code stays non-retryable: the service answered, and
+	// replaying a request it already rejected is the failure mode this whole
+	// classification exists to prevent.
+	return classified
+}
+
+// faultCodeLocalPart strips the namespace prefix from a fault code
+// ("soap:Client" → "Client"), returning the code unchanged when it has none.
+func faultCodeLocalPart(code string) string {
+	if i := strings.LastIndex(code, ":"); i >= 0 {
+		return code[i+1:]
+	}
+	return code
 }
 
 type faultEnvelope struct {
