@@ -22,7 +22,6 @@ import (
 	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
-	"github.com/cannectors/runtime/internal/metadata"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/recordpath"
 	"github.com/cannectors/runtime/internal/template"
@@ -606,16 +605,7 @@ func (m *HTTPCallModule) renderField(src string, target template.Target, record 
 	if err != nil {
 		return "", err
 	}
-	return compiled.Render(recordRenderContext(record))
-}
-
-// recordRenderContext exposes the record and its metadata sub-map (`meta`).
-func recordRenderContext(record map[string]any) template.RenderContext {
-	var meta map[string]any
-	if m, ok := record[metadata.DefaultFieldName].(map[string]any); ok {
-		meta = m
-	}
-	return template.RenderContext{Record: record, Meta: meta}
+	return compiled.Render(template.ContextForRecord(record))
 }
 
 // compositeKeyString joins key values in config order for cache key.

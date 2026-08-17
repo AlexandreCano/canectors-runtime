@@ -11,6 +11,7 @@ import (
 
 	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/metadata"
 	"github.com/cannectors/runtime/internal/modules/filter"
 	"github.com/cannectors/runtime/internal/modules/input"
 	"github.com/cannectors/runtime/internal/modules/output"
@@ -766,8 +767,38 @@ func (e *Executor) executeInput(ctx context.Context, pipeline *connector.Pipelin
 	if p, ok := e.inputModule.(connector.RetryInfoProvider); ok {
 		result.RetryInfo = p.GetRetryInfo()
 	}
+	records = reserveMetadataField(records, traceID)
 	logger.LogStageEnd(stageCtx, len(records), inputDuration, nil)
 	return records, inputDuration, nil
+}
+
+// reserveMetadataField drops the `_metadata` field from freshly fetched records.
+//
+// `_metadata` is runtime bookkeeping, not data: the loop filter writes its
+// per-alias index there, and template rendering reads that same sub-map as the
+// marker telling a loop scope apart from a plain record. A source payload
+// carrying a field of that name — plus a field named `record`, which costs
+// nothing to have — would be taken for a scope, and every template downstream
+// would silently resolve against the wrong addressing root.
+//
+// Cheaper to make the reservation true than to make the detection clever: no
+// input writes this field, so anything found here came from the source.
+func reserveMetadataField(records []map[string]any, traceID string) []map[string]any {
+	stripped := 0
+	for _, record := range records {
+		if _, carried := record[metadata.DefaultFieldName]; carried {
+			delete(record, metadata.DefaultFieldName)
+			stripped++
+		}
+	}
+	if stripped > 0 {
+		logger.Warn("dropped reserved field from inbound records",
+			slog.String("trace_id", traceID),
+			slog.String("field", metadata.DefaultFieldName),
+			slog.Int("records", stripped),
+		)
+	}
+	return records
 }
 
 // executeFiltersWithResult executes filter modules and updates result on error.

@@ -6,7 +6,6 @@ import (
 	"mime"
 	"strings"
 
-	"github.com/cannectors/runtime/internal/metadata"
 	"github.com/cannectors/runtime/internal/recordpath"
 	"github.com/cannectors/runtime/internal/template"
 )
@@ -61,16 +60,6 @@ func (h *HTTPRequestModule) bodyTargetFor(record map[string]any) template.Target
 	return template.TargetText
 }
 
-// recordRenderContext builds the template context for a record, exposing the
-// record itself plus its metadata sub-map (the _metadata field) as `meta`.
-func recordRenderContext(record map[string]any) template.RenderContext {
-	var meta map[string]any
-	if m, ok := record[metadata.DefaultFieldName].(map[string]any); ok {
-		meta = m
-	}
-	return template.RenderContext{Record: record, Meta: meta}
-}
-
 // renderField compiles (cached) and renders a template field for the given
 // record, escaping substituted values for the target. REST fields use lenient
 // undefined handling (missing fields render empty).
@@ -79,7 +68,7 @@ func (h *HTTPRequestModule) renderField(src string, target template.Target, reco
 	if err != nil {
 		return "", err
 	}
-	return compiled.Render(recordRenderContext(record))
+	return compiled.Render(template.ContextForRecord(record))
 }
 
 // truncateString truncates s to maxLen characters, appending "..." when the

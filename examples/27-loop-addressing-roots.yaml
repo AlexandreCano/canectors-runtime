@@ -1,0 +1,54 @@
+name: loop-addressing-roots
+version: 1.0.0
+description: Address the current item and the root record from inside a loop, in templates and in field paths.
+tags:
+  - loop
+  - templating
+input:
+  type: httpPolling
+  schedule: "*/15 * * * *"
+  endpoint: https://source.example.com/api/orders
+  dataField: orders
+filters:
+  # Inside a loop there is one addressing root, and both mechanisms use it:
+  #
+  #   line.<field>                    the current item
+  #   record.<field>                  the root record
+  #   _metadata.loop.line.index       the iteration index (read-only)
+  #
+  # The same names work in a template ({{ line.number }}) and in a field path
+  # (keys[].field: line.number).
+  - type: loop
+    field: lines
+    itemName: line
+    filters:
+      # Templates: the alias and the root, side by side in one endpoint.
+      - type: http_call
+        endpoint: https://catalog.example.com/api/orders/{{ record.orderId }}/lines/{{ line.number }}
+        method: GET
+        # Field paths: the very same two values, addressed identically.
+        keys:
+          - field: line.sku
+            paramType: query
+            paramName: sku
+          - field: record.customerId
+            paramType: query
+            paramName: customer
+        onError: log
+
+      # The iteration index is available to nested filters too.
+      - type: mapping
+        mappings:
+          - source: _metadata.loop.line.index
+            target: line.position
+
+      # Writing to record.<field> from inside the loop updates the root record.
+      - type: mapping
+        mappings:
+          - source: line.sku
+            target: record.lastSku
+output:
+  type: httpRequest
+  endpoint: https://destination.example.com/api/orders/enriched
+  method: POST
+  requestMode: batch

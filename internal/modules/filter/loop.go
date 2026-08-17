@@ -11,21 +11,39 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/internal/metadata"
 	"github.com/cannectors/runtime/internal/recordpath"
+	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
-// Reserved scope keys that cannot be used as a loop itemName.
+// Scope keys the loop writes, and which cannot be used as a loop itemName. Each
+// is taken from where it is defined rather than restated: the template package
+// reads these very names back when it unwraps a scope, so a rename must not be
+// able to break the detection silently.
 const (
-	loopScopeRecord   = "record"
-	loopScopeMetadata = "_metadata"
-	loopScopeLoop     = "loop"
+	loopScopeRecord   = template.VarRecord
+	loopScopeMetadata = metadata.DefaultFieldName
+	loopScopeLoop     = metadata.LoopFieldName
 )
+
+// loopScopeOnlyKeys is what an itemName may not collide with beyond the
+// reserved template variables. `record` is deliberately absent: it is
+// template.VarRecord, so template.IsReservedVarName already rejects it.
+var loopScopeOnlyKeys = []string{loopScopeMetadata, loopScopeLoop}
+
+// reservedItemNames returns every name an itemName may not take. It is the one
+// place the set is assembled, so the constructor and the test that ties it to
+// the enum the JSON schema restates cannot disagree.
+func reservedItemNames() []string {
+	return append(template.ReservedVarNames(), loopScopeOnlyKeys...)
+}
 
 // Loop module errors.
 var (
@@ -67,9 +85,15 @@ func NewLoopFromConfig(config LoopConfig, nestedCreator NestedModuleCreator) (*L
 	if itemName == "" {
 		return nil, fmt.Errorf("%w", ErrLoopItemNameRequired)
 	}
-	switch itemName {
-	case loopScopeRecord, loopScopeMetadata, loopScopeLoop:
-		return nil, fmt.Errorf("%w: %q", ErrLoopReservedItemName, itemName)
+	// The alias becomes a top-level template variable and a field-path root, so
+	// it must not take a name that already means something at that level: a
+	// reserved template variable, or one of the scope keys the loop itself
+	// writes. Left unchecked, `itemName: state` would produce a template where
+	// `{{ state.x }}` is the persistence state and not the item — the alias
+	// loses the collision at render time, so the loop would simply not work and
+	// nothing would say why.
+	if slices.Contains(reservedItemNames(), itemName) {
+		return nil, fmt.Errorf("%w: %q already names a template variable or a loop scope key", ErrLoopReservedItemName, itemName)
 	}
 
 	onError, err := errhandling.ParseOnErrorStrategy(config.OnError)
@@ -208,8 +232,8 @@ func (l *LoopModule) processRecord(ctx context.Context, R map[string]any, record
 		rootRecord = R
 	}
 
-	metadata, metadataPreExisted := ensureScopeMap(rootRecord, loopScopeMetadata)
-	loopMeta, loopMetaPreExisted := ensureScopeMap(metadata, loopScopeLoop)
+	scopeMeta, metadataPreExisted := ensureScopeMap(rootRecord, loopScopeMetadata)
+	loopMeta, loopMetaPreExisted := ensureScopeMap(scopeMeta, loopScopeLoop)
 
 	if _, exists := loopMeta[l.itemName]; exists {
 		return fmt.Errorf("%w: alias %q already active", ErrLoopAliasConflict, l.itemName)
@@ -246,7 +270,7 @@ func (l *LoopModule) processRecord(ctx context.Context, R map[string]any, record
 		aliasState["index"] = i
 
 		_, originalIsMap := item.(map[string]any)
-		scope := buildLoopScope(R, rootRecord, metadata, l.itemName, item, isNested)
+		scope := buildLoopScope(R, rootRecord, scopeMeta, l.itemName, item, isNested)
 
 		snap, err := jsonSnapshot(loopBranchFromRoot(rootRecord))
 		if err != nil {
@@ -310,7 +334,7 @@ func (l *LoopModule) runNested(ctx context.Context, scope map[string]any) ([]map
 // only the reserved keys plus the current item alias. For nested loops the
 // scope is a shallow copy of the parent scope so parent aliases remain
 // visible to the inner filter chain.
-func buildLoopScope(R, root, metadata map[string]any, itemName string, item any, isNested bool) map[string]any {
+func buildLoopScope(R, root, scopeMeta map[string]any, itemName string, item any, isNested bool) map[string]any {
 	if isNested {
 		scope := make(map[string]any, len(R)+1)
 		maps.Copy(scope, R)
@@ -319,7 +343,7 @@ func buildLoopScope(R, root, metadata map[string]any, itemName string, item any,
 	}
 	return map[string]any{
 		loopScopeRecord:   root,
-		loopScopeMetadata: metadata,
+		loopScopeMetadata: scopeMeta,
 		itemName:          item,
 	}
 }

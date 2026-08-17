@@ -358,7 +358,7 @@ func (m *SQLCallModule) processRecord(ctx context.Context, record map[string]any
 // executeQuery executes a single SQL query with record data.
 func (m *SQLCallModule) executeQuery(ctx context.Context, record map[string]any) (map[string]any, error) {
 	// Render the query template and bind its parameters
-	query, args, err := m.sqlQuery.Build(recordRenderContext(record))
+	query, args, err := m.sqlQuery.Build(template.ContextForRecord(record))
 	if err != nil {
 		return nil, fmt.Errorf("building parameterized query: %w", err)
 	}
@@ -435,7 +435,7 @@ func (m *SQLCallModule) buildCacheKey(record map[string]any) string {
 	if m.cacheKey != "" {
 		compiled, err := m.engine.Compile(m.cacheKey, template.TargetText, false)
 		if err == nil {
-			if key, renderErr := compiled.Render(recordRenderContext(record)); renderErr == nil {
+			if key, renderErr := compiled.Render(template.ContextForRecord(record)); renderErr == nil {
 				return key
 			}
 		}
