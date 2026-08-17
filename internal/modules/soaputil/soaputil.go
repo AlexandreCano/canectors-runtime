@@ -33,7 +33,7 @@ func renderTemplate(src string, target template.Target, record map[string]any) (
 	if err != nil {
 		return "", err
 	}
-	return compiled.Render(template.RenderContext{Record: record})
+	return compiled.Render(template.ContextForRecord(record))
 }
 
 // ValidateBase validates static SOAP request configuration shared by modules.

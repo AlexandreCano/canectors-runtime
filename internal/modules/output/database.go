@@ -17,6 +17,7 @@ import (
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/pathutil"
 	"github.com/cannectors/runtime/internal/sqltemplate"
+	"github.com/cannectors/runtime/internal/template"
 	"github.com/cannectors/runtime/pkg/connector"
 )
 
@@ -210,7 +211,7 @@ func (d *DatabaseOutput) sendWithTransaction(ctx context.Context, records []map[
 // processRecordInTransaction processes a single record within a transaction.
 // Returns true if the record was successfully processed, false if skipped, and an error if processing should stop.
 func (d *DatabaseOutput) processRecordInTransaction(ctx context.Context, tx *sql.Tx, record map[string]any, recordIndex int) (bool, error) {
-	query, args, err := d.sqlQuery.Build(recordRenderContext(record))
+	query, args, err := d.sqlQuery.Build(template.ContextForRecord(record))
 	if err != nil {
 		return d.handleQueryBuildError(err, recordIndex)
 	}
@@ -290,7 +291,7 @@ func (d *DatabaseOutput) sendWithoutTransaction(ctx context.Context, records []m
 // processRecordWithoutTransaction processes a single record without a transaction.
 // Returns true if the record was successfully processed, false if skipped, and an error if processing should stop.
 func (d *DatabaseOutput) processRecordWithoutTransaction(ctx context.Context, record map[string]any, recordIndex int) (bool, error) {
-	query, args, err := d.sqlQuery.Build(recordRenderContext(record))
+	query, args, err := d.sqlQuery.Build(template.ContextForRecord(record))
 	if err != nil {
 		return d.handleQueryBuildError(err, recordIndex)
 	}

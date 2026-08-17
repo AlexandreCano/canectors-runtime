@@ -91,7 +91,10 @@ func EvaluateXMLTemplate(raw string, record map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return compiled.Render(recordtemplate.RenderContext{Record: record})
+	// ContextForRecord, not a bare RenderContext: inside a loop the record is a
+	// scope, and the body must address the item and the root record by the same
+	// names the endpoint, the headers and keys[].field use.
+	return compiled.Render(recordtemplate.ContextForRecord(record))
 }
 
 func escapeXMLText(value string) string {

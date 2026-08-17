@@ -133,7 +133,7 @@
 
 		"loopFilterConfig": {
 			"type": "object",
-			"description": "Loop filter module. Iterates over an array field on each record, running a nested filter chain per item. The current item is exposed under the configured 'itemName' alias; the root record stays available as 'record'. Loop metadata is exposed read-only at '_metadata.loop.<itemName>.index'.",
+			"description": "Loop filter module. Iterates over an array field on each record, running a nested filter chain per item. Inside the loop there is one addressing root, used identically by templates and by field paths: '<itemName>.field' is the current item, 'record.field' is the root record, and '_metadata.loop.<itemName>.index' is the read-only iteration index. For example with itemName 'line': '{{ line.number }}' and keys[].field 'line.number' read the same value, as do '{{ record.orderId }}' and 'record.orderId'. A field a nested filter writes without the 'record.' prefix — an http_call response merge, a sql_call resultKey, a 'set' target — is read back by its bare name as well ('{{ price }}', not '{{ record.price }}'), and is discarded when the loop ends.",
 			"required": [ "field", "itemName", "filters" ],
 			"properties": {
 				"field": {
@@ -144,8 +144,8 @@
 				"itemName": {
 					"type": "string",
 					"minLength": 1,
-					"description": "Alias exposed to nested filters for the current item. Cannot be 'record', '_metadata', or 'loop', and must not duplicate an active parent loop alias.",
-					"not": { "enum": [ "record", "_metadata", "loop" ] }
+					"description": "Alias exposed to nested filters for the current item, both as a template variable and as a field path root. Cannot be 'record', '_metadata', 'loop', 'meta', 'state' or 'pagination' — those are template variables the alias would shadow — and must not duplicate an active parent loop alias.",
+					"not": { "enum": [ "record", "_metadata", "loop", "meta", "state", "pagination" ] }
 				},
 				"filters": {
 					"type": "array",

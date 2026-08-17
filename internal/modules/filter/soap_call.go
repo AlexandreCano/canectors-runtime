@@ -239,7 +239,7 @@ func (m *SOAPCallModule) buildCacheKey(keyValues map[string]string, record map[s
 	if m.cacheKey != "" {
 		compiled, err := m.engine.Compile(m.cacheKey, template.TargetText, false)
 		if err == nil {
-			if key, renderErr := compiled.Render(template.RenderContext{Record: record}); renderErr == nil {
+			if key, renderErr := compiled.Render(template.ContextForRecord(record)); renderErr == nil {
 				return key
 			}
 		}

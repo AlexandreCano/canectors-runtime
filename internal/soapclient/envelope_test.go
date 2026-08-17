@@ -49,6 +49,36 @@ func TestEvaluateXMLTemplate_ReplacesRepeatedVariables(t *testing.T) {
 	}
 }
 
+// Inside a loop the record handed to the SOAP body is a scope, and the body
+// must use the same addressing root as the endpoint, the headers and
+// keys[].field: the alias for the item, `record` for the root record.
+func TestEvaluateXMLTemplate_LoopScopeAddressing(t *testing.T) {
+	scope := map[string]any{
+		"record": map[string]any{"orderId": "ORD-1"},
+		"line":   map[string]any{"number": "L1"},
+		"_metadata": map[string]any{
+			"loop": map[string]any{"line": map[string]any{"index": 0}},
+		},
+	}
+
+	got, err := EvaluateXMLTemplate(
+		`<Order>{{ record.orderId }}</Order><Line>{{ line.number }}</Line><Idx>{{ _metadata.loop.line.index }}</Idx>`,
+		scope,
+	)
+	if err != nil {
+		t.Fatalf("EvaluateXMLTemplate returned error: %v", err)
+	}
+	want := `<Order>ORD-1</Order><Line>L1</Line><Idx>0</Idx>`
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	// The old doubly-prefixed form is gone, here as everywhere else.
+	if _, err := EvaluateXMLTemplate(`<Line>{{ record.line.number }}</Line>`, scope); err == nil {
+		t.Fatal("record.line.number still resolved in a SOAP body")
+	}
+}
+
 func TestEvaluateXMLTemplate_MissingVariableReturnsError(t *testing.T) {
 	_, err := EvaluateXMLTemplate(`<A>{{record.missing}}</A>`, map[string]any{"id": "x"})
 	if err == nil {
