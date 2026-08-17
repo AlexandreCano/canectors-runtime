@@ -31,7 +31,11 @@ func (h *HTTPPolling) buildRequest(ctx context.Context, endpoint string) (*http.
 
 	var body io.Reader
 	if h.bodyTemplate != "" {
-		body = strings.NewReader(h.bodyTemplate)
+		rendered, renderErr := h.renderBody()
+		if renderErr != nil {
+			return nil, renderErr
+		}
+		body = strings.NewReader(rendered)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, h.method, endpoint, body)
@@ -45,8 +49,12 @@ func (h *HTTPPolling) buildRequest(ctx context.Context, endpoint string) (*http.
 	}
 
 	req.Header.Set("User-Agent", defaultUserAgent)
-	validated := make(map[string]string, len(h.headers))
-	for key, value := range h.headers {
+	headers, err := h.renderHeaders()
+	if err != nil {
+		return nil, err
+	}
+	validated := make(map[string]string, len(headers))
+	for key, value := range headers {
 		if err := httpclient.AddValidatedHeader(validated, key, value); err != nil {
 			return nil, fmt.Errorf("invalid header for httpPolling: %w", err)
 		}

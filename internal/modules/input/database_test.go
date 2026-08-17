@@ -95,7 +95,7 @@ func TestParseDatabaseInputConfig(t *testing.T) {
 			cfg: map[string]any{
 				"connectionString": "postgres://localhost/db",
 				"query":            "SELECT * FROM events WHERE created_at > $1",
-				"parameters":       []any{"state.lastRunTimestamp"},
+				"parameters":       []any{"state.lastTimestamp"},
 				"incremental": map[string]any{
 					"enabled":        true,
 					"timestampField": "created_at",
@@ -111,8 +111,8 @@ func TestParseDatabaseInputConfig(t *testing.T) {
 				if config.Incremental.TimestampField != "created_at" {
 					t.Errorf("Incremental.TimestampField = %q, want created_at", config.Incremental.TimestampField)
 				}
-				if len(config.Parameters) != 1 || config.Parameters[0] != "state.lastRunTimestamp" {
-					t.Errorf("Parameters = %v, want [state.lastRunTimestamp]", config.Parameters)
+				if len(config.Parameters) != 1 || config.Parameters[0] != "state.lastTimestamp" {
+					t.Errorf("Parameters = %v, want [state.lastTimestamp]", config.Parameters)
 				}
 			},
 		},
@@ -386,7 +386,7 @@ func TestNewDatabaseInputFromConfig_Validation(t *testing.T) {
 				Raw: mustJSON(map[string]any{
 					"connectionString": "postgres://localhost/db",
 					"query":            "SELECT id FROM t WHERE id > $1",
-					"parameters":       []any{"state.lastRunId ?? 0"},
+					"parameters":       []any{"state.lastId ?? 0"},
 					"pagination": map[string]any{
 						"type":        "cursor",
 						"limit":       10,

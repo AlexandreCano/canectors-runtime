@@ -13,7 +13,7 @@ input:
   operation: ListOrdersPage
   body: |
     <m:ListOrdersPage xmlns:m="urn:orders">
-      <m:Cursor>{{ record.pagination.cursor | default('') }}</m:Cursor>
+      <m:Cursor>{{ pagination.cursor | default('') }}</m:Cursor>
     </m:ListOrdersPage>
   dataField: Envelope.Body.ListOrdersPageResponse.Orders.Order
   pagination:

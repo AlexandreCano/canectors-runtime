@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
 )
 
@@ -322,15 +322,15 @@ func (h *HTTPPolling) paginationLimitParams() map[string]string {
 }
 
 // buildPaginatedURLMultiFrom adds multiple query parameters to baseURL.
+//
+// Merged like queryParams rather than through url.Values: baseURL arrives from
+// Fetch already shaped — state rendered, queryParams merged, spaces normalized —
+// and decoding it into url.Values to add `page` would re-serialize all of it,
+// turning `$filter` into `%24filter` and its %20 back into `+` (Story 25.1 AC7).
 func (h *HTTPPolling) buildPaginatedURLMultiFrom(baseURL string, params map[string]string) (string, error) {
-	parsedURL, err := url.Parse(baseURL)
+	merged, err := httpclient.MergeQueryParams(baseURL, params)
 	if err != nil {
 		return "", fmt.Errorf(errMsgParsingEndpointURL, err)
 	}
-	q := parsedURL.Query()
-	for param, value := range params {
-		q.Set(param, value)
-	}
-	parsedURL.RawQuery = q.Encode()
-	return parsedURL.String(), nil
+	return merged, nil
 }

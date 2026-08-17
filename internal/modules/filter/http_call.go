@@ -921,29 +921,23 @@ func (m *HTTPCallModule) buildRequestURL(keyValues map[string]string, record map
 		return "", err
 	}
 
-	// Apply query parameters
-	hasQuery := false
+	// Apply query parameters. Merged like queryParams rather than through
+	// url.Values, so a query the endpoint already spells out keeps its own
+	// encoding and order instead of being re-serialized around the keys.
+	queryKeys := make(map[string]string)
 	for _, k := range m.keys {
 		if k.ParamType == "query" {
-			hasQuery = true
-			break
+			queryKeys[k.ParamName] = keyValues[k.ParamName]
 		}
 	}
-	if hasQuery {
-		parsedURL, err := url.Parse(endpoint)
+	if len(queryKeys) > 0 {
+		merged, err := httpclient.MergeQueryParams(endpoint, queryKeys)
 		if err != nil {
 			return "", fmt.Errorf(errMsgParsingEndpointURL, err)
 		}
-		q := parsedURL.Query()
-		for _, k := range m.keys {
-			if k.ParamType == "query" {
-				q.Set(k.ParamName, keyValues[k.ParamName])
-			}
-		}
-		parsedURL.RawQuery = q.Encode()
-		return parsedURL.String(), nil
+		return httpclient.NormalizeURL(merged)
 	}
 
 	// Path-only or header-only: return endpoint after path replacements
-	return endpoint, nil
+	return httpclient.NormalizeURL(endpoint)
 }

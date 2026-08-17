@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
+	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
 	"github.com/cannectors/runtime/pkg/connector"
 )
@@ -142,9 +144,19 @@ func newAPIKeyHandler(config *connector.AuthConfig) (*apiKeyHandler, error) {
 func (h *apiKeyHandler) ApplyAuth(_ context.Context, req *http.Request) error {
 	switch h.location {
 	case "query":
-		q := req.URL.Query()
-		q.Set(h.paramName, h.key)
-		req.URL.RawQuery = q.Encode()
+		// Appended verbatim rather than through url.Values: this runs last, on a
+		// URL the module has already shaped, and re-encoding the whole query here
+		// would undo it — `$filter` back to `%24filter`, %20 back to `+`, the
+		// parameters reordered (Story 25.1 AC7).
+		merged, err := httpclient.MergeQueryParams(req.URL.String(), map[string]string{h.paramName: h.key})
+		if err != nil {
+			return fmt.Errorf("adding api-key query parameter: %w", err)
+		}
+		parsed, err := url.Parse(merged)
+		if err != nil {
+			return fmt.Errorf("adding api-key query parameter: %w", err)
+		}
+		req.URL = parsed
 	case "header":
 		req.Header.Set(h.headerName, h.key)
 	}

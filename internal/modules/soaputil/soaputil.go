@@ -104,8 +104,12 @@ func ToRetryConfig(rc *connector.RetryConfig) connector.RetryConfig {
 
 // OperationOptions contains per-call values added to the shared SOAP base.
 type OperationOptions struct {
-	Base        moduleconfig.SOAPRequestBase
-	Record      map[string]any
+	Base   moduleconfig.SOAPRequestBase
+	Record map[string]any
+	// State and Pagination are top-level template variables for the SOAP body
+	// and headers, named as in every other module (Story 25.5).
+	State       map[string]any
+	Pagination  map[string]any
 	AuthHandler auth.Handler
 	Retry       *connector.RetryConfig
 	Endpoint    string
@@ -167,6 +171,8 @@ func BuildOperation(opts OperationOptions) (soapclient.SOAPOperation, error) {
 
 	return soapclient.SOAPOperation{
 		Endpoint:       endpoint,
+		State:          opts.State,
+		Pagination:     opts.Pagination,
 		SOAPAction:     opts.Base.SOAPAction,
 		Version:        soapclient.SOAPVersion(opts.Base.SOAPVersion),
 		Body:           opts.Base.Body,
@@ -360,22 +366,20 @@ func BuildEndpointWithKeys(endpoint string, record map[string]any, keys []module
 			resolved = strings.Replace(resolved, "{"+key.ParamName+"}", url.PathEscape(values[key.ParamName]), 1)
 		}
 	}
-	parsedURL, err := url.Parse(resolved)
+	// Merged like queryParams rather than through url.Values, so a query the
+	// endpoint already spells out keeps its own encoding and order instead of
+	// being re-serialized around the keys (Story 25.1 AC7).
+	queryKeys := make(map[string]string)
+	for _, key := range keys {
+		if key.ParamType == "query" {
+			queryKeys[key.ParamName] = values[key.ParamName]
+		}
+	}
+	merged, err := httpclient.MergeQueryParams(resolved, queryKeys)
 	if err != nil {
 		return "", fmt.Errorf("parsing SOAP endpoint URL: %w", err)
 	}
-	q := parsedURL.Query()
-	modified := false
-	for _, key := range keys {
-		if key.ParamType == "query" {
-			q.Set(key.ParamName, values[key.ParamName])
-			modified = true
-		}
-	}
-	if modified {
-		parsedURL.RawQuery = q.Encode()
-	}
-	return parsedURL.String(), nil
+	return merged, nil
 }
 
 // BuildHeaderOverridesWithKeys returns headers populated from key values.

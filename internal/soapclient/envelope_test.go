@@ -39,7 +39,7 @@ func TestBuildEnvelope_UsesSOAP12Namespace(t *testing.T) {
 }
 
 func TestEvaluateXMLTemplate_ReplacesRepeatedVariables(t *testing.T) {
-	got, err := EvaluateXMLTemplate(`<A>{{record.id}}</A><B>{{record.id}}</B>`, map[string]any{"id": "x&y"})
+	got, err := EvaluateXMLTemplate(`<A>{{record.id}}</A><B>{{record.id}}</B>`, XMLTemplateVars{Record: map[string]any{"id": "x&y"}})
 	if err != nil {
 		t.Fatalf("EvaluateXMLTemplate returned error: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestEvaluateXMLTemplate_LoopScopeAddressing(t *testing.T) {
 
 	got, err := EvaluateXMLTemplate(
 		`<Order>{{ record.orderId }}</Order><Line>{{ line.number }}</Line><Idx>{{ _metadata.loop.line.index }}</Idx>`,
-		scope,
+		XMLTemplateVars{Record: scope},
 	)
 	if err != nil {
 		t.Fatalf("EvaluateXMLTemplate returned error: %v", err)
@@ -74,13 +74,13 @@ func TestEvaluateXMLTemplate_LoopScopeAddressing(t *testing.T) {
 	}
 
 	// The old doubly-prefixed form is gone, here as everywhere else.
-	if _, err := EvaluateXMLTemplate(`<Line>{{ record.line.number }}</Line>`, scope); err == nil {
+	if _, err := EvaluateXMLTemplate(`<Line>{{ record.line.number }}</Line>`, XMLTemplateVars{Record: scope}); err == nil {
 		t.Fatal("record.line.number still resolved in a SOAP body")
 	}
 }
 
 func TestEvaluateXMLTemplate_MissingVariableReturnsError(t *testing.T) {
-	_, err := EvaluateXMLTemplate(`<A>{{record.missing}}</A>`, map[string]any{"id": "x"})
+	_, err := EvaluateXMLTemplate(`<A>{{record.missing}}</A>`, XMLTemplateVars{Record: map[string]any{"id": "x"}})
 	if err == nil {
 		t.Fatal("expected missing variable error")
 	}

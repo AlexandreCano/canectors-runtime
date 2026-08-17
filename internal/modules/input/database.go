@@ -35,7 +35,7 @@ var (
 // DatabaseInputConfig holds configuration for the database input module.
 // The query is a Jinja template with $N placeholders bound to the parameters
 // list (inherited from SQLRequestBase). Parameter expressions may reference
-// `state` (state.lastRunTimestamp, state.lastRunId) and, when pagination is
+// `state` (state.lastTimestamp, state.lastId) and, when pagination is
 // configured, `pagination` (pagination.offset / pagination.cursor /
 // pagination.limit) — pagination-aware parameters are re-evaluated per page.
 type DatabaseInputConfig struct {
@@ -51,7 +51,7 @@ type DatabaseInputConfig struct {
 
 // IncrementalConfig defines incremental query configuration. The fields name
 // which record columns feed the persisted state; the query consumes that state
-// through parameter expressions (state.lastRunTimestamp, state.lastRunId).
+// through parameter expressions (state.lastTimestamp, state.lastId).
 type IncrementalConfig struct {
 	// Enabled: whether to enable incremental queries
 	Enabled bool `json:"enabled"`
@@ -226,21 +226,16 @@ func (d *DatabaseInput) Fetch(ctx context.Context) ([]map[string]any, error) {
 }
 
 // stateContext exposes the persisted incremental state to query templates and
-// parameter expressions as `state.*`. On the first run lastRunTimestamp is the
+// parameter expressions as `state.*`. On the first run lastTimestamp is the
 // epoch, so incremental queries fetch all records.
+//
+// The names come from persistence.RenderState, shared with httpPolling and
+// soapPolling: this module used to publish `lastRunTimestamp` / `lastRunId`,
+// names found nowhere else in the runtime (Story 25.5).
 func (d *DatabaseInput) stateContext() map[string]any {
-	timestamp := time.Unix(0, 0).UTC()
-	if d.lastState != nil && d.lastState.LastTimestamp != nil {
-		timestamp = *d.lastState.LastTimestamp
-	}
-	var lastID any
-	if d.lastState != nil && d.lastState.LastID != nil {
-		lastID = *d.lastState.LastID
-	}
-	return map[string]any{
-		"lastRunTimestamp": timestamp.Format(time.RFC3339),
-		"lastRunId":        lastID,
-	}
+	// No statePersistence config to gate on: this module decides what it tracks
+	// through `incremental`, and the state file only ever holds what it wrote.
+	return persistence.RenderState(d.lastState, nil)
 }
 
 // buildForPage renders the query for one page of results. Pagination-aware

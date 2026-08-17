@@ -136,7 +136,7 @@ func TestBuild_TypesPreserved(t *testing.T) {
 
 func TestBuild_StateAndPaginationContext(t *testing.T) {
 	q, err := Compile(engine, `select * from t where ts > $1 and id > $2 limit $3`,
-		[]string{"state.lastRunTimestamp", "pagination.cursor ?? 0", "pagination.limit"}, "postgres")
+		[]string{"state.lastTimestamp", "pagination.cursor ?? 0", "pagination.limit"}, "postgres")
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestBuild_StateAndPaginationContext(t *testing.T) {
 		t.Fatalf("UsesPagination should be true")
 	}
 	_, args, err := q.Build(template.RenderContext{
-		State:      map[string]any{"lastRunTimestamp": "2026-01-01T00:00:00Z"},
+		State:      map[string]any{"lastTimestamp": "2026-01-01T00:00:00Z"},
 		Pagination: map[string]any{"cursor": nil, "limit": 200},
 	})
 	if err != nil {
