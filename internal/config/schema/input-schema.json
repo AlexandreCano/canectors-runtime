@@ -131,7 +131,7 @@
 
 		"databaseInputConfig": {
 			"type": "object",
-			"description": "Database input module configuration. Executes SQL queries to fetch data. Incremental state is consumed via parameter expressions (state.lastRunTimestamp, state.lastRunId). Without 'schedule', runs once. With 'schedule', registered with the CRON scheduler.",
+			"description": "Database input module configuration. Executes SQL queries to fetch data. Incremental state is consumed via parameter expressions (state.lastTimestamp, state.lastId). Without 'schedule', runs once. With 'schedule', registered with the CRON scheduler.",
 			"allOf": [ { "$ref": "common-schema.json#/$defs/sqlRequestBase" } ],
 			"properties": {
 				"schedule": {

@@ -78,21 +78,16 @@ func (h *HTTPRequestModule) resolveEndpointForRecord(record map[string]any) (str
 	// and http_call already left it untouched; the output was the odd one out.
 	finalURL := endpoint
 	if len(h.request.QueryParams) > 0 || h.hasQueryKey() {
-		// Same reasoning as the validation below: an endpoint that will not parse
-		// is an endpoint the module cannot honor, and returning it unchanged
-		// skipped the query parameters and the keys it was about to add.
-		parsedURL, err := url.Parse(endpoint)
-		if err != nil {
-			return "", fmt.Errorf("parsing endpoint URL after template evaluation: %w", err)
-		}
-
-		q := parsedURL.Query()
+		// Keys are added after queryParams into the same map, so a key targeting
+		// the same name still wins: keys are per-record, queryParams are the
+		// module-wide default.
+		params := make(map[string]string, len(h.request.QueryParams)+len(h.request.Keys))
 		for param, value := range h.request.QueryParams {
 			rendered, err := h.renderQueryParam(param, value, record)
 			if err != nil {
 				return "", err
 			}
-			q.Set(param, rendered)
+			params[param] = rendered
 		}
 		for _, k := range h.request.Keys {
 			if k.paramType == "query" {
@@ -100,11 +95,20 @@ func (h *HTTPRequestModule) resolveEndpointForRecord(record map[string]any) (str
 				if err != nil {
 					return "", fmt.Errorf("query key %q: %w", k.paramName, err)
 				}
-				q.Set(k.paramName, value)
+				params[k.paramName] = value
 			}
 		}
-		parsedURL.RawQuery = q.Encode()
-		finalURL = parsedURL.String()
+
+		// Same reasoning as the validation below: an endpoint that will not parse
+		// is an endpoint the module cannot honor, and returning it unchanged
+		// skipped the query parameters and the keys it was about to add. The
+		// parameters already in the endpoint keep their own encoding and order —
+		// only the new ones are appended.
+		merged, err := httpclient.MergeQueryParams(endpoint, params)
+		if err != nil {
+			return "", fmt.Errorf("parsing endpoint URL after template evaluation: %w", err)
+		}
+		finalURL = merged
 	}
 
 	// An endpoint that does not survive template evaluation is an error, not a
@@ -114,7 +118,7 @@ func (h *HTTPRequestModule) resolveEndpointForRecord(record map[string]any) (str
 	if err := validateURL(finalURL); err != nil {
 		return "", fmt.Errorf("endpoint is invalid after template evaluation: %w", err)
 	}
-	return finalURL, nil
+	return httpclient.NormalizeURL(finalURL)
 }
 
 // hasQueryKey reports whether any configured key targets the query string.

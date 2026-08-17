@@ -16,8 +16,8 @@ input:
     order by id asc
     limit $3
   parameters:
-    - state.lastRunTimestamp
-    - pagination.cursor ?? state.lastRunId ?? 0
+    - state.lastTimestamp
+    - pagination.cursor ?? state.lastId ?? 0
     - pagination.limit
   pagination:
     type: cursor

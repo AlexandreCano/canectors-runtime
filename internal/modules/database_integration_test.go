@@ -207,7 +207,7 @@ func TestDatabaseInputWithQueryFile(t *testing.T) {
 	}
 }
 
-// TestDatabaseInputWithLastRunTimestamp tests state.lastRunTimestamp injection
+// TestDatabaseInputWithLastRunTimestamp tests state.lastTimestamp injection
 func TestDatabaseInputWithLastRunTimestamp(t *testing.T) {
 	t.Parallel()
 
@@ -231,14 +231,14 @@ func TestDatabaseInputWithLastRunTimestamp(t *testing.T) {
 	}
 	db.Close()
 
-	// Query with lastRunTimestamp - should get all records on first run (epoch time)
+	// Query with lastTimestamp - should get all records on first run (epoch time)
 	cfg := &connector.ModuleConfig{
 		Type: "database",
 		Raw: mustJSON(map[string]any{
 			"connectionString": "file:" + tmpFile,
 			"driver":           "sqlite",
 			"query":            "SELECT id, name, created_at FROM events WHERE created_at > $1 ORDER BY id",
-			"parameters":       []any{"state.lastRunTimestamp"},
+			"parameters":       []any{"state.lastTimestamp"},
 		}),
 	}
 

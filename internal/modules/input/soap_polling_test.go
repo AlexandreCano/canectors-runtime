@@ -97,7 +97,7 @@ func TestSOAPPolling_PaginationStrategies(t *testing.T) {
 		module := newSOAPTestPolling(t, map[string]any{
 			"endpoint":   server.URL,
 			"operation":  "List",
-			"body":       `<List><Page>{{record.pagination.page}}</Page></List>`,
+			"body":       `<List><Page>{{pagination.page}}</Page></List>`,
 			"dataField":  "Envelope.Body.Response.Items.Item",
 			"pagination": map[string]any{"type": "page", "param": "page", "totalPagesField": "Envelope.Body.Response.TotalPages"},
 		})
@@ -125,7 +125,7 @@ func TestSOAPPolling_PaginationStrategies(t *testing.T) {
 		module := newSOAPTestPolling(t, map[string]any{
 			"endpoint":   server.URL,
 			"operation":  "List",
-			"body":       `<List><Offset>{{record.pagination.offset}}</Offset><Limit>{{record.pagination.limit}}</Limit></List>`,
+			"body":       `<List><Offset>{{pagination.offset}}</Offset><Limit>{{pagination.limit}}</Limit></List>`,
 			"dataField":  "Envelope.Body.Response.Items.Item",
 			"pagination": map[string]any{"type": "offset", "param": "offset", "limitParam": "limit", "limit": 2, "totalField": "Envelope.Body.Response.Total"},
 		})
@@ -158,7 +158,7 @@ func TestSOAPPolling_PaginationStrategies(t *testing.T) {
 		module := newSOAPTestPolling(t, map[string]any{
 			"endpoint":   server.URL,
 			"operation":  "List",
-			"body":       `<List><Cursor>{{record.pagination.cursor}}</Cursor></List>`,
+			"body":       `<List><Cursor>{{pagination.cursor}}</Cursor></List>`,
 			"dataField":  "Envelope.Body.Response.Items.Item",
 			"pagination": map[string]any{"type": "cursor", "param": "cursor", "nextCursorField": "Envelope.Body.Response.Next"},
 		})
@@ -200,6 +200,73 @@ func TestSOAPPolling_StatePersistenceValuesAreTemplated(t *testing.T) {
 	ts := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
 	id := "abc"
 	module.lastState = &persistence.State{LastTimestamp: &ts, LastID: &id}
+
+	if _, err := module.Fetch(context.Background()); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+}
+
+// AC6: the SOAP body reads the watermark under the same names as httpPolling and
+// the database input. It used to be `record.state.lastID` — a root nothing else
+// used, and a name the state file did not have either (Story 25.5).
+func TestSOAPPolling_StateIsATopLevelVariable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		for _, want := range []string{"<Since>2026-05-12T10:00:00Z</Since>", "<After>abc</After>"} {
+			if !strings.Contains(string(body), want) {
+				t.Fatalf("request missing %q:\n%s", want, body)
+			}
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		_, _ = w.Write([]byte(`<Envelope><Body><Response><Items><Item><id>1</id></Item></Items></Response></Body></Envelope>`))
+	}))
+	defer server.Close()
+
+	module := newSOAPTestPolling(t, map[string]any{
+		"endpoint":  server.URL,
+		"operation": "List",
+		"body": `<List><Since>{{ state.lastTimestamp }}</Since>` +
+			`<After>{{ state.lastId | default('') }}</After></List>`,
+		"dataField": "Envelope.Body.Response.Items.Item",
+		"statePersistence": map[string]any{
+			"timestamp": map[string]any{"enabled": true},
+			"id":        map[string]any{"enabled": true, "field": "id"},
+		},
+	})
+	defer func() { _ = module.Close() }()
+	ts := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
+	id := "abc"
+	module.lastState = &persistence.State{LastTimestamp: &ts, LastID: &id}
+
+	if _, err := module.Fetch(context.Background()); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+}
+
+// AC7: on a first run the body still renders — the epoch for the timestamp, a
+// default() for the ID. The state used to be absent entirely until something had
+// been persisted, so a strict SOAP template failed on the very first run.
+func TestSOAPPolling_StateRendersOnFirstRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "<Since>"+persistence.EpochTimestamp+"</Since>") {
+			t.Fatalf("request missing the epoch watermark:\n%s", body)
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		_, _ = w.Write([]byte(`<Envelope><Body><Response><Items><Item><id>1</id></Item></Items></Response></Body></Envelope>`))
+	}))
+	defer server.Close()
+
+	module := newSOAPTestPolling(t, map[string]any{
+		"endpoint":  server.URL,
+		"operation": "List",
+		"body":      `<List><Since>{{ state.lastTimestamp }}</Since></List>`,
+		"dataField": "Envelope.Body.Response.Items.Item",
+		"statePersistence": map[string]any{
+			"timestamp": map[string]any{"enabled": true},
+		},
+	})
+	defer func() { _ = module.Close() }()
 
 	if _, err := module.Fetch(context.Background()); err != nil {
 		t.Fatalf("Fetch: %v", err)

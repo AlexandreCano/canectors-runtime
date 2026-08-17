@@ -585,11 +585,11 @@
 				},
 				"timestampField": {
 					"type": "string",
-					"description": "Record field persisted as the incremental timestamp. Consumed by the query through the state.lastRunTimestamp parameter expression."
+					"description": "Record field persisted as the incremental timestamp. Consumed by the query through the state.lastTimestamp parameter expression."
 				},
 				"idField": {
 					"type": "string",
-					"description": "Record field persisted as the incremental ID. Consumed by the query through the state.lastRunId parameter expression."
+					"description": "Record field persisted as the incremental ID. Consumed by the query through the state.lastId parameter expression."
 				}
 			},
 			"additionalProperties": false

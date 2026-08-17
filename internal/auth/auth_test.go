@@ -577,3 +577,33 @@ func toJSON(t *testing.T, v any) json.RawMessage {
 	}
 	return b
 }
+
+// ApplyAuth runs last, on a URL the module has already shaped. Adding the key
+// through url.Values re-encoded that whole query: `$filter` came back as
+// `%24filter`, its %20 as `+`, and the parameters in alphabetical order — the
+// round trip Story 25.1 removed from the modules, reintroduced one step later.
+func TestAPIKeyHandler_ApplyAuth_QueryKeepsURLShape(t *testing.T) {
+	config := &connector.AuthConfig{
+		Type: "api-key",
+		Credentials: toJSON(t, map[string]string{
+			"key":       "secret",
+			"location":  "query",
+			"paramName": "apikey",
+		}),
+	}
+
+	handler, err := NewHandler(config, nil)
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	const query = "$filter=LastModifiedDate%20gt%202026-01-01&b=2&a=1"
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/api?"+query, nil)
+	if err := handler.ApplyAuth(context.Background(), req); err != nil {
+		t.Fatalf("ApplyAuth failed: %v", err)
+	}
+
+	if want := query + "&apikey=secret"; req.URL.RawQuery != want {
+		t.Errorf("RawQuery = %q, want %q", req.URL.RawQuery, want)
+	}
+}

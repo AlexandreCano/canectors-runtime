@@ -1,0 +1,43 @@
+name: http-polling-state-odata-filter
+version: 1.0.0
+description: Incremental polling through an OData filter, with the watermark rendered into the endpoint rather than a query parameter.
+tags:
+  - http-polling
+  - state-persistence
+  - templating
+input:
+  type: httpPolling
+  schedule: "*/10 * * * *"
+  # The persisted watermark reaches any part of the request, not only the query
+  # parameter statePersistence names:
+  #
+  #   state.lastTimestamp   RFC3339, the epoch before anything is persisted
+  #   state.lastId          absent until an ID has been persisted
+  #
+  # Spaces belong to the OData grammar — the runtime percent-encodes them.
+  endpoint: https://source.example.com/api/orders?$filter=LastModifiedDate gt {{ state.lastTimestamp }}
+  method: GET
+  dataField: value
+  headers:
+    # Available in headers too. A custom header rather than If-Modified-Since:
+    # RFC 9110 requires an HTTP-date there ("Sat, 15 Mar 2026 08:30:00 GMT") and
+    # mandates that a malformed value be ignored, so sending the RFC3339
+    # watermark would silently do nothing.
+    X-Since: "{{ state.lastTimestamp }}"
+  queryParams:
+    # And in queryParams values.
+    $orderby: LastModifiedDate asc
+    $top: "200"
+  statePersistence:
+    timestamp:
+      enabled: true
+    id:
+      enabled: true
+      field: Id
+    storagePath: ./.cannectors-state
+filters: []
+output:
+  type: httpRequest
+  endpoint: https://destination.example.com/api/orders/import
+  method: POST
+  requestMode: batch

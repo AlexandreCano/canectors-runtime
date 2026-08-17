@@ -21,7 +21,7 @@ func testCtx() RenderContext {
 			},
 			"tags": []any{"go", "rust"},
 		},
-		State: map[string]any{"lastRunTimestamp": "2026-01-01T00:00:00Z"},
+		State: map[string]any{"lastTimestamp": "2026-01-01T00:00:00Z"},
 	}
 }
 
@@ -41,10 +41,10 @@ func render(t *testing.T, e *Engine, src string, target Target) string {
 func TestEngine_BasicSubstitutionAndNavigation(t *testing.T) {
 	e := NewEngine()
 	cases := map[string]string{
-		`{{ record.id }}`:              "42",
-		`{{ record.items[0].name }}`:   "first",
-		`{{ record.items[1].name }}`:   "second",
-		`{{ state.lastRunTimestamp }}`: "2026-01-01T00:00:00Z",
+		`{{ record.id }}`:            "42",
+		`{{ record.items[0].name }}`: "first",
+		`{{ record.items[1].name }}`: "second",
+		`{{ state.lastTimestamp }}`:  "2026-01-01T00:00:00Z",
 	}
 	for src, want := range cases {
 		if got := render(t, e, src, TargetText); got != want {

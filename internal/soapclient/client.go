@@ -24,11 +24,15 @@ type SOAPClient interface {
 
 // SOAPOperation contains one raw XML SOAP request.
 type SOAPOperation struct {
-	Endpoint       string
-	SOAPAction     string
-	Version        SOAPVersion
-	Body           string
-	Record         map[string]any
+	Endpoint   string
+	SOAPAction string
+	Version    SOAPVersion
+	Body       string
+	Record     map[string]any
+	// State and Pagination are top-level template variables, shared with the
+	// HTTP modules — see XMLTemplateVars.
+	State          map[string]any
+	Pagination     map[string]any
 	Headers        []SOAPHeaderTemplate
 	HTTPHeaders    map[string]string
 	Authentication *connector.AuthConfig
@@ -62,7 +66,8 @@ func (c *Client) Call(ctx context.Context, op SOAPOperation) (SOAPResponse, erro
 	if err != nil {
 		return SOAPResponse{}, err
 	}
-	body, err := EvaluateXMLTemplate(op.Body, op.Record)
+	vars := XMLTemplateVars{Record: op.Record, State: op.State, Pagination: op.Pagination}
+	body, err := EvaluateXMLTemplate(op.Body, vars)
 	if err != nil {
 		return SOAPResponse{}, err
 	}
@@ -112,7 +117,7 @@ func (c *Client) Call(ctx context.Context, op SOAPOperation) (SOAPResponse, erro
 		if strings.TrimSpace(header.XML) == "" {
 			continue
 		}
-		evaluated, evalErr := EvaluateXMLTemplate(header.XML, op.Record)
+		evaluated, evalErr := EvaluateXMLTemplate(header.XML, vars)
 		if evalErr != nil {
 			return SOAPResponse{}, fmt.Errorf("evaluating SOAP header: %w", evalErr)
 		}

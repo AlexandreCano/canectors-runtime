@@ -189,6 +189,10 @@ func NewHTTPPollingFromConfig(config *connector.ModuleConfig) (*HTTPPolling, err
 		)
 	}
 
+	if err := h.validateStateTemplates(); err != nil {
+		return nil, err
+	}
+
 	logModuleCreation(cfg.Endpoint, timeout, authHandler, cfg.Pagination, retryConfig)
 
 	return h, nil
@@ -223,10 +227,34 @@ func (h *HTTPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 	// Reset OAuth2 retry tracking for this fetch cycle
 	h.oauth2RetryCount = 0
 
+	// Templates are resolved against the persisted state before anything else
+	// touches the URL, so `{{ state.lastTimestamp }}` can sit anywhere in the
+	// endpoint — a path segment, an OData $filter — not only in the query
+	// parameter statePersistence names (Story 25.5).
+	renderedEndpoint, err := h.renderEndpoint()
+	if err != nil {
+		logger.Error("failed to render endpoint template",
+			"module_type", "httpPolling",
+			"endpoint", httpclient.SanitizeURL(h.endpoint),
+			"error", err.Error(),
+		)
+		return nil, err
+	}
+
+	renderedParams, err := h.renderQueryParams()
+	if err != nil {
+		logger.Error("failed to render queryParams templates",
+			"module_type", "httpPolling",
+			"endpoint", httpclient.SanitizeURL(h.endpoint),
+			"error", err.Error(),
+		)
+		return nil, err
+	}
+
 	// Static queryParams first, state-derived params second: the state values
 	// are computed for this very run, so they must win over a module-wide
 	// default that happens to use the same parameter name.
-	endpoint, err := httpclient.MergeQueryParams(h.endpoint, h.queryParams)
+	endpoint, err := httpclient.MergeQueryParams(renderedEndpoint, renderedParams)
 	if err != nil {
 		logger.Error("failed to apply queryParams to endpoint",
 			"module_type", "httpPolling",
@@ -234,6 +262,16 @@ func (h *HTTPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 			"error", err.Error(),
 		)
 		return nil, fmt.Errorf("applying queryParams: %w", err)
+	}
+
+	endpoint, err = httpclient.NormalizeURL(endpoint)
+	if err != nil {
+		logger.Error("failed to normalize endpoint",
+			"module_type", "httpPolling",
+			"endpoint", httpclient.SanitizeURL(h.endpoint),
+			"error", err.Error(),
+		)
+		return nil, err
 	}
 
 	// Build endpoint with state-based query params if applicable

@@ -19,6 +19,8 @@ type EnvelopeOptions struct {
 	Version    SOAPVersion
 	Body       string
 	Record     map[string]any
+	State      map[string]any
+	Pagination map[string]any
 	Headers    []SOAPHeaderTemplate
 	WSSecurity *WSSecurityConfig
 }
@@ -35,7 +37,8 @@ func BuildEnvelope(opts EnvelopeOptions) ([]byte, error) {
 		return nil, fmt.Errorf("SOAP body is required")
 	}
 
-	body, err := EvaluateXMLTemplate(opts.Body, opts.Record)
+	vars := XMLTemplateVars{Record: opts.Record, State: opts.State, Pagination: opts.Pagination}
+	body, err := EvaluateXMLTemplate(opts.Body, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +48,7 @@ func BuildEnvelope(opts EnvelopeOptions) ([]byte, error) {
 		if strings.TrimSpace(h.XML) == "" {
 			continue
 		}
-		evaluated, evalErr := EvaluateXMLTemplate(h.XML, opts.Record)
+		evaluated, evalErr := EvaluateXMLTemplate(h.XML, vars)
 		if evalErr != nil {
 			return nil, fmt.Errorf("evaluating SOAP header %d: %w", i, evalErr)
 		}
@@ -81,9 +84,22 @@ func BuildEnvelope(opts EnvelopeOptions) ([]byte, error) {
 // (strict): SOAP bodies must not silently drop required fields.
 var xmlTemplateEngine = recordtemplate.NewEngine()
 
-// EvaluateXMLTemplate evaluates record templates in an XML fragment, XML-escaping
+// XMLTemplateVars are the variables a SOAP fragment renders against.
+//
+// State and Pagination are top-level variables, not fields of Record: an input
+// polling incrementally reads `{{ state.lastTimestamp }}` and
+// `{{ pagination.cursor }}` by the same names as httpPolling and the database
+// input, instead of the `record.state.*` this module used to invent for values
+// that were never part of any record (Story 25.5).
+type XMLTemplateVars struct {
+	Record     map[string]any
+	State      map[string]any
+	Pagination map[string]any
+}
+
+// EvaluateXMLTemplate evaluates templates in an XML fragment, XML-escaping
 // substituted values. A missing variable without a default is an error.
-func EvaluateXMLTemplate(raw string, record map[string]any) (string, error) {
+func EvaluateXMLTemplate(raw string, vars XMLTemplateVars) (string, error) {
 	if !recordtemplate.HasVariables(raw) {
 		return raw, nil
 	}
@@ -94,7 +110,10 @@ func EvaluateXMLTemplate(raw string, record map[string]any) (string, error) {
 	// ContextForRecord, not a bare RenderContext: inside a loop the record is a
 	// scope, and the body must address the item and the root record by the same
 	// names the endpoint, the headers and keys[].field use.
-	return compiled.Render(recordtemplate.ContextForRecord(record))
+	ctx := recordtemplate.ContextForRecord(vars.Record)
+	ctx.State = vars.State
+	ctx.Pagination = vars.Pagination
+	return compiled.Render(ctx)
 }
 
 func escapeXMLText(value string) string {

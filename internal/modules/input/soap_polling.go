@@ -115,7 +115,7 @@ func (s *SOAPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 		err     error
 	)
 	if s.pagination == nil {
-		records, err = s.fetchSingle(ctx, s.stateRecord(nil))
+		records, err = s.fetchSingle(ctx, s.stateRecord())
 	} else {
 		records, err = s.fetchWithPagination(ctx)
 	}
@@ -139,17 +139,23 @@ func (s *SOAPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 }
 
 func (s *SOAPPolling) fetchSingle(ctx context.Context, record map[string]any) ([]map[string]any, error) {
-	resp, err := s.call(ctx, record)
+	resp, err := s.call(ctx, record, nil)
 	if err != nil {
 		return nil, err
 	}
 	return s.recordsFromSOAPResponse(resp)
 }
 
-func (s *SOAPPolling) call(ctx context.Context, record map[string]any) (soapclient.SOAPResponse, error) {
+// call issues one SOAP request. state and pagination reach the body as
+// top-level template variables rather than as fields of the synthetic record:
+// they are not record data, and naming them `state` and `pagination` is what
+// makes a SOAP body read like every other module's templates (Story 25.5).
+func (s *SOAPPolling) call(ctx context.Context, record, pagination map[string]any) (soapclient.SOAPResponse, error) {
 	op, err := soaputil.BuildOperation(soaputil.OperationOptions{
 		Base:        s.base,
 		Record:      record,
+		State:       persistence.RenderState(s.lastState, s.persistenceConfig),
+		Pagination:  pagination,
 		AuthHandler: s.authHandler,
 		Retry:       &s.retryConfig,
 	})
@@ -207,12 +213,13 @@ func (s *SOAPPolling) fetchWithPagination(ctx context.Context) ([]map[string]any
 func (s *SOAPPolling) fetchPageBased(ctx context.Context) ([]map[string]any, error) {
 	var all []map[string]any
 	for page := 1; page <= maxPaginationPages; page++ {
-		record := s.stateRecord(map[string]any{
+		pagination := map[string]any{
 			"type": s.pagination.Type,
 			"page": page,
-		})
+		}
+		record := s.stateRecord()
 		record[s.pagination.Param] = page
-		resp, err := s.call(ctx, record)
+		resp, err := s.call(ctx, record, pagination)
 		if err != nil {
 			return nil, err
 		}
@@ -239,14 +246,15 @@ func (s *SOAPPolling) fetchOffsetBased(ctx context.Context) ([]map[string]any, e
 		limit = 100
 	}
 	for offset := 0; offset < maxPaginationPages*limit; offset += limit {
-		record := s.stateRecord(map[string]any{
+		pagination := map[string]any{
 			"type":   s.pagination.Type,
 			"offset": offset,
 			"limit":  limit,
-		})
+		}
+		record := s.stateRecord()
 		record[s.pagination.Param] = offset
 		record[s.pagination.LimitParam] = limit
-		resp, err := s.call(ctx, record)
+		resp, err := s.call(ctx, record, pagination)
 		if err != nil {
 			return nil, err
 		}
@@ -270,14 +278,15 @@ func (s *SOAPPolling) fetchCursorBased(ctx context.Context) ([]map[string]any, e
 	var all []map[string]any
 	cursor := ""
 	for iteration := 0; iteration < maxPaginationPages; iteration++ {
-		record := s.stateRecord(map[string]any{
+		pagination := map[string]any{
 			"type":   s.pagination.Type,
 			"cursor": cursor,
-		})
+		}
+		record := s.stateRecord()
 		if cursor != "" {
 			record[s.pagination.Param] = cursor
 		}
-		resp, err := s.call(ctx, record)
+		resp, err := s.call(ctx, record, pagination)
 		if err != nil {
 			return nil, err
 		}
@@ -295,30 +304,24 @@ func (s *SOAPPolling) fetchCursorBased(ctx context.Context) ([]map[string]any, e
 	return all, nil
 }
 
-func (s *SOAPPolling) stateRecord(pagination map[string]any) map[string]any {
+// stateRecord builds the synthetic record a polling call renders against: it
+// holds only the `queryParam` shortcuts, the flat names the pagination config
+// asks for, and nothing else. The state and the current page are top-level
+// variables now (see call), not fields of a record that never existed.
+func (s *SOAPPolling) stateRecord() map[string]any {
 	record := make(map[string]any)
-	if pagination != nil {
-		record["pagination"] = pagination
-	}
 	if s.persistenceConfig == nil || s.lastState == nil {
 		return record
 	}
-	state := map[string]any{}
 	if s.persistenceConfig.TimestampEnabled() && s.lastState.LastTimestamp != nil {
-		value := s.lastState.FormatTimestamp()
-		state["lastTimestamp"] = value
 		if s.persistenceConfig.Timestamp.QueryParam != "" {
-			record[s.persistenceConfig.Timestamp.QueryParam] = value
+			record[s.persistenceConfig.Timestamp.QueryParam] = s.lastState.FormatTimestamp()
 		}
 	}
 	if s.persistenceConfig.IDEnabled() && s.lastState.LastID != nil {
-		state["lastID"] = *s.lastState.LastID
 		if s.persistenceConfig.ID.QueryParam != "" {
 			record[s.persistenceConfig.ID.QueryParam] = *s.lastState.LastID
 		}
-	}
-	if len(state) > 0 {
-		record["state"] = state
 	}
 	return record
 }

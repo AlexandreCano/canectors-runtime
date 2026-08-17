@@ -2,8 +2,8 @@ package input
 
 import (
 	"fmt"
-	"net/url"
 
+	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
 	"github.com/cannectors/runtime/internal/persistence"
 )
@@ -61,19 +61,16 @@ func (h *HTTPPolling) buildEndpointWithState(endpoint string) (string, error) {
 		return endpoint, nil
 	}
 
-	parsedURL, err := url.Parse(endpoint)
-	if err != nil {
-		return "", fmt.Errorf(errMsgParsingEndpointURL, err)
-	}
-
-	q := parsedURL.Query()
-	modified := false
+	// Merged rather than set through url.Values: the endpoint may already carry
+	// a query an author shaped deliberately — an OData filter, its own
+	// parameter order — and re-encoding it to add a watermark rewrites parts of
+	// the request nobody asked to change (Story 25.5).
+	params := make(map[string]string, 2)
 
 	// Add timestamp query param if configured
 	if h.persistenceConfig.TimestampEnabled() && h.persistenceConfig.Timestamp.QueryParam != "" {
 		if h.lastState.LastTimestamp != nil {
-			q.Set(h.persistenceConfig.Timestamp.QueryParam, h.lastState.FormatTimestamp())
-			modified = true
+			params[h.persistenceConfig.Timestamp.QueryParam] = h.lastState.FormatTimestamp()
 			logger.Debug("added timestamp query param for state persistence",
 				"pipeline_id", h.pipelineID,
 				"param", h.persistenceConfig.Timestamp.QueryParam,
@@ -85,8 +82,7 @@ func (h *HTTPPolling) buildEndpointWithState(endpoint string) (string, error) {
 	// Add ID query param if configured
 	if h.persistenceConfig.IDEnabled() && h.persistenceConfig.ID.QueryParam != "" {
 		if h.lastState.LastID != nil {
-			q.Set(h.persistenceConfig.ID.QueryParam, *h.lastState.LastID)
-			modified = true
+			params[h.persistenceConfig.ID.QueryParam] = *h.lastState.LastID
 			logger.Debug("added ID query param for state persistence",
 				"pipeline_id", h.pipelineID,
 				"param", h.persistenceConfig.ID.QueryParam,
@@ -95,9 +91,9 @@ func (h *HTTPPolling) buildEndpointWithState(endpoint string) (string, error) {
 		}
 	}
 
-	if modified {
-		parsedURL.RawQuery = q.Encode()
+	merged, err := httpclient.MergeQueryParams(endpoint, params)
+	if err != nil {
+		return "", fmt.Errorf(errMsgParsingEndpointURL, err)
 	}
-
-	return parsedURL.String(), nil
+	return merged, nil
 }

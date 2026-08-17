@@ -101,7 +101,7 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 			cfg: DatabaseInputConfig{
 				SQLRequestBase: moduleconfig.SQLRequestBase{
 					Query:      "SELECT id, name FROM records WHERE updated_at > $1 ORDER BY id",
-					Parameters: []string{"state.lastRunTimestamp"},
+					Parameters: []string{"state.lastTimestamp"},
 				},
 				Incremental: &IncrementalConfig{Enabled: true, TimestampField: "updated_at"},
 			},
@@ -113,7 +113,7 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 			cfg: DatabaseInputConfig{
 				SQLRequestBase: moduleconfig.SQLRequestBase{
 					Query:      "SELECT id, name FROM records WHERE id > $1 ORDER BY id",
-					Parameters: []string{"state.lastRunId ?? 0"},
+					Parameters: []string{"state.lastId ?? 0"},
 				},
 				Incremental: &IncrementalConfig{Enabled: true, IDField: "id"},
 			},
@@ -125,7 +125,7 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 			cfg: DatabaseInputConfig{
 				SQLRequestBase: moduleconfig.SQLRequestBase{
 					Query:      "SELECT id, name FROM records WHERE updated_at > $1 AND id > $2 ORDER BY id",
-					Parameters: []string{"state.lastRunTimestamp", "state.lastRunId ?? 0"},
+					Parameters: []string{"state.lastTimestamp", "state.lastId ?? 0"},
 				},
 				Incremental: &IncrementalConfig{Enabled: true, TimestampField: "updated_at", IDField: "id"},
 			},
@@ -137,7 +137,7 @@ func TestDatabaseInput_IncrementalQueries(t *testing.T) {
 			cfg: DatabaseInputConfig{
 				SQLRequestBase: moduleconfig.SQLRequestBase{
 					Query:      "SELECT id, name FROM records WHERE updated_at > $1 ORDER BY id",
-					Parameters: []string{"state.lastRunTimestamp"},
+					Parameters: []string{"state.lastTimestamp"},
 				},
 			},
 			want: []string{"old", "middle", "new", "newer"},
@@ -273,7 +273,7 @@ func TestDatabaseInput_NewFromConfig_QueryFileAndEnvConnectionString(t *testing.
 func TestDatabaseInput_BuildDriverSpecificPlaceholders(t *testing.T) {
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	querySrc := "SELECT * FROM records WHERE updated_at > $1 AND id > $2 AND name = $3"
-	params := []string{"state.lastRunTimestamp", "state.lastRunId", `"Alice"`}
+	params := []string{"state.lastTimestamp", "state.lastId", `"Alice"`}
 
 	build := func(driver string) (string, []any) {
 		t.Helper()
