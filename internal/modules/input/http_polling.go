@@ -65,6 +65,7 @@ type HTTPPollingInputConfig struct {
 // last timestamp and/or last ID for reliable resumption after restarts.
 type HTTPPolling struct {
 	endpoint         string
+	queryParams      map[string]string
 	method           string
 	body             string
 	bodyTemplateFile string
@@ -156,6 +157,7 @@ func NewHTTPPollingFromConfig(config *connector.ModuleConfig) (*HTTPPolling, err
 
 	h := &HTTPPolling{
 		endpoint:          cfg.Endpoint,
+		queryParams:       cfg.QueryParams,
 		method:            method,
 		body:              cfg.Body,
 		bodyTemplateFile:  cfg.BodyTemplateFile,
@@ -221,8 +223,21 @@ func (h *HTTPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 	// Reset OAuth2 retry tracking for this fetch cycle
 	h.oauth2RetryCount = 0
 
+	// Static queryParams first, state-derived params second: the state values
+	// are computed for this very run, so they must win over a module-wide
+	// default that happens to use the same parameter name.
+	endpoint, err := httpclient.MergeQueryParams(h.endpoint, h.queryParams)
+	if err != nil {
+		logger.Error("failed to apply queryParams to endpoint",
+			"module_type", "httpPolling",
+			"endpoint", httpclient.SanitizeURL(h.endpoint),
+			"error", err.Error(),
+		)
+		return nil, fmt.Errorf("applying queryParams: %w", err)
+	}
+
 	// Build endpoint with state-based query params if applicable
-	endpoint, err := h.buildEndpointWithState(h.endpoint)
+	endpoint, err = h.buildEndpointWithState(endpoint)
 	if err != nil {
 		logger.Error("failed to build endpoint with state params",
 			"module_type", "httpPolling",
@@ -245,9 +260,12 @@ func (h *HTTPPolling) Fetch(ctx context.Context) ([]map[string]any, error) {
 
 	var records []map[string]any
 
-	// Handle pagination if configured
+	// Both branches take the endpoint resolved above. The paginated one used to
+	// rebuild its own from h.endpoint, which silently dropped queryParams on
+	// every paginated pipeline — the exact failure mode this module was fixed
+	// for, surviving one branch further down (Story 25.1).
 	if h.pagination != nil {
-		records, err = h.fetchWithPagination(ctx)
+		records, err = h.fetchWithPagination(ctx, endpoint)
 	} else {
 		// Single request without pagination
 		records, err = h.fetchSingle(ctx, endpoint)

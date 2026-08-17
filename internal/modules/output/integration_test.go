@@ -613,9 +613,18 @@ func TestHTTPRequestModule_Templating_URLEncoding(t *testing.T) {
 	}
 
 	reqs := server.getRequests()
-	// URL-encoded space should be present
-	if !contains(reqs[0].Path, "hello+world") && !contains(reqs[0].Path, "hello%20world") {
-		t.Errorf("expected URL-encoded path, got %s", reqs[0].Path)
+	// The captured path is the decoded one, so this asserts what the server
+	// actually received — the point of encoding is that the value survives it.
+	//
+	// This used to accept "hello+world" as a pass, which is the bug: + is a
+	// literal plus in a path segment, so the server was being asked for a
+	// customer whose name contains a plus sign. Only %20 round-trips to a space
+	// here (Story 25.1).
+	if !contains(reqs[0].Path, "/api/search/hello world") {
+		t.Errorf("expected the space to survive encoding, got %s", reqs[0].Path)
+	}
+	if contains(reqs[0].Path, "hello+world") {
+		t.Errorf("space encoded as + in a path segment, which decodes to a literal plus: %s", reqs[0].Path)
 	}
 }
 

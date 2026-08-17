@@ -2,6 +2,7 @@ package template
 
 import (
 	"encoding/json"
+	"net/url"
 	"testing"
 )
 
@@ -85,9 +86,47 @@ func TestEngine_ControlBlocks(t *testing.T) {
 func TestEngine_URLTarget(t *testing.T) {
 	e := NewEngine()
 	got := render(t, e, `https://api/u/{{ record.id }}?q={{ record.q }}`, TargetURL)
-	want := `https://api/u/42?q=a+b%26c`
+	// %20 rather than + for the space: the same escaping serves path segments,
+	// where + is a literal plus and would corrupt the value. A query decoder
+	// reads %20 as a space just the same (Story 25.1).
+	want := `https://api/u/42?q=a%20b%26c`
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A space substituted into a path segment must survive the round trip. This is
+// the case QueryEscape got wrong: it produced a literal +, so a request for
+// "Dupont Fils" asked the server for "Dupont+Fils".
+func TestEngine_URLTargetPathSegmentSpace(t *testing.T) {
+	e := NewEngine()
+
+	got := render(t, e, `https://api/customers/{{ record.q }}`, TargetURL)
+
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("rendered URL does not parse: %v (%q)", err, got)
+	}
+	const want = "/customers/a b&c"
+	if parsed.Path != want {
+		t.Errorf("decoded path = %q, want %q (rendered: %q)", parsed.Path, want, got)
+	}
+}
+
+// The same value in a query position must decode identically, so that moving a
+// placeholder between positions does not change what the server receives.
+func TestEngine_URLTargetQueryValueDecodes(t *testing.T) {
+	e := NewEngine()
+
+	got := render(t, e, `https://api/customers?q={{ record.q }}`, TargetURL)
+
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("rendered URL does not parse: %v (%q)", err, got)
+	}
+	const want = "a b&c"
+	if v := parsed.Query().Get("q"); v != want {
+		t.Errorf("decoded query value = %q, want %q (rendered: %q)", v, want, got)
 	}
 }
 

@@ -14,11 +14,11 @@ import (
 // fetchWithPagination dispatches to the correct pagination strategy based on
 // the module configuration. Non-paginated endpoints are handled by
 // fetchSingle directly, not through this file.
-func (h *HTTPPolling) fetchWithPagination(ctx context.Context) ([]map[string]any, error) {
-	baseEndpoint, err := h.buildEndpointWithState(h.endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("building endpoint with state: %w", err)
-	}
+//
+// baseEndpoint arrives fully resolved from Fetch — queryParams merged and state
+// parameters applied. It is not rebuilt here: doing so is what made a paginated
+// pipeline ignore its queryParams.
+func (h *HTTPPolling) fetchWithPagination(ctx context.Context, baseEndpoint string) ([]map[string]any, error) {
 	switch h.pagination.Type {
 	case "page":
 		return h.fetchPageBased(ctx, baseEndpoint)

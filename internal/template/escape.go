@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/nikolalohinski/gonja/v2"
@@ -92,7 +93,26 @@ func renderValue(in *exec.Value) string {
 
 func noEscape(s string) string { return s }
 
-func urlEscape(s string) string { return url.QueryEscape(s) }
+// urlEscape percent-encodes a value for substitution anywhere in a URL — a path
+// segment as well as a query value.
+//
+// It is QueryEscape with the space encoded as %20 rather than +, because a
+// single endpoint template holds both positions
+// (`/orders/{{ name }}?q={{ term }}`) and one escaping has to be right in both.
+// `+` means a space only in a query string; in a path it is a literal plus, so
+// QueryEscape alone turns `/orders/{{ name }}` with "Dupont Fils" into a request
+// for the customer named "Dupont+Fils". %20 decodes to a space in both
+// positions, so it is the encoding that satisfies them at once.
+//
+// The replacement cannot corrupt a real plus: QueryEscape has already turned any
+// literal + in the value into %2B, so every + left in its output came from a
+// space.
+//
+// url.PathEscape is not an option in the other direction — it leaves &, = and ?
+// untouched, which would let a value break out of a query parameter.
+func urlEscape(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+}
 
 func xmlEscape(s string) string {
 	var b bytes.Buffer
