@@ -102,6 +102,7 @@ type HTTPCallModule struct {
 	cacheTTL         time.Duration
 	cacheKey         string // Cache key configuration (optional)
 	bodyTemplateRaw  string // Loaded body template content
+	queryParams      map[string]string
 	overrides        errhandling.ClassificationOverrides
 	engine           *template.Engine // Jinja templating engine (shared compile cache)
 }
@@ -349,6 +350,7 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 		cacheTTL:         cacheTTL,
 		cacheKey:         config.Cache.Key,
 		bodyTemplateRaw:  bodyTemplateRaw,
+		queryParams:      config.QueryParams,
 		engine:           engine,
 		overrides:        config.ErrorClassification.ToOverrides(),
 	}, nil
@@ -479,10 +481,23 @@ func (m *HTTPCallModule) processRecord(ctx context.Context, record map[string]an
 		}
 	}
 
+	// The URL is built before the cache is consulted because it is part of what
+	// identifies the call: a templated endpoint or a templated queryParams value
+	// makes two records with identical keys hit two different URLs, and keying on
+	// the raw endpoint served the first record's response to the second.
+	requestURL, err := m.buildRequestURL(keyValues, record)
+	if err != nil {
+		return nil, false, newHTTPCallError(
+			ErrCodeHTTPCallHTTPError,
+			fmt.Sprintf("http_call failed to build request URL: %v", err),
+			recordIdx, m.endpoint, 0, m.compositeKeyString(keyValues),
+		)
+	}
+
 	// Check cache first (only if enabled).
 	var cacheKey string
 	if m.cacheEnabled {
-		cacheKey = m.buildCacheKey(keyValues, record)
+		cacheKey = m.buildCacheKey(requestURL, keyValues, record)
 		if cachedData, found := m.cache.Get(cacheKey); found {
 			responseData, ok := cachedData.(map[string]any)
 			if ok {
@@ -498,15 +513,13 @@ func (m *HTTPCallModule) processRecord(ctx context.Context, record map[string]an
 	}
 
 	// Cache miss - make HTTP request
-	responseData, err := m.fetchResponseData(ctx, keyValues, recordIdx, record)
+	responseData, err := m.fetchResponseData(ctx, requestURL, keyValues, recordIdx, record)
 	if err != nil {
 		return nil, false, err
 	}
 
 	// Cache successful response (don't cache errors)
-	// Rebuild cache key in case it depends on record values
 	if m.cacheEnabled {
-		cacheKey = m.buildCacheKey(keyValues, record)
 		m.cache.Set(cacheKey, responseData, m.cacheTTL)
 
 		logger.Debug("http_call cache miss (fetched and cached)",
@@ -561,23 +574,28 @@ func (m *HTTPCallModule) extractKeyValues(record map[string]any, recordIdx int) 
 	return result, nil
 }
 
-// buildCacheKey creates a unique cache key from the key values and record.
+// buildCacheKey creates a unique cache key from the request URL, the key values
+// and the record.
 // If cacheKey is configured, it is evaluated as a template against the record
 // (e.g. "{{record.customerId}}"). Static strings are used as-is.
-// If cacheKey is not configured, uses default: endpoint + "::" + joined key values (in config order)
-func (m *HTTPCallModule) buildCacheKey(keyValues map[string]string, record map[string]any) string {
+// If cacheKey is not configured, uses default: requestURL + "::" + joined key
+// values (in config order). The URL rather than the raw endpoint, so that
+// anything the record contributes to it — a templated endpoint, a templated
+// queryParams value, a path key — separates the entries. The key values stay in
+// the suffix because header keys never reach the URL.
+func (m *HTTPCallModule) buildCacheKey(requestURL string, keyValues map[string]string, record map[string]any) string {
 	if m.cacheKey != "" {
 		key, err := m.renderField(m.cacheKey, template.TargetText, record)
 		if err != nil {
 			logger.Warn("http_call cache key template render failed, using composite key",
 				slog.String("error", err.Error()),
 			)
-			return m.endpoint + "::" + m.compositeKeyString(keyValues)
+			return requestURL + "::" + m.compositeKeyString(keyValues)
 		}
 		return key
 	}
 
-	return m.endpoint + "::" + m.compositeKeyString(keyValues)
+	return requestURL + "::" + m.compositeKeyString(keyValues)
 }
 
 // renderField compiles (cached) and renders a template field for record,
@@ -613,9 +631,9 @@ func (m *HTTPCallModule) compositeKeyString(keyValues map[string]string) string 
 }
 
 // fetchResponseData fetches data from the external API for the given key values and record.
-func (m *HTTPCallModule) fetchResponseData(ctx context.Context, keyValues map[string]string, recordIdx int, record map[string]any) (map[string]any, error) {
+func (m *HTTPCallModule) fetchResponseData(ctx context.Context, requestURL string, keyValues map[string]string, recordIdx int, record map[string]any) (map[string]any, error) {
 	// Build and execute HTTP request
-	body, statusCode, err := m.executeHTTPRequest(ctx, keyValues, recordIdx, record)
+	body, statusCode, err := m.executeHTTPRequest(ctx, requestURL, keyValues, recordIdx, record)
 	if err != nil {
 		return nil, err
 	}
@@ -627,16 +645,7 @@ func (m *HTTPCallModule) fetchResponseData(ctx context.Context, keyValues map[st
 // executeHTTPRequest builds the HTTP request, executes it with retry via
 // httpclient.DoWithRetry, and returns the response body and status code.
 // Story 15.5 introduces retry support (previously absent from this filter).
-func (m *HTTPCallModule) executeHTTPRequest(ctx context.Context, keyValues map[string]string, recordIdx int, record map[string]any) ([]byte, int, error) {
-	requestURL, err := m.buildRequestURL(keyValues, record)
-	if err != nil {
-		return nil, 0, newHTTPCallError(
-			ErrCodeHTTPCallHTTPError,
-			fmt.Sprintf("http_call failed to build request URL: %v", err),
-			recordIdx, m.endpoint, 0, m.compositeKeyString(keyValues),
-		)
-	}
-
+func (m *HTTPCallModule) executeHTTPRequest(ctx context.Context, requestURL string, keyValues map[string]string, recordIdx int, record map[string]any) ([]byte, int, error) {
 	req, err := m.buildHTTPRequest(ctx, requestURL, keyValues, recordIdx, record)
 	if err != nil {
 		return nil, 0, err
@@ -863,6 +872,33 @@ func (m *HTTPCallModule) extractDataField(responseData map[string]any, recordIdx
 	return make(map[string]any)
 }
 
+// applyQueryParams renders the module's static query parameters against the
+// record and merges them into the endpoint.
+//
+// Values are rendered with TargetText, not TargetURL: MergeQueryParams encodes
+// them itself when it serializes the query string, and escaping them twice would
+// send %2520 for a space.
+func (m *HTTPCallModule) applyQueryParams(endpoint string, record map[string]any) (string, error) {
+	if len(m.queryParams) == 0 {
+		return endpoint, nil
+	}
+
+	rendered := make(map[string]string, len(m.queryParams))
+	for name, value := range m.queryParams {
+		if !template.HasVariables(value) {
+			rendered[name] = value
+			continue
+		}
+		out, err := m.renderField(value, template.TargetText, record)
+		if err != nil {
+			return "", fmt.Errorf("evaluating queryParams[%q] template: %w", name, err)
+		}
+		rendered[name] = out
+	}
+
+	return httpclient.MergeQueryParams(endpoint, rendered)
+}
+
 // buildRequestURL constructs the HTTP request URL based on the key configurations and template evaluation.
 func (m *HTTPCallModule) buildRequestURL(keyValues map[string]string, record map[string]any) (string, error) {
 	endpoint := m.endpoint
@@ -876,17 +912,23 @@ func (m *HTTPCallModule) buildRequestURL(keyValues map[string]string, record map
 		endpoint = rendered
 	}
 
-	// If no key configuration, return the templated endpoint as-is
-	if len(m.keys) == 0 {
-		return endpoint, nil
-	}
-
-	// Apply path replacements first
+	// Path replacements run before queryParams: merging the parameters parses
+	// and re-serializes the URL, which percent-encodes the braces of a `{param}`
+	// placeholder (`/orders/{id}` becomes `/orders/%7Bid%7D`) and leaves nothing
+	// for the substitution below to match.
 	for _, k := range m.keys {
 		if k.ParamType == "path" {
 			placeholder := "{" + k.ParamName + "}"
 			endpoint = strings.Replace(endpoint, placeholder, url.PathEscape(keyValues[k.ParamName]), 1)
 		}
+	}
+
+	// Static queryParams come before the query keys so that a key targeting the
+	// same parameter name still wins: keys are per-record, queryParams are the
+	// module-wide default.
+	endpoint, err := m.applyQueryParams(endpoint, record)
+	if err != nil {
+		return "", err
 	}
 
 	// Apply query parameters

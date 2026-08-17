@@ -11,16 +11,20 @@ import (
 	"github.com/cannectors/runtime/internal/template"
 )
 
-// resolveEndpointWithStaticQuery appends the module's static query params to
-// an endpoint URL. Templates are left untouched (callers apply them first):
-// when there are no static query params to append, the endpoint is returned
-// verbatim so that template markers like `{{record.id}}` are not
-// percent-encoded by url.Parse / url.String round-tripping.
+// resolveEndpointWithStaticQuery appends the module's static query params to an
+// endpoint URL that has no record to render against.
+//
+// Only the dry-run preview reaches it, and only with an empty batch: Send
+// returns early on zero records. The endpoint therefore still carries its
+// unrendered `{{ }}` markers, and merging static params round-trips the URL,
+// which percent-encodes those markers — acceptable in a preview of a batch that
+// has nothing to send, wrong anywhere a request is actually issued. Keep this
+// off the sending paths; they go through resolveEndpointForRecord.
+//
+// A parse failure is warned about rather than raised for the same reason: there
+// is no request to stop.
 func (h *HTTPRequestModule) resolveEndpointWithStaticQuery(endpoint string) string {
-	if len(h.request.QueryParams) == 0 {
-		return endpoint
-	}
-	parsedURL, err := url.Parse(endpoint)
+	merged, err := httpclient.MergeQueryParams(endpoint, h.request.QueryParams)
 	if err != nil {
 		logger.Warn("failed to parse endpoint URL for query params",
 			slog.String("endpoint", httpclient.SanitizeURL(endpoint)),
@@ -28,12 +32,7 @@ func (h *HTTPRequestModule) resolveEndpointWithStaticQuery(endpoint string) stri
 		)
 		return endpoint
 	}
-	q := parsedURL.Query()
-	for param, value := range h.request.QueryParams {
-		q.Set(param, value)
-	}
-	parsedURL.RawQuery = q.Encode()
-	return parsedURL.String()
+	return merged
 }
 
 // resolveEndpointForBatch resolves template variables and keys in the
@@ -72,38 +71,76 @@ func (h *HTTPRequestModule) resolveEndpointForRecord(record map[string]any) (str
 		}
 	}
 
-	parsedURL, err := url.Parse(endpoint)
-	if err != nil {
-		logger.Warn("failed to parse endpoint URL for record",
-			slog.String("endpoint", httpclient.SanitizeURL(endpoint)),
-			slog.String("error", err.Error()),
-		)
-		return endpoint, nil
-	}
-
-	q := parsedURL.Query()
-	for param, value := range h.request.QueryParams {
-		q.Set(param, value)
-	}
-	for _, k := range h.request.Keys {
-		if k.paramType == "query" {
-			value, err := requireRecordFieldString(record, k.field)
-			if err != nil {
-				return "", fmt.Errorf("query key %q: %w", k.paramName, err)
-			}
-			q.Set(k.paramName, value)
+	// With nothing to add to the query string, the endpoint is left alone: a
+	// url.Parse/Encode round trip sorts the parameters and re-encodes them, so
+	// an endpoint the author wrote as `?b=2&a=1` went out as `?a=1&b=2` even
+	// when this module had nothing to contribute (Story 25.1 AC7). httpPolling
+	// and http_call already left it untouched; the output was the odd one out.
+	finalURL := endpoint
+	if len(h.request.QueryParams) > 0 || h.hasQueryKey() {
+		// Same reasoning as the validation below: an endpoint that will not parse
+		// is an endpoint the module cannot honor, and returning it unchanged
+		// skipped the query parameters and the keys it was about to add.
+		parsedURL, err := url.Parse(endpoint)
+		if err != nil {
+			return "", fmt.Errorf("parsing endpoint URL after template evaluation: %w", err)
 		}
-	}
-	parsedURL.RawQuery = q.Encode()
-	finalURL := parsedURL.String()
 
+		q := parsedURL.Query()
+		for param, value := range h.request.QueryParams {
+			rendered, err := h.renderQueryParam(param, value, record)
+			if err != nil {
+				return "", err
+			}
+			q.Set(param, rendered)
+		}
+		for _, k := range h.request.Keys {
+			if k.paramType == "query" {
+				value, err := requireRecordFieldString(record, k.field)
+				if err != nil {
+					return "", fmt.Errorf("query key %q: %w", k.paramName, err)
+				}
+				q.Set(k.paramName, value)
+			}
+		}
+		parsedURL.RawQuery = q.Encode()
+		finalURL = parsedURL.String()
+	}
+
+	// An endpoint that does not survive template evaluation is an error, not a
+	// warning: sending it anyway means issuing a request nobody described, to a
+	// host nobody chose. Returning it left the caller to send a URL this
+	// function had just judged invalid (Story 25.1 AC6).
 	if err := validateURL(finalURL); err != nil {
-		logger.Warn("invalid URL after template evaluation",
-			slog.String("url", httpclient.SanitizeURL(finalURL)),
-			slog.String("error", err.Error()),
-		)
+		return "", fmt.Errorf("endpoint is invalid after template evaluation: %w", err)
 	}
 	return finalURL, nil
+}
+
+// hasQueryKey reports whether any configured key targets the query string.
+func (h *HTTPRequestModule) hasQueryKey() bool {
+	for _, k := range h.request.Keys {
+		if k.paramType == "query" {
+			return true
+		}
+	}
+	return false
+}
+
+// renderQueryParam evaluates a `queryParams` value against the record.
+//
+// Rendered with TargetText, not TargetURL: the query serializer encodes the
+// value itself, and escaping it twice would send %2520 for a space. Same
+// treatment as http_call, so that `queryParams` means the same thing on both.
+func (h *HTTPRequestModule) renderQueryParam(param, value string, record map[string]any) (string, error) {
+	if !template.HasVariables(value) {
+		return value, nil
+	}
+	rendered, err := h.renderField(value, template.TargetText, record)
+	if err != nil {
+		return "", fmt.Errorf("evaluating queryParams[%q] template: %w", param, err)
+	}
+	return rendered, nil
 }
 
 // validateURL validates that a URL string is well-formed.
