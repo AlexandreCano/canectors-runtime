@@ -316,23 +316,6 @@ func ExtractStringField(data map[string]any, field string) string {
 	return fmt.Sprintf("%v", value)
 }
 
-// ValueAsRecordMap converts SOAP response data into a mergeable record map.
-func ValueAsRecordMap(value any) (map[string]any, error) {
-	switch v := value.(type) {
-	case map[string]any:
-		return v, nil
-	case []any:
-		if len(v) == 1 {
-			if m, ok := v[0].(map[string]any); ok {
-				return m, nil
-			}
-		}
-		return map[string]any{"items": v}, nil
-	default:
-		return map[string]any{"value": v}, nil
-	}
-}
-
 // ValueAsRecords converts a SOAP response sub-tree into input records.
 func ValueAsRecords(value any) ([]map[string]any, error) {
 	switch v := value.(type) {

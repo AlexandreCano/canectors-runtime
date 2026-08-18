@@ -1,53 +1,35 @@
 package filter
 
 import (
+	"errors"
+
 	"github.com/cannectors/runtime/internal/cache"
+	"github.com/cannectors/runtime/internal/errhandling"
 )
 
-// mergeData merges response data into record according to the module's
-// configured mergeStrategy ("merge", "replace", or "append").
-func (m *HTTPCallModule) mergeData(record, responseData map[string]any) map[string]any {
-	switch m.mergeStrategy {
-	case mergeStrategyReplace:
-		result := make(map[string]any, len(record)+len(responseData))
-		for k, v := range record {
-			result[k] = v
+// mergeData folds the response into the record through the contract shared
+// with soap_call and sql_call. A list response only fits the append strategy,
+// so the mismatch surfaces as an http_call error that onError arbitrates
+// instead of an empty enrichment (Story 25.3).
+func (m *HTTPCallModule) mergeData(record map[string]any, responseData any, recordIdx int, keyValues map[string]string) (map[string]any, error) {
+	merged, err := mergeCallResult("http_call", m.mergeStrategy, m.resultKey, record, responseData)
+	if err != nil {
+		// The contract error is kept as the cause so a caller can route on the
+		// shared sentinels (errors.Is) as well as on the http_call code. Its own
+		// message is reused verbatim rather than err.Error(), which would prefix
+		// the classification a second time.
+		message := err.Error()
+		var contractErr *errhandling.ClassifiedError
+		if errors.As(err, &contractErr) {
+			message = contractErr.Message
 		}
-		for k, v := range responseData {
-			result[k] = v
-		}
-		return result
-	case mergeStrategyAppend:
-		result := make(map[string]any, len(record)+1)
-		for k, v := range record {
-			result[k] = v
-		}
-		result[m.resultKey] = responseData
-		return result
-	default:
-		return m.deepMerge(record, responseData)
+		return nil, newHTTPCallError(
+			ErrCodeHTTPCallMergeMismatch,
+			message,
+			recordIdx, m.endpoint, 0, m.compositeKeyString(keyValues),
+		).withCause(err, 0)
 	}
-}
-
-// deepMerge performs a recursive merge of two maps. Values from b override
-// values from a at each level, except for nested maps which are merged.
-func (m *HTTPCallModule) deepMerge(a, b map[string]any) map[string]any {
-	result := make(map[string]any, len(a)+len(b))
-	for k, v := range a {
-		result[k] = v
-	}
-	for k, vb := range b {
-		if va, exists := result[k]; exists {
-			if mapA, okA := va.(map[string]any); okA {
-				if mapB, okB := vb.(map[string]any); okB {
-					result[k] = m.deepMerge(mapA, mapB)
-					continue
-				}
-			}
-		}
-		result[k] = vb
-	}
-	return result
+	return merged, nil
 }
 
 // GetCacheStats returns the current cache statistics. When the cache is

@@ -1,0 +1,14 @@
+{
+  "name": "enrichment-catalog-SKU-001",
+  "request": {
+    "method": "GET",
+    "urlPath": "/enrichment/catalog",
+    "queryParameters": { "sku": { "equalTo": "SKU-001" } }
+  },
+  "priority": 1,
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "enrichment/catalog-SKU-001.json"
+  }
+}
