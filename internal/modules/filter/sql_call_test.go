@@ -137,7 +137,7 @@ func TestNewSQLCallFromConfig_Validation(t *testing.T) {
 				},
 				MergeStrategy: "append",
 			},
-			wantSub: "resultKey is required when mergeStrategy is 'append'",
+			wantSub: "resultKey is required when mergeStrategy is append",
 		},
 		{
 			name: "invalid mergeStrategy",
@@ -341,9 +341,9 @@ func newSQLCallTestModule(t *testing.T, db *sql.DB, cfg SQLCallConfig) *SQLCallM
 	if err != nil {
 		t.Fatalf("parsing onError: %v", err)
 	}
-	mergeStrategy, err := resolveMergeStrategy(cfg.MergeStrategy)
+	mergeStrategy, resultKey, err := resolveCallMergeContract("sql_call", cfg.MergeStrategy, cfg.ResultKey)
 	if err != nil {
-		t.Fatalf("resolving mergeStrategy: %v", err)
+		t.Fatalf("resolving merge contract: %v", err)
 	}
 	engine := template.NewEngine()
 	sqlQuery, err := sqltemplate.Compile(engine, cfg.Query, cfg.Parameters, "sqlite")
@@ -356,7 +356,7 @@ func newSQLCallTestModule(t *testing.T, db *sql.DB, cfg SQLCallConfig) *SQLCallM
 		query:         cfg.Query,
 		sqlQuery:      sqlQuery,
 		mergeStrategy: mergeStrategy,
-		resultKey:     cfg.ResultKey,
+		resultKey:     resultKey,
 		onError:       onError,
 		cache:         cacheStore,
 		cacheEnabled:  cacheEnabled,

@@ -204,3 +204,52 @@ func TestHTTPCall_KeyEntriesValidatedEvenWithBody(t *testing.T) {
 		})
 	}
 }
+
+// TestHTTPCall_AppendHonorsResultKey locks Story 25.2 AC1: http_call nests the
+// whole response under resultKey, exactly like soap_call and sql_call.
+func TestHTTPCall_AppendHonorsResultKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"tier": "gold"})
+	}))
+	defer server.Close()
+
+	module, err := NewHTTPCallFromConfig(newAppendHTTPCallConfig(server.URL, "enrichment"))
+	if err != nil {
+		t.Fatalf("NewHTTPCallFromConfig: %v", err)
+	}
+	out, err := module.Process(context.Background(), []map[string]any{{"id": "c1"}})
+	if err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	nested, ok := out[0]["enrichment"].(map[string]any)
+	if !ok {
+		t.Fatalf("record has no map under \"enrichment\": %v", out[0])
+	}
+	if nested["tier"] != "gold" {
+		t.Errorf("unexpected response payload: %v", nested)
+	}
+}
+
+// TestHTTPCall_AppendRequiresResultKey locks Story 25.2: the append strategy has
+// no default destination, so the constructor refuses it just like soap_call and
+// sql_call do — the schema and the runtime enforce the same contract.
+func TestHTTPCall_AppendRequiresResultKey(t *testing.T) {
+	_, err := NewHTTPCallFromConfig(newAppendHTTPCallConfig("https://example.com/x", ""))
+	if err == nil {
+		t.Fatal("http_call accepted mergeStrategy append without resultKey")
+	}
+	if !strings.Contains(err.Error(), "resultKey is required when mergeStrategy is append") {
+		t.Errorf("error does not name the missing field: %v", err)
+	}
+}
+
+func newAppendHTTPCallConfig(endpoint, resultKey string) HTTPCallConfig {
+	return HTTPCallConfig{
+		HTTPRequestBase: moduleconfig.HTTPRequestBase{Endpoint: endpoint},
+		Keys: []moduleconfig.KeyConfig{{
+			Field: "id", ParamType: "query", ParamName: "id",
+		}},
+		MergeStrategy: "append",
+		ResultKey:     resultKey,
+	}
+}

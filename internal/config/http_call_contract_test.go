@@ -143,3 +143,28 @@ func TestSchemaHTTPCall_KeysRequiredWithoutBody(t *testing.T) {
 		})
 	}
 }
+
+// TestSchemaHTTPCall_AppendRequiresResultKey locks Story 25.2 AC1/AC3: http_call
+// accepts resultKey like soap_call and sql_call, and append without a
+// destination is a validation error rather than a silent fallback.
+func TestSchemaHTTPCall_AppendRequiresResultKey(t *testing.T) {
+	const keys = `"keys":[{"field":"id","paramType":"query","paramName":"id"}]`
+	cases := []struct {
+		name      string
+		filter    string
+		wantValid bool
+	}{
+		{"append without resultKey", `{"type":"http_call","endpoint":"https://e/x",` + keys + `,"mergeStrategy":"append"}`, false},
+		{"append with resultKey", `{"type":"http_call","endpoint":"https://e/x",` + keys + `,"mergeStrategy":"append","resultKey":"enrichment"}`, true},
+		{"merge with resultKey", `{"type":"http_call","endpoint":"https://e/x",` + keys + `,"mergeStrategy":"merge","resultKey":"enrichment"}`, true},
+		{"merge without resultKey", `{"type":"http_call","endpoint":"https://e/x",` + keys + `,"mergeStrategy":"merge"}`, true},
+		{"empty resultKey rejected", `{"type":"http_call","endpoint":"https://e/x",` + keys + `,"mergeStrategy":"append","resultKey":""}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validateFilter(t, tc.filter); got != tc.wantValid {
+				t.Fatalf("validateFilter(%s) = %v, want %v", tc.filter, got, tc.wantValid)
+			}
+		})
+	}
+}

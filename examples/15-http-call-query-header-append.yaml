@@ -23,6 +23,7 @@ filters:
         paramType: header
         paramName: X-Tenant-Id
     mergeStrategy: append
+    resultKey: sla
     cache:
       enabled: true
       maxSize: 1000

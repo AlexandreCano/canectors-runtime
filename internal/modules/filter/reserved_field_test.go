@@ -124,6 +124,23 @@ func TestSOAPCallRejectsReservedResultKey(t *testing.T) {
 	}
 }
 
+func TestHTTPCallRejectsReservedResultKey(t *testing.T) {
+	_, err := NewHTTPCallFromConfig(HTTPCallConfig{
+		HTTPRequestBase: moduleconfig.HTTPRequestBase{Endpoint: "https://example.com/x"},
+		Keys: []moduleconfig.KeyConfig{{
+			Field: "id", ParamType: "query", ParamName: "id",
+		}},
+		MergeStrategy: "append",
+		ResultKey:     errhandling.RecordErrorsField,
+	})
+	if err == nil {
+		t.Fatal("http_call accepted a reserved resultKey")
+	}
+	if !strings.Contains(err.Error(), errhandling.RecordErrorsField) {
+		t.Errorf("error does not name the reserved field: %v", err)
+	}
+}
+
 func TestIsReservedRecordPath(t *testing.T) {
 	tests := map[string]bool{
 		"_errors":              true,

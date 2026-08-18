@@ -207,7 +207,8 @@ filters:
       - field: customerId
         paramType: path
         paramName: customerId
-    mergeStrategy: merge
+    mergeStrategy: append
+    resultKey: customer
 ```
 
 Examples:
@@ -251,6 +252,23 @@ filters:
 ```
 
 See [examples/42-soap-call-enrichment.yaml](../examples/42-soap-call-enrichment.yaml).
+
+### Merge Contract Of The Call Filters
+
+`http_call`, `soap_call` and `sql_call` share one merge contract.
+
+| `mergeStrategy` | Where the response lands | `resultKey` |
+| --- | --- | --- |
+| `merge` (default) | deep-merged into the record | ignored |
+| `replace` | overwrites the record's top-level keys | ignored |
+| `append` | nested whole under `resultKey` | **required** |
+
+`mergeStrategy: append` without `resultKey` is rejected at validation time for
+the three filters alike — none of them picks a destination for you. Outside
+`append`, `resultKey` is unused. Writing into `_errors` is refused — that key
+belongs to the runtime's error markers.
+
+See [examples/29-call-filters-shared-merge-contract.yaml](../examples/29-call-filters-shared-merge-contract.yaml).
 
 ### `set` And `remove`
 

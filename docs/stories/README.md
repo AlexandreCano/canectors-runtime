@@ -183,7 +183,7 @@ La piste 2 n'a **aucun prérequis** : elle peut démarrer le même jour que la p
 
 | Story | Décision |
 |---|---|
-| 25.2 | **Option A** — `http_call` accepte `resultKey` (défaut `_response`, obligatoire sous `mergeStrategy: append`), contraintes factorisées dans le schéma pour les 3 filtres. Pas de shim de compatibilité. |
+| 25.2 | **Option A** — `http_call` accepte `resultKey`, obligatoire dès `mergeStrategy: append` comme pour `soap_call`/`sql_call`. Aucun défaut implicite (`AC2` retiré : un défaut `_response` que la validation refuse serait inatteignable). Contraintes factorisées dans le schéma pour les 3 filtres. Pas de shim de compatibilité. |
 
 ## Décisions encore ouvertes
 

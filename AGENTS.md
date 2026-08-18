@@ -153,7 +153,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **Pointeurs sur éléments de slice + `append` = aliasing dangereux.** `&p.Filters[i]` puis `p.Filters = append(p.Filters, ...)` peut invalider le pointeur capturé si la slice se réalloue. Pré-dimensionne (`make([]T, n)`) et assigne par index. Bug fixé en 22.5 dans `internal/config/converter.go`.
 - **`statePersistence.storagePath` n'était lu que par l'input.** Avant 22.6, l'executor sauvait dans `./cannectors-data/state` par défaut → l'état ne faisait jamais l'aller-retour. Désormais l'executor partage le même `StateStore` — cf. `internal/runtime/pipeline.go:setupStatePersistence`.
-- **`http_call` n'a pas de `resultKey`** (hardcodé à `_response` dans le schema). Il utilise toujours un cache LRU ; sans `keys` ni `cache.key` explicite tous les records partagent le même slot et tu n'observes qu'une seule requête. Pour forcer un appel par record, ajoute `cache.key: <id>` au pipeline.
+- **Les trois filtres d'appel partagent un contrat de fusion** (`mergeStrategy` + `resultKey`, cf. `internal/modules/filter/call_merge.go`) : `append` exige `resultKey`, au schéma comme au runtime, pour `http_call`, `soap_call` et `sql_call`. `http_call` utilise toujours un cache LRU ; sans `keys` ni `cache.key` explicite tous les records partagent le même slot et tu n'observes qu'une seule requête. Pour forcer un appel par record, ajoute `cache.key: <id>` au pipeline.
 - **`sql_call` substitue `{{record.x}}` comme paramètre positionnel** (`$1` en postgres), pas comme texte. Ne JAMAIS l'entourer de quotes dans le SQL.
 
 ### YAML pipelines

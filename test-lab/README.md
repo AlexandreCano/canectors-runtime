@@ -463,7 +463,7 @@ Four pipelines exercise the `http_call` filter against WireMock enrichment stubs
 | --- | --- | --- |
 | `http-call-path-merge.yaml` | `merge` | path key (`{customerId}`), `dataField`, cache deduplicates on `customer.id`, `onError=skip` for the 404 case |
 | `http-call-query-replace.yaml` | `replace` | query key (`?customerId=...`), shallow overwrite |
-| `http-call-header-append.yaml` | `append` | header key (`X-Customer-Id`), response stored under `_response` |
+| `http-call-header-append.yaml` | `append` | header key (`X-Customer-Id`), response stored under the configured `resultKey` (`permissions_lookup`) |
 | `http-call-post-template.yaml` | `replace` | POST with `bodyTemplateFile`, per-record cache key |
 
 Run `make test-lab-verify-http-call` (or `bash test-lab/scripts/verify-http-call.sh`). Assertions cover the WireMock journal (request count after caching, headers received) and the enriched payloads forwarded to the destination.
