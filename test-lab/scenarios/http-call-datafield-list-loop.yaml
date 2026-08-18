@@ -1,0 +1,64 @@
+name: http-call-datafield-list-loop
+description: >
+  A dataField resolving to a list reaches the record as a list under resultKey (2 matches for
+  SKU-001, 1 for SKU-002, none for SKU-999) and is iterated by the loop filter. Before story 25.3
+  a multi-element list was replaced by an empty map, so every record shipped with no enrichment
+  at all.
+pipeline: test-lab/pipelines/http-call-datafield-list-loop.yaml
+expect_status: success
+records_expected: 4
+setup:
+  reset_db: false
+assertions:
+  # SKU-001 appears on two product lines but is fetched once thanks to the cache key
+  - http_count_eq:
+      method: GET
+      path: /enrichment/catalog
+      query: { sku: SKU-001 }
+      expected: 1
+  - http_count_eq:
+      method: GET
+      path: /enrichment/catalog
+      query: { sku: SKU-002 }
+      expected: 1
+  - http_count_eq: { method: POST, path: /destination/enrichment/datafield-list, expected: 1 }
+  # both elements of the SKU-001 list survive, and loop wrote label on each of them
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"label":"alpha"'
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"label":"beta"'
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"label":"gamma"'
+      expected: 1
+  # an empty list is a functional outcome: the record ships, carrying an empty list
+  - http_count_eq:
+      method: GET
+      path: /enrichment/catalog
+      query: { sku: SKU-999 }
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"matches":[]'
+      expected: 1
+  # SKU-001 is enriched from one cached response for L-1 and L-3: each record
+  # must own its copy of the list, so each item carries its own line id.
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"owner":"L-1"'
+      expected: 1
+  - http_count_ge:
+      method: POST
+      path: /destination/enrichment/datafield-list
+      body_contains: '"owner":"L-3"'
+      expected: 1
+  - log_not_contains: "dataField not found or invalid"

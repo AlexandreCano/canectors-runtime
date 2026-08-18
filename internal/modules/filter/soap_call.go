@@ -175,13 +175,11 @@ func (m *SOAPCallModule) processRecord(ctx context.Context, record map[string]an
 	if m.cacheEnabled {
 		cacheKey := m.buildCacheKey(keyValues, record)
 		if cached, found := m.cache.Get(cacheKey); found {
-			if responseData, ok := cached.(map[string]any); ok {
-				logger.Debug("soap_call cache hit",
-					slog.String("operation", m.base.Operation),
-					slog.Any("key_values", keyValues),
-				)
-				return m.mergeData(record, responseData), nil
-			}
+			logger.Debug("soap_call cache hit",
+				slog.String("operation", m.base.Operation),
+				slog.Any("key_values", keyValues),
+			)
+			return m.mergeData(record, cached)
 		}
 	}
 
@@ -192,10 +190,10 @@ func (m *SOAPCallModule) processRecord(ctx context.Context, record map[string]an
 	if m.cacheEnabled {
 		m.cache.Set(m.buildCacheKey(keyValues, record), responseData, m.cacheTTL)
 	}
-	return m.mergeData(record, responseData), nil
+	return m.mergeData(record, responseData)
 }
 
-func (m *SOAPCallModule) fetchResponseData(ctx context.Context, record map[string]any, keyValues map[string]string) (map[string]any, error) {
+func (m *SOAPCallModule) fetchResponseData(ctx context.Context, record map[string]any, keyValues map[string]string) (any, error) {
 	endpoint, err := soaputil.BuildEndpointWithKeys(m.base.Endpoint, record, m.keys, keyValues)
 	if err != nil {
 		return nil, err
@@ -220,11 +218,7 @@ func (m *SOAPCallModule) fetchResponseData(ctx context.Context, record map[strin
 	if err != nil {
 		return nil, err
 	}
-	value, err := soaputil.ExtractDataField(resp.Data, m.dataField)
-	if err != nil {
-		return nil, err
-	}
-	return soaputil.ValueAsRecordMap(value)
+	return soaputil.ExtractDataField(resp.Data, m.dataField)
 }
 
 func (m *SOAPCallModule) buildCacheKey(keyValues map[string]string, record map[string]any) string {
@@ -244,46 +238,11 @@ func (m *SOAPCallModule) buildCacheKey(keyValues map[string]string, record map[s
 	return m.base.Endpoint + "::" + m.base.Operation + "::" + strings.Join(parts, "::")
 }
 
-func (m *SOAPCallModule) mergeData(record, responseData map[string]any) map[string]any {
-	switch m.mergeStrategy {
-	case mergeStrategyReplace:
-		result := make(map[string]any, len(record)+len(responseData))
-		for k, v := range record {
-			result[k] = v
-		}
-		for k, v := range responseData {
-			result[k] = v
-		}
-		return result
-	case mergeStrategyAppend:
-		result := make(map[string]any, len(record)+1)
-		for k, v := range record {
-			result[k] = v
-		}
-		result[m.resultKey] = responseData
-		return result
-	default:
-		return m.deepMerge(record, responseData)
-	}
-}
-
-func (m *SOAPCallModule) deepMerge(a, b map[string]any) map[string]any {
-	result := make(map[string]any, len(a)+len(b))
-	for k, v := range a {
-		result[k] = v
-	}
-	for k, vb := range b {
-		if va, exists := result[k]; exists {
-			if mapA, okA := va.(map[string]any); okA {
-				if mapB, okB := vb.(map[string]any); okB {
-					result[k] = m.deepMerge(mapA, mapB)
-					continue
-				}
-			}
-		}
-		result[k] = vb
-	}
-	return result
+// mergeData folds the SOAP response into the record through the contract
+// shared with http_call and sql_call. Story 25.3: a dataField pointing at a
+// list keeps its list shape instead of being wrapped under an implicit key.
+func (m *SOAPCallModule) mergeData(record map[string]any, responseData any) (map[string]any, error) {
+	return mergeCallResult("soap_call", m.mergeStrategy, m.resultKey, record, responseData)
 }
 
 // GetCacheStats returns cache stats when caching is enabled.

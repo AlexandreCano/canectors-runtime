@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/cannectors/runtime/internal/errhandling"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/modules/soaputil"
 	"github.com/cannectors/runtime/internal/soapclient"
@@ -84,10 +85,13 @@ func TestSOAPCall_AppendRequiresResultKey(t *testing.T) {
 
 func TestSOAPCall_MergeStrategies(t *testing.T) {
 	module := &SOAPCallModule{mergeStrategy: "merge"}
-	merged := module.mergeData(
+	merged, err := module.mergeData(
 		map[string]any{"id": "1", "profile": map[string]any{"name": "old", "keep": "yes"}},
 		map[string]any{"profile": map[string]any{"name": "new"}},
 	)
+	if err != nil {
+		t.Fatalf("mergeData: %v", err)
+	}
 	profile, ok := merged["profile"].(map[string]any)
 	if !ok {
 		t.Fatalf("profile = %T, want map[string]any", merged["profile"])
@@ -97,7 +101,10 @@ func TestSOAPCall_MergeStrategies(t *testing.T) {
 	}
 
 	module.mergeStrategy = "replace"
-	replaced := module.mergeData(map[string]any{"id": "1", "name": "old"}, map[string]any{"name": "new"})
+	replaced, err := module.mergeData(map[string]any{"id": "1", "name": "old"}, map[string]any{"name": "new"})
+	if err != nil {
+		t.Fatalf("mergeData: %v", err)
+	}
 	if replaced["id"] != "1" || replaced["name"] != "new" {
 		t.Fatalf("unexpected replace result: %#v", replaced)
 	}
@@ -187,5 +194,121 @@ func TestSOAPCall_FaultPropagatesTypedError(t *testing.T) {
 	var fault *soapclient.SOAPFaultError
 	if !errors.As(err, &fault) {
 		t.Fatalf("expected SOAPFaultError, got %T: %v", err, err)
+	}
+}
+
+// TestSOAPCall_DataFieldListKeepsShape locks Story 25.3: a dataField resolving
+// to repeated XML elements lands under resultKey as a list, where soaputil used
+// to wrap it under an implicit "items" key that no YAML ever named.
+func TestSOAPCall_DataFieldListKeepsShape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/xml")
+		_, _ = w.Write([]byte(`<Envelope><Body><LookupResponse>` +
+			`<Contract><id>c1</id></Contract>` +
+			`<Contract><id>c2</id></Contract>` +
+			`</LookupResponse></Body></Envelope>`))
+	}))
+	defer server.Close()
+
+	module, err := NewSOAPCallFromConfig(SOAPCallConfig{
+		SOAPRequestBase: moduleconfig.SOAPRequestBase{
+			Endpoint:  server.URL,
+			Operation: "Lookup",
+			Body:      `<Lookup/>`,
+		},
+		DataField:     "Envelope.Body.LookupResponse.Contract",
+		MergeStrategy: "append",
+		ResultKey:     "contracts",
+	})
+	if err != nil {
+		t.Fatalf("NewSOAPCallFromConfig: %v", err)
+	}
+
+	out, err := module.Process(context.Background(), []map[string]any{{"id": "1"}})
+	if err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	contracts, ok := out[0]["contracts"].([]any)
+	if !ok {
+		t.Fatalf("contracts = %#v, want a list", out[0]["contracts"])
+	}
+	if len(contracts) != 2 {
+		t.Fatalf("expected 2 contracts, got %d: %#v", len(contracts), contracts)
+	}
+	if _, wrapped := out[0]["items"]; wrapped {
+		t.Error("response was wrapped under an implicit items key")
+	}
+}
+
+// TestSOAPCall_DataFieldScalarRejected locks that a scalar dataField is an
+// error traveling through onError, not a record enriched with {"value": …}.
+func TestSOAPCall_DataFieldScalarRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/xml")
+		_, _ = w.Write([]byte(`<Envelope><Body><LookupResponse><Total>7</Total></LookupResponse></Body></Envelope>`))
+	}))
+	defer server.Close()
+
+	module, err := NewSOAPCallFromConfig(SOAPCallConfig{
+		SOAPRequestBase: moduleconfig.SOAPRequestBase{
+			Endpoint:  server.URL,
+			Operation: "Lookup",
+			Body:      `<Lookup/>`,
+		},
+		DataField:     "Envelope.Body.LookupResponse.Total",
+		MergeStrategy: "append",
+		ResultKey:     "total",
+	})
+	if err != nil {
+		t.Fatalf("NewSOAPCallFromConfig: %v", err)
+	}
+
+	_, err = module.Process(context.Background(), []map[string]any{{"id": "1"}})
+	if err == nil {
+		t.Fatal("expected an error for a scalar dataField, got none")
+	}
+	// soap_call has no error type of its own, so the shared sentinel is what
+	// makes the failure routable — the same one http_call carries.
+	if !errors.Is(err, ErrCallResultType) {
+		t.Errorf("error does not carry ErrCallResultType: %v", err)
+	}
+	if errhandling.IsRetryable(err) {
+		t.Error("a deterministic shape failure must not be retryable")
+	}
+}
+
+// TestSOAPCall_DataFieldListRejectedByMerge locks that soap_call answers a list
+// under merge exactly like http_call does: one contract, one sentinel.
+func TestSOAPCall_DataFieldListRejectedByMerge(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/xml")
+		_, _ = w.Write([]byte(`<Envelope><Body><LookupResponse>` +
+			`<Contract><id>c1</id></Contract><Contract><id>c2</id></Contract>` +
+			`</LookupResponse></Body></Envelope>`))
+	}))
+	defer server.Close()
+
+	module, err := NewSOAPCallFromConfig(SOAPCallConfig{
+		SOAPRequestBase: moduleconfig.SOAPRequestBase{
+			Endpoint:  server.URL,
+			Operation: "Lookup",
+			Body:      `<Lookup/>`,
+		},
+		DataField:     "Envelope.Body.LookupResponse.Contract",
+		MergeStrategy: "merge",
+	})
+	if err != nil {
+		t.Fatalf("NewSOAPCallFromConfig: %v", err)
+	}
+
+	_, err = module.Process(context.Background(), []map[string]any{{"id": "1"}})
+	if err == nil {
+		t.Fatal("expected an error, got none")
+	}
+	if !errors.Is(err, ErrCallMergeStrategyMismatch) {
+		t.Errorf("error does not carry ErrCallMergeStrategyMismatch: %v", err)
+	}
+	if !strings.Contains(err.Error(), "mergeStrategy: append") {
+		t.Errorf("error does not point at the fix: %v", err)
 	}
 }

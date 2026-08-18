@@ -1,0 +1,44 @@
+name: http-call-datafield-list-loop
+version: 1.0.0
+description: Enrich each record with a list-shaped HTTP response, then iterate the list with the loop filter.
+tags:
+  - http-call
+  - data-field
+  - loop
+input:
+  type: httpPolling
+  schedule: "*/10 * * * *"
+  endpoint: https://source.example.com/api/orders
+  dataField: orders
+filters:
+  - type: http_call
+    endpoint: https://catalog.example.com/api/matches
+    method: GET
+    dataField: results
+    keys:
+      - field: reference
+        paramType: query
+        paramName: reference
+    mergeStrategy: append
+    resultKey: matches
+    cache:
+      enabled: true
+      maxSize: 1000
+      ttlSeconds: 300
+      key: "matches:{{record.reference}}"
+  - type: loop
+    field: matches
+    itemName: match
+    filters:
+      - type: mapping
+        mappings:
+          - source: match.productCode
+            target: match.sku
+      - type: remove
+        target:
+          - match.productCode
+output:
+  type: httpRequest
+  endpoint: https://destination.example.com/api/orders/matched
+  method: POST
+  requestMode: batch

@@ -38,7 +38,7 @@ Bugs autonomes, faible risque, aucun couplage avec la phase A. Parallélisables 
 | # | Story | Titre | Prérequis |
 |---|---|---|---|
 | 05 | [25.2](05-25.2-contrat-resultkey-filtres-appel.md) | Contrat unifié `resultKey` / `mergeStrategy` — **option A actée** | — |
-| 06 | [25.3](06-25.3-http-call-datafield-tableau.md) | `http_call` : `dataField` sur un tableau de plus d'un élément | 25.2 |
+| 06 | [25.3](06-25.3-http-call-datafield-tableau.md) | `http_call` : `dataField` sur un tableau de plus d'un élément — **option 1 actée** | 25.2 |
 | 07 | [25.6](07-25.6-output-database-dry-run.md) | Output `database` : pas d'aperçu en `--dry-run` et connexion ouverte quand même | — |
 
 **Pourquoi 25.2 avant 25.3** : la correction de `dataField` a besoin d'une destination configurable pour écrire un tableau multi-éléments. Sans `resultKey` sur `http_call`, on n'a nulle part où le mettre proprement.
@@ -184,6 +184,7 @@ La piste 2 n'a **aucun prérequis** : elle peut démarrer le même jour que la p
 | Story | Décision |
 |---|---|
 | 25.2 | **Option A** — `http_call` accepte `resultKey`, obligatoire dès `mergeStrategy: append` comme pour `soap_call`/`sql_call`. Aucun défaut implicite (`AC2` retiré : un défaut `_response` que la validation refuse serait inatteignable). Contraintes factorisées dans le schéma pour les 3 filtres. Pas de shim de compatibilité. |
+| 25.3 | **Option 1 seule** — un tableau est conservé tel quel sous `resultKey` et itéré par `loop` ; `merge`/`replace` sur un tableau remontent une erreur au runtime. Pas de champ `onMultiple` (ajoutable plus tard sans coût de migration). `AC6` tranché côté alignement : `soaputil.ValueAsRecordMap` et son enrobage implicite `items`/`value` sont supprimés, `soap_call` suit la même règle que `http_call` ; `soap_polling` reste inchangé. |
 
 ## Décisions encore ouvertes
 

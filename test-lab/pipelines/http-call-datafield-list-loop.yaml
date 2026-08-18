@@ -1,0 +1,49 @@
+name: http-call-datafield-list-loop
+version: 1.0.0
+description: Enrich product lines with a list-shaped dataField response, then iterate the list with loop.
+tags:
+  - test-lab
+  - http_call
+  - loop
+input:
+  type: httpPolling
+  schedule: "* * * * * *"
+  endpoint: http://localhost:18080/source/enrichment/products
+  dataField: products
+filters:
+  - type: http_call
+    endpoint: http://localhost:18080/enrichment/catalog
+    method: GET
+    dataField: results
+    keys:
+      - field: sku
+        paramType: query
+        paramName: sku
+    mergeStrategy: append
+    resultKey: matches
+    cache:
+      enabled: true
+      maxSize: 100
+      ttlSeconds: 60
+      key: "{{record.sku}}"
+  - type: loop
+    field: matches
+    itemName: match
+    filters:
+      - type: mapping
+        mappings:
+          - source: match.name
+            target: match.label
+      # Writes the *record's* line id into the item: if the list handed to two
+      # records sharing a cache slot were the same object, both would end up
+      # carrying whichever line was processed last (Story 25.3 review).
+      - type: mapping
+        mappings:
+          - source: record.line_id
+            target: match.owner
+output:
+  type: httpRequest
+  endpoint: http://localhost:18080/destination/enrichment/datafield-list
+  method: POST
+  headers:
+    Content-Type: application/json

@@ -37,12 +37,15 @@ const (
 
 // Error codes for http_call module
 const (
-	ErrCodeHTTPCallEndpointMissing = "HTTP_CALL_ENDPOINT_MISSING"
-	ErrCodeHTTPCallKeyMissing      = "HTTP_CALL_KEY_MISSING"
-	ErrCodeHTTPCallKeyInvalid      = "HTTP_CALL_KEY_INVALID"
-	ErrCodeHTTPCallKeyExtract      = "HTTP_CALL_KEY_EXTRACT"
-	ErrCodeHTTPCallHTTPError       = "HTTP_CALL_HTTP_ERROR"
-	ErrCodeHTTPCallJSONParse       = "HTTP_CALL_JSON_PARSE"
+	ErrCodeHTTPCallEndpointMissing  = "HTTP_CALL_ENDPOINT_MISSING"
+	ErrCodeHTTPCallKeyMissing       = "HTTP_CALL_KEY_MISSING"
+	ErrCodeHTTPCallKeyInvalid       = "HTTP_CALL_KEY_INVALID"
+	ErrCodeHTTPCallKeyExtract       = "HTTP_CALL_KEY_EXTRACT"
+	ErrCodeHTTPCallHTTPError        = "HTTP_CALL_HTTP_ERROR"
+	ErrCodeHTTPCallJSONParse        = "HTTP_CALL_JSON_PARSE"
+	ErrCodeHTTPCallDataFieldMissing = "HTTP_CALL_DATA_FIELD_MISSING"
+	ErrCodeHTTPCallDataFieldType    = "HTTP_CALL_DATA_FIELD_TYPE"
+	ErrCodeHTTPCallMergeMismatch    = "HTTP_CALL_MERGE_MISMATCH"
 )
 
 // Error messages
@@ -151,12 +154,19 @@ func (e *HTTPCallError) Unwrap() error { return e.Cause }
 // that is how a connection timeout stays a network error instead of being
 // reported as an unknown one.
 func (e *HTTPCallError) Classify() *errhandling.ClassifiedError {
-	if e.Code != ErrCodeHTTPCallJSONParse {
+	switch e.Code {
+	case ErrCodeHTTPCallJSONParse,
+		ErrCodeHTTPCallDataFieldMissing,
+		ErrCodeHTTPCallDataFieldType,
+		ErrCodeHTTPCallMergeMismatch:
+	default:
 		return nil
 	}
-	// The server answered, and answered something this filter cannot read.
-	// Replaying the same request gets the same body, so this is functional: the
-	// pipeline should route the record, not queue it for another cycle.
+	// The server answered, and answered something this filter cannot read — an
+	// unparsable body, or a dataField whose shape has no destination in the
+	// record. Replaying the same request gets the same body, so this is
+	// functional: the pipeline should route the record, not queue it for another
+	// cycle.
 	//
 	// No StatusCode is reported: the one this error carries is the *successful*
 	// response's (a 200 whose body turned out to be unusable), and a marker
@@ -504,16 +514,16 @@ func (m *HTTPCallModule) processRecord(ctx context.Context, record map[string]an
 	if m.cacheEnabled {
 		cacheKey = m.buildCacheKey(requestURL, keyValues, record)
 		if cachedData, found := m.cache.Get(cacheKey); found {
-			responseData, ok := cachedData.(map[string]any)
-			if ok {
-				logger.Debug("http_call cache hit",
-					slog.String("module_type", "http_call"),
-					slog.Int("record_index", recordIdx),
-					slog.Any("key_values", keyValues),
-				)
-				enrichedRecord := m.mergeData(record, responseData)
-				return enrichedRecord, true, nil
+			logger.Debug("http_call cache hit",
+				slog.String("module_type", "http_call"),
+				slog.Int("record_index", recordIdx),
+				slog.Any("key_values", keyValues),
+			)
+			enrichedRecord, mergeErr := m.mergeData(record, cachedData, recordIdx, keyValues)
+			if mergeErr != nil {
+				return nil, true, mergeErr
 			}
+			return enrichedRecord, true, nil
 		}
 	}
 
@@ -535,7 +545,10 @@ func (m *HTTPCallModule) processRecord(ctx context.Context, record map[string]an
 	}
 
 	// Merge data into record
-	enrichedRecord := m.mergeData(record, responseData)
+	enrichedRecord, err := m.mergeData(record, responseData, recordIdx, keyValues)
+	if err != nil {
+		return nil, false, err
+	}
 
 	return enrichedRecord, false, nil
 }
@@ -627,7 +640,7 @@ func (m *HTTPCallModule) compositeKeyString(keyValues map[string]string) string 
 }
 
 // fetchResponseData fetches data from the external API for the given key values and record.
-func (m *HTTPCallModule) fetchResponseData(ctx context.Context, requestURL string, keyValues map[string]string, recordIdx int, record map[string]any) (map[string]any, error) {
+func (m *HTTPCallModule) fetchResponseData(ctx context.Context, requestURL string, keyValues map[string]string, recordIdx int, record map[string]any) (any, error) {
 	// Build and execute HTTP request
 	body, statusCode, err := m.executeHTTPRequest(ctx, requestURL, keyValues, recordIdx, record)
 	if err != nil {
@@ -816,8 +829,10 @@ func (m *HTTPCallModule) buildHTTPRequest(ctx context.Context, requestURL string
 	return req, nil
 }
 
-// parseResponseData parses the JSON response and extracts the data field if configured.
-func (m *HTTPCallModule) parseResponseData(body []byte, statusCode int, recordIdx int) (map[string]any, error) {
+// parseResponseData parses the JSON response and extracts the data field if
+// configured. The result is not necessarily an object: a dataField pointing at
+// a list keeps its list shape (Story 25.3).
+func (m *HTTPCallModule) parseResponseData(body []byte, statusCode int, recordIdx int) (any, error) {
 	// Parse JSON response
 	var responseData map[string]any
 	if err := json.Unmarshal(body, &responseData); err != nil {
@@ -830,42 +845,63 @@ func (m *HTTPCallModule) parseResponseData(body []byte, statusCode int, recordId
 
 	// Extract data field if configured
 	if m.dataField != "" {
-		return m.extractDataField(responseData, recordIdx), nil
+		return m.extractDataField(responseData, recordIdx, statusCode)
 	}
 
 	return responseData, nil
 }
 
-// extractDataField extracts the configured data field from the response.
-// Returns an empty map if the field is not found or invalid.
-func (m *HTTPCallModule) extractDataField(responseData map[string]any, recordIdx int) map[string]any {
-	data, ok := responseData[m.dataField]
-	if !ok {
-		logger.Warn("http_call dataField not found or invalid",
+// extractDataField reads the configured dataField out of the response.
+//
+// Story 25.3 replaced a silent "return an empty map" fallback with three
+// distinct outcomes, because the old behavior lost data without ever tripping
+// onError:
+//   - the field is missing → error (the pipeline asked for a field the API did
+//     not send, which onError then arbitrates)
+//   - the field holds an object or a list → returned as-is, lists included,
+//     whatever their length. A list of one stays a list of one: silently
+//     unwrapping it is what made the shape depend on the payload.
+//   - the field holds a scalar or null → error, since neither can enrich a
+//     record
+//
+// The path is resolved with recordpath, so a nested dataField ("data.results")
+// works here exactly as it does in soap_call.
+func (m *HTTPCallModule) extractDataField(responseData map[string]any, recordIdx, statusCode int) (any, error) {
+	data, found := recordpath.Get(responseData, m.dataField)
+	if !found {
+		logger.Warn("http_call dataField missing from response",
 			slog.String("data_field", m.dataField),
 			slog.Int("record_index", recordIdx),
 		)
-		return make(map[string]any)
+		return nil, newHTTPCallError(
+			ErrCodeHTTPCallDataFieldMissing,
+			fmt.Sprintf("http_call dataField %q is missing from the response", m.dataField),
+			recordIdx, m.endpoint, statusCode, "",
+		)
 	}
 
-	// If dataField points to a map, return it
-	if dataMap, ok := data.(map[string]any); ok {
-		return dataMap
+	switch value := data.(type) {
+	case map[string]any:
+		return value, nil
+	case []any:
+		logger.Debug("http_call dataField resolved to a list",
+			slog.String("data_field", m.dataField),
+			slog.Int("record_index", recordIdx),
+			slog.Int("items", len(value)),
+		)
+		return value, nil
+	default:
+		logger.Warn("http_call dataField has an unexpected type",
+			slog.String("data_field", m.dataField),
+			slog.Int("record_index", recordIdx),
+			slog.String("type", fmt.Sprintf("%T", data)),
+		)
+		return nil, newHTTPCallError(
+			ErrCodeHTTPCallDataFieldType,
+			fmt.Sprintf("http_call dataField %q holds %T, expected an object or a list", m.dataField, data),
+			recordIdx, m.endpoint, statusCode, "",
+		).withCause(fmt.Errorf("%w: %T", ErrCallResultType, data), 0)
 	}
-
-	// If dataField points to an array with single element, use that
-	if dataArr, ok := data.([]any); ok && len(dataArr) == 1 {
-		if dataMap, ok := dataArr[0].(map[string]any); ok {
-			return dataMap
-		}
-	}
-
-	// dataField not an object - return empty
-	logger.Warn("http_call dataField not found or invalid",
-		slog.String("data_field", m.dataField),
-		slog.Int("record_index", recordIdx),
-	)
-	return make(map[string]any)
 }
 
 // applyQueryParams renders the module's static query parameters against the

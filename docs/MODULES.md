@@ -253,6 +253,31 @@ filters:
 
 See [examples/42-soap-call-enrichment.yaml](../examples/42-soap-call-enrichment.yaml).
 
+### `dataField` Of The Call Filters
+
+`http_call` and `soap_call` resolve `dataField` as a path into the response, and
+what sits at the end of that path decides the outcome.
+
+| The field holds | Outcome |
+| --- | --- |
+| An object | Merged, replaced, or nested per `mergeStrategy`. |
+| A non-empty list | Nested as-is under `resultKey`, any length — requires `mergeStrategy: append`. Iterate it with `loop`. |
+| An empty list | A functional "no match": `[]` under `resultKey` with `append`, record untouched under `merge`/`replace`. |
+| A scalar, `null`, or nothing | Error traveling through `onError`, classified as validation (never retried). |
+
+A list stays a list, an empty list is a functional "no match", and no key is
+invented on the pipeline's behalf.
+
+`dataField` is a `recordpath` expression, so `data.results` walks into `data`
+rather than reading a key literally named `data.results`.
+
+What a record receives is its own copy: with `cache.enabled` the response object
+is the one the LRU holds, so it is cloned on the way into the record. A `loop`
+mutating the items in place therefore touches neither the cache entry nor the
+other records sharing it.
+
+See [examples/30-http-call-datafield-list-loop.yaml](../examples/30-http-call-datafield-list-loop.yaml).
+
 ### Merge Contract Of The Call Filters
 
 `http_call`, `soap_call` and `sql_call` share one merge contract.

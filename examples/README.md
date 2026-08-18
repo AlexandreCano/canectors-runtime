@@ -48,6 +48,7 @@ Validate one example:
 | [27-loop-addressing-roots.yaml](27-loop-addressing-roots.yaml) | Loop addressing roots shared by templates and field paths |
 | [28-http-polling-state-odata-filter.yaml](28-http-polling-state-odata-filter.yaml) | Persisted state injected into an OData filter |
 | [29-call-filters-shared-merge-contract.yaml](29-call-filters-shared-merge-contract.yaml) | Same `mergeStrategy`/`resultKey` contract across `http_call`, `soap_call` and `sql_call` |
+| [30-http-call-datafield-list-loop.yaml](30-http-call-datafield-list-loop.yaml) | List-shaped `dataField` response iterated with `loop` |
 | [40-soap-polling-basic-v11.yaml](40-soap-polling-basic-v11.yaml) | SOAP 1.1 polling input |
 | [40b-soap-polling-basic-v12.yaml](40b-soap-polling-basic-v12.yaml) | SOAP 1.2 polling input |
 | [41-soap-polling-cursor.yaml](41-soap-polling-cursor.yaml) | Cursor pagination in a SOAP body |

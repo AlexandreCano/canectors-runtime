@@ -494,60 +494,15 @@ func (m orderedMap) MarshalJSON() ([]byte, error) {
 	return []byte(buf.String()), nil
 }
 
-// mergeData merges query result into the record.
+// mergeData merges the query result into the record. sql_call always folds a
+// single row, so the shared contract cannot fail here — a query returning no
+// row leaves the record untouched, which is a legitimate outcome rather than
+// an error.
 func (m *SQLCallModule) mergeData(record, result map[string]any) map[string]any {
 	if result == nil {
 		return record
 	}
-
-	switch m.mergeStrategy {
-	case mergeStrategyMerge:
-		return deepMerge(record, result)
-	case mergeStrategyReplace:
-		merged := make(map[string]any)
-		for k, v := range record {
-			merged[k] = v
-		}
-		for k, v := range result {
-			merged[k] = v
-		}
-		return merged
-	case mergeStrategyAppend:
-		merged := make(map[string]any)
-		for k, v := range record {
-			merged[k] = v
-		}
-		merged[m.resultKey] = result
-		return merged
-	default:
-		// Construction validates mergeStrategy strictly, so this is unreachable;
-		// falling back to the default strategy keeps the three call filters
-		// aligned rather than making sql_call the only one that panics.
-		return deepMerge(record, result)
-	}
-}
-
-// deepMerge performs a deep merge of two maps.
-func deepMerge(a, b map[string]any) map[string]any {
-	result := make(map[string]any)
-
-	for k, v := range a {
-		result[k] = v
-	}
-
-	for k, vb := range b {
-		if va, exists := result[k]; exists {
-			if mapA, okA := va.(map[string]any); okA {
-				if mapB, okB := vb.(map[string]any); okB {
-					result[k] = deepMerge(mapA, mapB)
-					continue
-				}
-			}
-		}
-		result[k] = vb
-	}
-
-	return result
+	return mergeCallMap(m.mergeStrategy, m.resultKey, record, result)
 }
 
 // GetCacheStats returns cache statistics.
