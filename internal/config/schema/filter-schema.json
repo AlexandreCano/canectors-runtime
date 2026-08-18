@@ -211,9 +211,37 @@
 			]
 		},
 
+		"callFilterMergeConstraints": {
+			"type": "object",
+			"description": "Merge contract shared by the three call filters (http_call, soap_call, sql_call). Story 25.2: the verbs and the append constraint are declared once so they cannot drift apart between modules.",
+			"properties": {
+				"mergeStrategy": {
+					"type": "string",
+					"description": "How to merge the call response with the input record. merge: deep-merge the response into the record. replace: overwrite the record's top-level keys with the response ones. append: nest the whole response under resultKey.",
+					"enum": [
+						"merge",
+						"replace",
+						"append"
+					],
+					"default": "merge"
+				},
+				"resultKey": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Record key receiving the whole response with mergeStrategy: append. Required as soon as mergeStrategy is append, for the three call filters alike; ignored by the merge and replace strategies."
+				}
+			},
+			"if": {
+				"properties": { "mergeStrategy": { "const": "append" } },
+				"required": ["mergeStrategy"]
+			},
+			"then": { "required": ["resultKey"] }
+		},
+
 		"httpCallFilterConfig": {
 			"allOf": [
 				{ "$ref": "common-schema.json#/$defs/httpRequestBase" },
+				{ "$ref": "#/$defs/callFilterMergeConstraints" },
 				{
 					"type": "object",
 					"description": "HTTP call filter module configuration. Makes HTTP requests to external APIs for record enrichment.",
@@ -230,16 +258,6 @@
 						},
 						"cache": {
 							"$ref": "#/$defs/cacheConfig"
-						},
-						"mergeStrategy": {
-							"type": "string",
-							"description": "How to merge HTTP response with input records.",
-							"enum": [
-								"merge",
-								"replace",
-								"append"
-							],
-							"default": "merge"
 						},
 						"dataField": {
 							"type": "string",
@@ -271,6 +289,7 @@
 		"soapCallFilterConfig": {
 			"allOf": [
 				{ "$ref": "common-schema.json#/$defs/soapRequestBase" },
+				{ "$ref": "#/$defs/callFilterMergeConstraints" },
 				{
 					"type": "object",
 					"description": "SOAP call filter module configuration. Makes SOAP requests to external APIs for record enrichment.",
@@ -285,21 +304,6 @@
 						"cache": {
 							"$ref": "#/$defs/cacheConfig"
 						},
-						"mergeStrategy": {
-							"type": "string",
-							"description": "How to merge SOAP response with input records.",
-							"enum": [
-								"merge",
-								"replace",
-								"append"
-							],
-							"default": "merge"
-						},
-						"resultKey": {
-							"type": "string",
-							"minLength": 1,
-							"description": "Key for storing the SOAP response when append mode is used."
-						},
 						"dataField": {
 							"type": "string",
 							"description": "Field path to extract from the parsed SOAP response map before merge/replace/append. When omitted, the full parsed SOAP response is used."
@@ -308,13 +312,6 @@
 							"$ref": "common-schema.json#/$defs/retryConfig"
 						}
 					}
-				},
-				{
-					"if": {
-						"properties": { "mergeStrategy": { "const": "append" } },
-						"required": ["mergeStrategy"]
-					},
-					"then": { "required": ["resultKey"] }
 				}
 			]
 		},
@@ -324,33 +321,12 @@
 			"description": "SQL call filter module configuration. Executes SQL queries for record enrichment.",
 			"allOf": [
 				{ "$ref": "common-schema.json#/$defs/sqlRequestBase" },
-				{
-					"if": {
-						"properties": { "mergeStrategy": { "const": "append" } },
-						"required": ["mergeStrategy"]
-					},
-					"then": { "required": ["resultKey"] }
-				},
+				{ "$ref": "#/$defs/callFilterMergeConstraints" },
 				{
 					"not": { "required": ["retry"] }
 				}
 			],
 			"properties": {
-				"mergeStrategy": {
-					"type": "string",
-					"description": "How to merge query results with input records.",
-					"enum": [
-						"merge",
-						"replace",
-						"append"
-					],
-					"default": "merge"
-				},
-				"resultKey": {
-					"type": "string",
-					"minLength": 1,
-					"description": "Key for storing result in append mode."
-				},
 				"cache": {
 					"$ref": "#/$defs/cacheConfig"
 				}

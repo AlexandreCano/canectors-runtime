@@ -19,6 +19,7 @@ filters:
         paramType: header
         paramName: X-Customer-Id
     mergeStrategy: append
+    resultKey: permissions_lookup
     cache:
       enabled: true
       maxSize: 100

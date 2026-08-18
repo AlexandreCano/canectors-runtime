@@ -29,7 +29,6 @@ const (
 	defaultSQLCallTimeout   = 30 * time.Second
 	defaultSQLCallCacheSize = 1000
 	defaultSQLCallCacheTTL  = 300 // 5 minutes
-	defaultSQLCallStrategy  = "merge"
 )
 
 // SQLCallConfig represents the configuration for a sql_call filter module.
@@ -72,18 +71,10 @@ func NewSQLCallFromConfig(config SQLCallConfig) (*SQLCallModule, error) {
 		return nil, err
 	}
 
-	mergeStrategy, err := resolveMergeStrategy(config.MergeStrategy)
+	mergeStrategy, resultKey, err := resolveCallMergeContract(
+		"sql_call", config.MergeStrategy, config.ResultKey)
 	if err != nil {
 		return nil, err
-	}
-	if mergeStrategy == "append" && config.ResultKey == "" {
-		return nil, fmt.Errorf("sql_call: resultKey is required when mergeStrategy is 'append'")
-	}
-	// resultKey writes straight into the record, so it can reach the reserved
-	// error list just as set and mapping can — and overwriting it would let a
-	// pipeline erase the runtime's own trace of what failed.
-	if reservedErr := errhandling.ValidateRecordTarget(config.ResultKey); reservedErr != nil {
-		return nil, fmt.Errorf("sql_call: %w", reservedErr)
 	}
 
 	engine := templateEngine
@@ -120,7 +111,7 @@ func NewSQLCallFromConfig(config SQLCallConfig) (*SQLCallModule, error) {
 		query:         config.Query,
 		sqlQuery:      sqlQuery,
 		mergeStrategy: mergeStrategy,
-		resultKey:     config.ResultKey,
+		resultKey:     resultKey,
 		onError:       onError,
 		cache:         cache,
 		cacheEnabled:  cacheEnabled,
@@ -157,22 +148,6 @@ func loadQueryFromFile(config *SQLCallConfig) error {
 
 	config.Query = string(queryBytes)
 	return nil
-}
-
-// resolveMergeStrategy returns the merge strategy with default if empty.
-// Returns an error if the value is not one of the canonical strategies
-// (merge|replace|append). This enforces the schema contract at runtime so
-// constructors built from raw configs (tests, in-process) fail fast instead
-// of silently falling back to merge.
-func resolveMergeStrategy(strategy string) (string, error) {
-	switch strategy {
-	case "":
-		return defaultSQLCallStrategy, nil
-	case "merge", "replace", "append":
-		return strategy, nil
-	default:
-		return "", fmt.Errorf("sql_call: invalid mergeStrategy %q (expected one of: merge, replace, append)", strategy)
-	}
 }
 
 // createDatabaseConnection creates and opens a database connection.
@@ -526,9 +501,9 @@ func (m *SQLCallModule) mergeData(record, result map[string]any) map[string]any 
 	}
 
 	switch m.mergeStrategy {
-	case "merge":
+	case mergeStrategyMerge:
 		return deepMerge(record, result)
-	case "replace":
+	case mergeStrategyReplace:
 		merged := make(map[string]any)
 		for k, v := range record {
 			merged[k] = v
@@ -537,7 +512,7 @@ func (m *SQLCallModule) mergeData(record, result map[string]any) map[string]any 
 			merged[k] = v
 		}
 		return merged
-	case "append":
+	case mergeStrategyAppend:
 		merged := make(map[string]any)
 		for k, v := range record {
 			merged[k] = v
@@ -545,9 +520,10 @@ func (m *SQLCallModule) mergeData(record, result map[string]any) map[string]any 
 		merged[m.resultKey] = result
 		return merged
 	default:
-		// Construction validates mergeStrategy strictly; reaching this branch
-		// means the strategy was mutated after construction.
-		panic(fmt.Sprintf("sql_call: unreachable mergeStrategy %q", m.mergeStrategy))
+		// Construction validates mergeStrategy strictly, so this is unreachable;
+		// falling back to the default strategy keeps the three call filters
+		// aligned rather than making sql_call the only one that panics.
+		return deepMerge(record, result)
 	}
 }
 

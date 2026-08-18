@@ -30,10 +30,9 @@ import (
 
 // Default configuration values for http_call module
 const (
-	defaultHTTPCallTimeout  = 30 * time.Second
-	defaultCacheMaxSize     = 1000
-	defaultCacheTTLSeconds  = 300 // 5 minutes
-	defaultHTTPCallStrategy = "merge"
+	defaultHTTPCallTimeout = 30 * time.Second
+	defaultCacheMaxSize    = 1000
+	defaultCacheTTLSeconds = 300 // 5 minutes
 )
 
 // Error codes for http_call module
@@ -66,6 +65,9 @@ type HTTPCallConfig struct {
 	Cache moduleconfig.CacheConfig `json:"cache"`
 	// MergeStrategy defines how to merge response data: "merge" (default), "replace", "append"
 	MergeStrategy string `json:"mergeStrategy"`
+	// ResultKey names the record key receiving the whole response with
+	// mergeStrategy "append". Required as soon as the strategy is "append".
+	ResultKey string `json:"resultKey,omitempty"`
 	// Retry defines the retry policy for the HTTP call (optional).
 	Retry *connector.RetryConfig `json:"retry,omitempty"`
 	// ErrorClassification restates what given status codes mean for this API,
@@ -95,6 +97,7 @@ type HTTPCallModule struct {
 	cache            cache.Cache
 	cacheEnabled     bool
 	mergeStrategy    string
+	resultKey        string
 	dataField        string
 	onError          errhandling.OnErrorStrategy
 	headers          map[string]string
@@ -233,6 +236,7 @@ func (e *HTTPCallError) withCause(cause error, attempts int) *HTTPCallError {
 //   - auth: Authentication configuration
 //   - cache: Cache configuration (enabled, maxSize, ttlSeconds, key)
 //   - mergeStrategy: How to merge data ("merge", "replace", "append")
+//   - resultKey: Record key receiving the response with "append" (required then)
 //   - dataField: JSON field containing the data array
 //   - onError: Error handling mode ("fail", "skip", "log")
 //   - timeoutMs: Request timeout in milliseconds
@@ -259,7 +263,8 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 		}
 	}
 
-	mergeStrategy, err := normalizeHTTPCallMergeStrategy(config.MergeStrategy)
+	mergeStrategy, resultKey, err := resolveCallMergeContract(
+		"http_call", config.MergeStrategy, config.ResultKey)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +348,7 @@ func NewHTTPCallFromConfig(config HTTPCallConfig) (*HTTPCallModule, error) {
 		cache:            lruCache,
 		cacheEnabled:     cacheEnabled,
 		mergeStrategy:    mergeStrategy,
+		resultKey:        resultKey,
 		dataField:        config.DataField,
 		onError:          onError,
 		headers:          config.Headers,

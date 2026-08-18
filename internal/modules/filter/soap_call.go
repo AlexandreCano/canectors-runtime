@@ -58,18 +58,10 @@ func NewSOAPCallFromConfig(config SOAPCallConfig) (*SOAPCallModule, error) {
 	if err := validateKeyEntries(config.Keys); err != nil {
 		return nil, err
 	}
-	mergeStrategy, err := normalizeMergeStrategy("soap_call", config.MergeStrategy)
+	mergeStrategy, resultKey, err := resolveCallMergeContract(
+		"soap_call", config.MergeStrategy, config.ResultKey)
 	if err != nil {
 		return nil, err
-	}
-	if mergeStrategy == "append" && strings.TrimSpace(config.ResultKey) == "" {
-		return nil, fmt.Errorf("soap_call resultKey is required when mergeStrategy is append")
-	}
-	// resultKey writes straight into the record, so it can reach the reserved
-	// error list just as set and mapping can — and overwriting it would let a
-	// pipeline erase the runtime's own trace of what failed.
-	if reservedErr := errhandling.ValidateRecordTarget(strings.TrimSpace(config.ResultKey)); reservedErr != nil {
-		return nil, fmt.Errorf("soap_call: %w", reservedErr)
 	}
 	onError, err := errhandling.ParseOnErrorStrategy(config.OnError)
 	if err != nil {
@@ -114,7 +106,7 @@ func NewSOAPCallFromConfig(config SOAPCallConfig) (*SOAPCallModule, error) {
 		keys:          keys,
 		dataField:     config.DataField,
 		mergeStrategy: mergeStrategy,
-		resultKey:     config.ResultKey,
+		resultKey:     resultKey,
 		onError:       onError,
 		httpClient:    httpClient,
 		soapClient:    soapclient.NewClient(httpClient),
@@ -254,7 +246,7 @@ func (m *SOAPCallModule) buildCacheKey(keyValues map[string]string, record map[s
 
 func (m *SOAPCallModule) mergeData(record, responseData map[string]any) map[string]any {
 	switch m.mergeStrategy {
-	case "replace":
+	case mergeStrategyReplace:
 		result := make(map[string]any, len(record)+len(responseData))
 		for k, v := range record {
 			result[k] = v
@@ -263,7 +255,7 @@ func (m *SOAPCallModule) mergeData(record, responseData map[string]any) map[stri
 			result[k] = v
 		}
 		return result
-	case "append":
+	case mergeStrategyAppend:
 		result := make(map[string]any, len(record)+1)
 		for k, v := range record {
 			result[k] = v

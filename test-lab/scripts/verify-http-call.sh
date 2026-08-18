@@ -70,8 +70,8 @@ run_pipeline "$PIPELINES_DIR/http-call-header-append.yaml"
 records=$(batch_records /destination/enrichment/http-append)
 assert_eq "header: 3 unique X-Customer-Id requests (cache hit on duplicates)" 3 \
   "$(curl -fsS "$WIREMOCK_BASE/__admin/requests" | jq '[.requests[] | select(.request.url=="/enrichment/by-header" and ((.request.headers["X-Customer-Id"] // "") != ""))] | length')"
-assert_eq "header: ORD-A1 has _response.permissions[0]=read" "read" \
-  "$(echo "$records" | jq -r '.[] | select(.order_id=="ORD-A1") | ._response.permissions[0]')"
+assert_eq "header: ORD-A1 has permissions_lookup.permissions[0]=read" "read" \
+  "$(echo "$records" | jq -r '.[] | select(.order_id=="ORD-A1") | .permissions_lookup.permissions[0]')"
 
 echo "[scenario] http-call-post-template"
 reset_journal

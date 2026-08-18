@@ -554,6 +554,7 @@ func TestHTTPCallModule_Process(t *testing.T) {
 				ParamName: "id",
 			}},
 			MergeStrategy: "append",
+			ResultKey:     "enrichment",
 		}
 
 		module, err := NewHTTPCallFromConfig(config)
@@ -570,10 +571,10 @@ func TestHTTPCallModule_Process(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		// Enrichment data should be under _response key
-		enrichment, ok := result[0]["_response"].(map[string]any)
+		// Enrichment data should be under the configured resultKey
+		enrichment, ok := result[0]["enrichment"].(map[string]any)
 		if !ok {
-			t.Fatal("expected _response to be a map")
+			t.Fatal("expected enrichment to be a map")
 		}
 		if enrichment["enrichedData"] != "value" {
 			t.Errorf("expected enrichedData 'value', got %v", enrichment["enrichedData"])

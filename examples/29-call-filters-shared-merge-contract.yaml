@@ -1,0 +1,64 @@
+name: call-filters-shared-merge-contract
+version: 1.0.0
+description: The three call filters share one merge contract - mergeStrategy append nests the whole response under resultKey.
+tags:
+  - http-call
+  - soap-call
+  - sql-call
+  - append
+input:
+  type: httpPolling
+  schedule: "*/15 * * * *"
+  endpoint: https://source.example.com/api/orders
+  dataField: orders
+filters:
+  - type: http_call
+    endpoint: https://crm.example.com/api/customers
+    method: GET
+    keys:
+      - field: customerId
+        paramType: query
+        paramName: id
+    mergeStrategy: append
+    resultKey: customer
+    cache:
+      enabled: true
+      maxSize: 1000
+      ttlSeconds: 300
+      key: "customer:{{record.customerId}}"
+  - type: soap_call
+    endpoint: https://erp.example.com/contracts
+    soapAction: urn:GetContract
+    operation: GetContract
+    body: |
+      <m:GetContract xmlns:m="urn:contracts">
+        <m:CustomerId>{{record.customerId}}</m:CustomerId>
+      </m:GetContract>
+    dataField: Envelope.Body.GetContractResponse.Contract
+    mergeStrategy: append
+    resultKey: contract
+    cache:
+      enabled: true
+      maxSize: 1000
+      ttlSeconds: 300
+      key: "contract:{{record.customerId}}"
+  - type: sql_call
+    connectionStringRef: ${REFERENCE_DATABASE_URL}
+    driver: postgres
+    query: SELECT tier, discount FROM pricing WHERE customer_id = $1
+    parameters:
+      - record.customerId
+    mergeStrategy: append
+    resultKey: pricing
+    cache:
+      enabled: true
+      maxSize: 1000
+      ttlSeconds: 300
+      key: "pricing:{{record.customerId}}"
+output:
+  type: httpRequest
+  endpoint: https://destination.example.com/api/orders/enriched
+  method: POST
+  requestMode: batch
+  headers:
+    Content-Type: application/json

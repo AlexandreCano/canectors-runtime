@@ -8,7 +8,7 @@ import (
 // configured mergeStrategy ("merge", "replace", or "append").
 func (m *HTTPCallModule) mergeData(record, responseData map[string]any) map[string]any {
 	switch m.mergeStrategy {
-	case "replace":
+	case mergeStrategyReplace:
 		result := make(map[string]any, len(record)+len(responseData))
 		for k, v := range record {
 			result[k] = v
@@ -17,12 +17,12 @@ func (m *HTTPCallModule) mergeData(record, responseData map[string]any) map[stri
 			result[k] = v
 		}
 		return result
-	case "append":
+	case mergeStrategyAppend:
 		result := make(map[string]any, len(record)+1)
 		for k, v := range record {
 			result[k] = v
 		}
-		result["_response"] = responseData
+		result[m.resultKey] = responseData
 		return result
 	default:
 		return m.deepMerge(record, responseData)
