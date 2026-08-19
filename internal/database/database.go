@@ -68,36 +68,73 @@ type Config struct {
 	ConnectTimeout time.Duration
 }
 
-// Open creates a new database connection pool with the given configuration.
-// Uses the standard database/sql package for connection pooling.
-func Open(cfg Config) (*sql.DB, string, error) {
-	// Resolve connection string from environment variable if specified
+// Resolved holds everything needed to open a connection, obtained without any
+// I/O. Splitting it out lets a caller validate its configuration — and compile
+// driver-specific SQL — without opening a connection, which is what dry-run
+// needs (Story 25.6).
+type Resolved struct {
+	// ConnString is the connection string after ${VAR} resolution.
+	ConnString string
+
+	// Driver is the resolved, supported driver name (postgres, mysql, sqlite).
+	Driver string
+}
+
+// Resolve resolves the connection string and the driver without contacting the
+// database. It reports the same configuration errors Open would report before
+// dialing: a missing connection string, an undetectable or unsupported driver.
+func Resolve(cfg Config) (Resolved, error) {
 	connString, err := ResolveConnectionString(cfg.ConnectionString, cfg.ConnectionStringRef)
 	if err != nil {
-		return nil, "", err
+		return Resolved{}, err
 	}
 
-	// Detect driver if not specified
 	driver := cfg.Driver
 	if driver == "" {
 		driver, err = DetectDriver(connString)
 		if err != nil {
-			return nil, "", err
+			return Resolved{}, err
 		}
 	}
 
-	// Validate driver is supported
 	if !IsDriverSupported(driver) {
-		return nil, "", fmt.Errorf("%w: %s", ErrUnsupportedDriver, driver)
+		return Resolved{}, fmt.Errorf("%w: %s", ErrUnsupportedDriver, driver)
 	}
 
+	return Resolved{ConnString: connString, Driver: driver}, nil
+}
+
+// Open creates a new database connection pool with the given configuration.
+// Uses the standard database/sql package for connection pooling.
+//
+// It is for callers that open in a constructor and have no context to offer; a
+// caller holding one should use Resolve and OpenResolved so a cancellation
+// interrupts the connection attempt.
+func Open(cfg Config) (*sql.DB, string, error) {
+	resolved, err := Resolve(cfg)
+	if err != nil {
+		return nil, "", err
+	}
+	db, err := OpenResolved(context.Background(), cfg, resolved)
+	if err != nil {
+		return nil, "", err
+	}
+	return db, resolved.Driver, nil
+}
+
+// OpenResolved opens and validates the connection pool for an already-resolved
+// configuration. It is the only step that touches the network.
+//
+// The connect timeout bounds ctx rather than replacing it: a canceled run must
+// stop waiting on an unreachable host instead of sitting out the full timeout.
+func OpenResolved(ctx context.Context, cfg Config, resolved Resolved) (*sql.DB, error) {
 	// Get the actual driver name for sql.Open
-	driverName := GetDriverName(driver)
+	driverName := GetDriverName(resolved.Driver)
 
 	// Open database connection
-	db, err := sql.Open(driverName, connString)
+	db, err := sql.Open(driverName, resolved.ConnString)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %w", ErrConnectionFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrConnectionFailed, err)
 	}
 
 	// Configure connection pool
@@ -108,16 +145,16 @@ func Open(cfg Config) (*sql.DB, string, error) {
 	if timeout <= 0 {
 		timeout = DefaultConnectTimeout
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	pingCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := db.PingContext(pingCtx); err != nil {
 		_ = db.Close()
-		return nil, "", fmt.Errorf("%w: ping failed: %w", ErrConnectionFailed, err)
+		return nil, fmt.Errorf("%w: ping failed: %w", ErrConnectionFailed, err)
 	}
 
 	logger.Debug("database connection established",
-		"driver", driver,
+		"driver", resolved.Driver,
 		"max_open_conns", cfg.MaxOpenConns,
 		"max_idle_conns", cfg.MaxIdleConns,
 	)
@@ -125,7 +162,7 @@ func Open(cfg Config) (*sql.DB, string, error) {
 	// Log connection pool stats for monitoring
 	stats := db.Stats()
 	logger.Debug("database connection pool stats",
-		"driver", driver,
+		"driver", resolved.Driver,
 		"open_connections", stats.OpenConnections,
 		"in_use", stats.InUse,
 		"idle", stats.Idle,
@@ -133,7 +170,7 @@ func Open(cfg Config) (*sql.DB, string, error) {
 		"wait_duration", stats.WaitDuration,
 	)
 
-	return db, driver, nil
+	return db, nil
 }
 
 // applyPoolConfig configures the connection pool with defaults.
@@ -237,20 +274,48 @@ func GetDriverName(driver string) string {
 	}
 }
 
-// SanitizeConnectionString removes sensitive information from the connection string for logging.
+// redactedPlaceholder replaces a password wherever a connection string is shown.
+const redactedPlaceholder = "[REDACTED]"
+
+// mysqlDSNPassword matches the password of a MySQL DSN, the one supported form
+// url.Parse cannot read a userinfo out of.
+// Format: user:pass@tcp(host:port)/db
+var mysqlDSNPassword = regexp.MustCompile(`^([^:]+):([^@]+)@`)
+
+// dsnSecretKeyValue matches a secret carried as a key=value pair, whether in a
+// libpq DSN (`password=s3cret dbname=db`), a query string (`?password=s3cret`),
+// or a sqlite URI (`?_pragma_key=…`). libpq allows quoted values, so those are
+// matched whole rather than cut at the first space.
+//
+// A regexp rather than a DSN parser: each driver has its own (pgconn, mysql,
+// modernc/sqlite), none of them masks, and running the right one per driver
+// would mean re-detecting and re-parsing a string we only want to display.
+var dsnSecretKeyValue = regexp.MustCompile(`(?i)\b(password|passwd|pwd|_pragma_key|_auth_pass|_auth_crypt)=('[^']*'|"[^"]*"|[^\s&;]*)`)
+
+// SanitizeConnectionString removes sensitive information from the connection
+// string, for logs and for the dry-run preview.
 func SanitizeConnectionString(connString string) string {
+	masked := connString
+
 	// Try parsing as URL
-	u, err := url.Parse(connString)
-	if err == nil && u.User != nil {
-		// Mask password in URL
-		u.User = url.UserPassword(u.User.Username(), "[REDACTED]")
-		return u.String()
+	if u, err := url.Parse(connString); err == nil && u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			// Mask password in URL
+			u.User = url.UserPassword(u.User.Username(), redactedPlaceholder)
+			// url.String percent-encodes the userinfo, turning the placeholder into
+			// %5BREDACTED%5D. Undo it on the placeholder only — this preview is read
+			// by a human, and the encoded form reads like part of the password.
+			masked = strings.Replace(u.String(), url.PathEscape(redactedPlaceholder), redactedPlaceholder, 1)
+		}
+		// A DSN url.Parse read a userinfo out of never needs the MySQL fallback:
+		// its password, if it has one, is masked above. Applying the fallback
+		// anyway would turn a passwordless `postgres://user@host/db` into
+		// `postgres:[REDACTED]@...` — a password the DSN does not even carry.
+		return dsnSecretKeyValue.ReplaceAllString(masked, "$1="+redactedPlaceholder)
 	}
 
-	// For MySQL DSN format, mask password
-	// Format: user:pass@tcp(host:port)/db
-	re := regexp.MustCompile(`^([^:]+):([^@]+)@`)
-	return re.ReplaceAllString(connString, "$1:[REDACTED]@")
+	masked = mysqlDSNPassword.ReplaceAllString(masked, "$1:"+redactedPlaceholder+"@")
+	return dsnSecretKeyValue.ReplaceAllString(masked, "$1="+redactedPlaceholder)
 }
 
 // PlaceholderStyle represents the SQL parameter placeholder style.

@@ -1308,10 +1308,10 @@ type MockPreviewableOutputModule struct {
 	closed           bool
 	previewErr       error
 	previewRecords   []map[string]any
-	previewResponses []output.RequestPreview
+	previewResponses []connector.OperationPreview
 }
 
-func NewMockPreviewableOutputModule(previewResponses []output.RequestPreview) *MockPreviewableOutputModule {
+func NewMockPreviewableOutputModule(previewResponses []connector.OperationPreview) *MockPreviewableOutputModule {
 	return &MockPreviewableOutputModule{
 		previewResponses: previewResponses,
 	}
@@ -1331,7 +1331,7 @@ func (m *MockPreviewableOutputModule) Close() error {
 	return nil
 }
 
-func (m *MockPreviewableOutputModule) PreviewRequest(records []map[string]any, _ output.PreviewOptions) ([]output.RequestPreview, error) {
+func (m *MockPreviewableOutputModule) PreviewOperations(records []map[string]any, _ output.PreviewOptions) ([]connector.OperationPreview, error) {
 	m.previewCalled = true
 	m.previewRecords = records
 	if m.previewErr != nil {
@@ -1351,13 +1351,16 @@ func TestExecutor_DryRun_CallsPreview(t *testing.T) {
 	}
 	mockInput := NewMockInputModule(inputData, nil)
 
-	expectedPreviews := []output.RequestPreview{
+	expectedPreviews := []connector.OperationPreview{
 		{
-			Endpoint:    "https://api.example.com/data",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
-			BodyPreview: `[{"id":"1","name":"Test 1"},{"id":"2","name":"Test 2"}]`,
+			Kind:        connector.PreviewKindHTTP,
 			RecordCount: 2,
+			HTTP: &connector.HTTPPreview{
+				Endpoint:    "https://api.example.com/data",
+				Method:      "POST",
+				Headers:     map[string]string{"Content-Type": "application/json"},
+				BodyPreview: `[{"id":"1","name":"Test 1"},{"id":"2","name":"Test 2"}]`,
+			},
 		},
 	}
 	mockOutput := NewMockPreviewableOutputModule(expectedPreviews)
@@ -1386,7 +1389,7 @@ func TestExecutor_DryRun_CallsPreview(t *testing.T) {
 
 	// Preview should be called in dry-run mode
 	if !mockOutput.previewCalled {
-		t.Error("PreviewRequest() should be called in dry-run mode")
+		t.Error("PreviewOperations() should be called in dry-run mode")
 	}
 
 	// Send should NOT be called in dry-run mode
@@ -1396,7 +1399,7 @@ func TestExecutor_DryRun_CallsPreview(t *testing.T) {
 
 	// Preview should receive the processed records
 	if len(mockOutput.previewRecords) != 2 {
-		t.Errorf("PreviewRequest() received %d records, expected 2", len(mockOutput.previewRecords))
+		t.Errorf("PreviewOperations() received %d records, expected 2", len(mockOutput.previewRecords))
 	}
 
 	// Result should contain preview information
@@ -1409,8 +1412,8 @@ func TestExecutor_DryRun_CallsPreview(t *testing.T) {
 		t.Errorf("Expected 1 preview, got %d", len(result.DryRunPreview))
 	}
 
-	if result.DryRunPreview[0].Endpoint != "https://api.example.com/data" {
-		t.Errorf("Expected endpoint 'https://api.example.com/data', got '%s'", result.DryRunPreview[0].Endpoint)
+	if result.DryRunPreview[0].HTTP.Endpoint != "https://api.example.com/data" {
+		t.Errorf("Expected endpoint 'https://api.example.com/data', got '%s'", result.DryRunPreview[0].HTTP.Endpoint)
 	}
 }
 
@@ -1438,13 +1441,16 @@ func TestExecutor_DryRun_WithFilters_CallsPreview(t *testing.T) {
 	})
 
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
 		{
-			Endpoint:    "https://api.example.com/data",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
-			BodyPreview: `[{"id":"1","value":20},{"id":"2","value":40}]`,
+			Kind:        connector.PreviewKindHTTP,
 			RecordCount: 2,
+			HTTP: &connector.HTTPPreview{
+				Endpoint:    "https://api.example.com/data",
+				Method:      "POST",
+				Headers:     map[string]string{"Content-Type": "application/json"},
+				BodyPreview: `[{"id":"1","value":20},{"id":"2","value":40}]`,
+			},
 		},
 	})
 
@@ -1473,7 +1479,7 @@ func TestExecutor_DryRun_WithFilters_CallsPreview(t *testing.T) {
 
 	// Preview should receive FILTERED records (doubled values)
 	if len(mockOutput.previewRecords) != 2 {
-		t.Fatalf("PreviewRequest() received %d records, expected 2", len(mockOutput.previewRecords))
+		t.Fatalf("PreviewOperations() received %d records, expected 2", len(mockOutput.previewRecords))
 		return
 	}
 
@@ -1570,7 +1576,7 @@ func TestExecutor_DryRun_PreviewError_ReportsError(t *testing.T) {
 
 	// Preview should have been attempted
 	if !mockOutput.previewCalled {
-		t.Error("PreviewRequest() should be called even if it will fail")
+		t.Error("PreviewOperations() should be called even if it will fail")
 	}
 
 	// The error should be captured but not fail the execution
@@ -1585,11 +1591,14 @@ func TestExecutor_DryRun_RecordsProcessedCount(t *testing.T) {
 		{"id": "3"},
 	}
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
 		{
-			Endpoint:    "https://api.example.com/data",
-			Method:      "POST",
+			Kind:        connector.PreviewKindHTTP,
 			RecordCount: 3,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com/data",
+				Method:   "POST",
+			},
 		},
 	})
 
@@ -1625,7 +1634,7 @@ func TestExecutor_DryRun_EmptyRecords(t *testing.T) {
 	// Test dry-run with empty input data
 	emptyData := []map[string]any{}
 	mockInput := NewMockInputModule(emptyData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{})
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{})
 
 	pipeline := &connector.Pipeline{
 		ID:      "dry-run-empty",
@@ -1661,11 +1670,14 @@ func TestExecutor_ExecuteWithRecords_DryRun_CallsPreview(t *testing.T) {
 		{"id": "2", "name": "Record 2"},
 	}
 
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
 		{
-			Endpoint:    "https://api.example.com/data",
-			Method:      "POST",
+			Kind:        connector.PreviewKindHTTP,
 			RecordCount: 2,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com/data",
+				Method:   "POST",
+			},
 		},
 	})
 
@@ -1693,7 +1705,7 @@ func TestExecutor_ExecuteWithRecords_DryRun_CallsPreview(t *testing.T) {
 
 	// Preview should be called
 	if !mockOutput.previewCalled {
-		t.Error("PreviewRequest() should be called in dry-run mode for ExecuteWithRecords")
+		t.Error("PreviewOperations() should be called in dry-run mode for ExecuteWithRecords")
 	}
 
 	// Send should NOT be called
@@ -1719,8 +1731,15 @@ func TestExecutor_DryRun_InputModuleExecutesNormally(t *testing.T) {
 		{"id": "3", "name": "Test 3"},
 	}
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
-		{Endpoint: "https://api.example.com", Method: "POST", RecordCount: 3},
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
+		{
+			Kind:        connector.PreviewKindHTTP,
+			RecordCount: 3,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com",
+				Method:   "POST",
+			},
+		},
 	})
 
 	pipeline := &connector.Pipeline{
@@ -1778,8 +1797,15 @@ func TestExecutor_DryRun_FilterModulesExecuteNormally(t *testing.T) {
 	})
 
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
-		{Endpoint: "https://api.example.com", Method: "POST", RecordCount: 2},
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
+		{
+			Kind:        connector.PreviewKindHTTP,
+			RecordCount: 2,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com",
+				Method:   "POST",
+			},
+		},
 	})
 
 	pipeline := &connector.Pipeline{
@@ -1935,8 +1961,15 @@ func TestExecutor_DryRun_MultipleFiltersSequence(t *testing.T) {
 
 	inputData := []map[string]any{{"id": "1"}}
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
-		{Endpoint: "https://api.example.com", Method: "POST", RecordCount: 1},
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
+		{
+			Kind:        connector.PreviewKindHTTP,
+			RecordCount: 1,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com",
+				Method:   "POST",
+			},
+		},
 	})
 
 	pipeline := &connector.Pipeline{
@@ -1991,12 +2024,15 @@ func TestExecutor_DryRun_CompletePipelineFlow(t *testing.T) {
 	})
 
 	mockInput := NewMockInputModule(inputData, nil)
-	mockOutput := NewMockPreviewableOutputModule([]output.RequestPreview{
+	mockOutput := NewMockPreviewableOutputModule([]connector.OperationPreview{
 		{
-			Endpoint:    "https://api.example.com/scores",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Kind:        connector.PreviewKindHTTP,
 			RecordCount: 2,
+			HTTP: &connector.HTTPPreview{
+				Endpoint: "https://api.example.com/scores",
+				Method:   "POST",
+				Headers:  map[string]string{"Content-Type": "application/json"},
+			},
 		},
 	})
 
@@ -2185,22 +2221,16 @@ func TestExecutor_DryRun_PreviewError_DoesNotFailExecution(t *testing.T) {
 		t.Errorf("Status should be success despite preview error, got %s", result.Status)
 	}
 
-	// DryRunPreview should contain error preview (not nil) to inform user of the failure
-	if result.DryRunPreview == nil {
-		t.Error("DryRunPreview should contain error preview when preview generation fails")
-	} else if len(result.DryRunPreview) != 1 {
-		t.Errorf("Expected 1 error preview, got %d", len(result.DryRunPreview))
-	} else {
-		errorPreview := result.DryRunPreview[0]
-		if errorPreview.Endpoint != "[PREVIEW GENERATION FAILED]" {
-			t.Errorf("Expected error preview endpoint '[PREVIEW GENERATION FAILED]', got '%s'", errorPreview.Endpoint)
-		}
-		if errorPreview.Method != "[UNKNOWN]" {
-			t.Errorf("Expected error preview method '[UNKNOWN]', got '%s'", errorPreview.Method)
-		}
-		if !strings.Contains(errorPreview.BodyPreview, "Failed to generate preview") {
-			t.Errorf("Error preview body should contain error message, got: %s", errorPreview.BodyPreview)
-		}
+	// The failure is reported as a failure, not as a fabricated request: a SQL
+	// output has no endpoint, and inventing one would bury the actual reason.
+	if len(result.DryRunPreview) != 0 {
+		t.Errorf("DryRunPreview should stay empty on failure, got %d operations", len(result.DryRunPreview))
+	}
+	if !strings.Contains(result.DryRunPreviewError, "failed to marshal request body") {
+		t.Errorf("DryRunPreviewError should carry the reason, got %q", result.DryRunPreviewError)
+	}
+	if result.DryRunPreviewUnsupported != "" {
+		t.Errorf("a module that failed is not an unsupported module, got %q", result.DryRunPreviewUnsupported)
 	}
 
 	// Records should still be counted
@@ -2250,8 +2280,15 @@ func TestExecutor_DryRun_ShowCredentials_EndToEnd(t *testing.T) {
 	// Create a mock that tracks the PreviewOptions passed to it
 	var receivedOpts output.PreviewOptions
 	mockOutput := &MockPreviewableOutputModuleWithOpts{
-		previewResponses: []output.RequestPreview{
-			{Endpoint: "https://api.example.com", Method: "POST", RecordCount: 1},
+		previewResponses: []connector.OperationPreview{
+			{
+				Kind:        connector.PreviewKindHTTP,
+				RecordCount: 1,
+				HTTP: &connector.HTTPPreview{
+					Endpoint: "https://api.example.com",
+					Method:   "POST",
+				},
+			},
 		},
 		receivedOpts: &receivedOpts,
 	}
@@ -2283,7 +2320,7 @@ func TestExecutor_DryRun_ShowCredentials_EndToEnd(t *testing.T) {
 
 	// Verify that ShowCredentials was passed correctly
 	if !receivedOpts.ShowCredentials {
-		t.Error("DryRunOptions.ShowCredentials=true should be passed to PreviewRequest")
+		t.Error("DryRunOptions.ShowCredentials=true should be passed to PreviewOperations")
 	}
 
 	// Verify preview was generated
@@ -2292,9 +2329,9 @@ func TestExecutor_DryRun_ShowCredentials_EndToEnd(t *testing.T) {
 	}
 }
 
-// MockPreviewableOutputModuleWithOpts tracks the PreviewOptions passed to PreviewRequest
+// MockPreviewableOutputModuleWithOpts tracks the PreviewOptions passed to PreviewOperations
 type MockPreviewableOutputModuleWithOpts struct {
-	previewResponses []output.RequestPreview
+	previewResponses []connector.OperationPreview
 	receivedOpts     *output.PreviewOptions
 }
 
@@ -2306,7 +2343,7 @@ func (m *MockPreviewableOutputModuleWithOpts) Close() error {
 	return nil
 }
 
-func (m *MockPreviewableOutputModuleWithOpts) PreviewRequest(_ []map[string]any, opts output.PreviewOptions) ([]output.RequestPreview, error) {
+func (m *MockPreviewableOutputModuleWithOpts) PreviewOperations(_ []map[string]any, opts output.PreviewOptions) ([]connector.OperationPreview, error) {
 	*m.receivedOpts = opts // Capture the options
 	return m.previewResponses, nil
 }
@@ -2594,5 +2631,102 @@ func TestExecutor_Execute_PartialSendReportsFailedRecords(t *testing.T) {
 	}
 	if result.RecordsFailed != 2 {
 		t.Errorf("RecordsFailed = %d, want 2 (3 given, 1 sent)", result.RecordsFailed)
+	}
+}
+
+// MockConnectableOutputModule records whether the runtime opened its connection.
+type MockConnectableOutputModule struct {
+	MockOutputModule
+	connectCalls int
+	connectErr   error
+}
+
+func (m *MockConnectableOutputModule) Connect(_ context.Context) error {
+	m.connectCalls++
+	return m.connectErr
+}
+
+var _ output.ConnectableModule = (*MockConnectableOutputModule)(nil)
+
+// TestExecutor_DryRun_DoesNotConnectOutput locks Story 25.6 AC2 at the runtime
+// level: describing what would be written must not open the destination.
+func TestExecutor_DryRun_DoesNotConnectOutput(t *testing.T) {
+	mockInput := NewMockInputModule([]map[string]any{{"id": "1"}}, nil)
+	mockOutput := &MockConnectableOutputModule{}
+	pipeline := &connector.Pipeline{
+		ID:      "dry-run-no-connect",
+		Name:    "Dry Run No Connect",
+		Version: "1.0.0",
+		Enabled: true,
+		Output:  &connector.ModuleConfig{Type: "database"},
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, true)
+	if _, err := executor.Execute(pipeline); err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+
+	if mockOutput.connectCalls != 0 {
+		t.Errorf("Connect() called %d times in dry-run mode, want 0", mockOutput.connectCalls)
+	}
+	if mockOutput.sendCalled {
+		t.Error("Send() should not be called in dry-run mode")
+	}
+}
+
+// TestExecutor_ConnectsOutputBeforeInput locks the other half: a real run opens
+// the destination first, so an unreachable one fails before the input is
+// fetched and before any enrichment call goes out.
+func TestExecutor_ConnectsOutputBeforeInput(t *testing.T) {
+	mockInput := NewMockInputModule([]map[string]any{{"id": "1"}}, nil)
+	mockOutput := &MockConnectableOutputModule{connectErr: errors.New("dial failed")}
+	pipeline := &connector.Pipeline{
+		ID:      "connect-before-input",
+		Name:    "Connect Before Input",
+		Version: "1.0.0",
+		Enabled: true,
+		Output:  &connector.ModuleConfig{Type: "database"},
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, false)
+	_, err := executor.Execute(pipeline)
+	if err == nil {
+		t.Fatal("Execute() should fail when the output cannot connect")
+	}
+	if !strings.Contains(err.Error(), "dial failed") {
+		t.Errorf("error does not name the connection failure: %v", err)
+	}
+	if mockOutput.connectCalls != 1 {
+		t.Errorf("Connect() called %d times, want 1", mockOutput.connectCalls)
+	}
+	if mockInput.fetchCalled {
+		t.Error("input should not be fetched when the output cannot connect")
+	}
+}
+
+// TestExecutor_DryRun_ReportsUnpreviewableOutput locks Story 25.6 AC6: an output
+// that cannot describe itself is named, so an empty preview is never read as
+// "nothing would happen".
+func TestExecutor_DryRun_ReportsUnpreviewableOutput(t *testing.T) {
+	mockInput := NewMockInputModule([]map[string]any{{"id": "1"}}, nil)
+	mockOutput := NewMockOutputModule(nil) // Module only, no PreviewOperations
+	pipeline := &connector.Pipeline{
+		ID:      "dry-run-unpreviewable",
+		Name:    "Dry Run Unpreviewable",
+		Version: "1.0.0",
+		Enabled: true,
+		Output:  &connector.ModuleConfig{Type: "customSink"},
+	}
+
+	executor := NewExecutorWithModules(mockInput, nil, mockOutput, true)
+	result, err := executor.Execute(pipeline)
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+	if len(result.DryRunPreview) != 0 {
+		t.Errorf("DryRunPreview = %v, want none", result.DryRunPreview)
+	}
+	if result.DryRunPreviewUnsupported != "customSink" {
+		t.Errorf("DryRunPreviewUnsupported = %q, want %q", result.DryRunPreviewUnsupported, "customSink")
 	}
 }

@@ -186,6 +186,8 @@ La piste 2 n'a **aucun prérequis** : elle peut démarrer le même jour que la p
 | 25.2 | **Option A** — `http_call` accepte `resultKey`, obligatoire dès `mergeStrategy: append` comme pour `soap_call`/`sql_call`. Aucun défaut implicite (`AC2` retiré : un défaut `_response` que la validation refuse serait inatteignable). Contraintes factorisées dans le schéma pour les 3 filtres. Pas de shim de compatibilité. |
 | 25.3 | **Option 1 seule** — un tableau est conservé tel quel sous `resultKey` et itéré par `loop` ; `merge`/`replace` sur un tableau remontent une erreur au runtime. Pas de champ `onMultiple` (ajoutable plus tard sans coût de migration). `AC6` tranché côté alignement : `soaputil.ValueAsRecordMap` et son enrobage implicite `items`/`value` sont supprimés, `soap_call` suit la même règle que `http_call` ; `soap_polling` reste inchangé. |
 
+| 25.6 | Type d'aperçu **commun** (`connector.OperationPreview` avec sous-structs `HTTP`/`SQL`) plutôt qu'un `RequestPreview` élargi ; doublon `output.RequestPreview` supprimé. Connexion **paresseuse** dans l'output `database` + interface `ConnectableModule` appelée par l'executor avant le stage input hors dry-run, pour garder l'échec précoce sur base injoignable. |
+
 ## Décisions encore ouvertes
 
 À trancher au démarrage de la story concernée — chacune est signalée dans le fichier :

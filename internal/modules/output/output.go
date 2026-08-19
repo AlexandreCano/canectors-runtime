@@ -4,7 +4,11 @@
 // This package implements Epic 3: Module Execution - Output modules.
 package output
 
-import "context"
+import (
+	"context"
+
+	"github.com/cannectors/runtime/pkg/connector"
+)
 
 // Module represents an output module that sends data to a destination system.
 //
@@ -156,33 +160,36 @@ type Module interface {
 	Close() error
 }
 
-// RequestPreview contains the preview of an HTTP request that would be sent.
-// Used in dry-run mode to show what would be sent without actually sending.
+// ConnectableModule is implemented by output modules that hold a connection to
+// their destination and can open it on demand.
 //
-// NOTE: This type is HTTP-specific by design. It is used by HTTP-based output modules
-// (httpRequest, REST API clients, webhooks). Non-HTTP output modules (databases, message queues,
-// file systems) are not required to implement PreviewableModule.
+// The runtime opens it before the input stage of a real run, so a destination
+// that cannot be reached fails before the pipeline has fetched anything or
+// enriched anything. In dry-run mode it is never called: describing a write must
+// not open a pool, start a transaction, or even dial the host.
 //
-// For non-HTTP output modules that want to support dry-run mode:
-//   - Either map your protocol to HTTP-like semantics (e.g., "INSERT" as Method, table name as Endpoint)
-//   - Or define a custom preview type in your module and don't implement PreviewableModule
-//
-// The core Module interface remains protocol-agnostic - only PreviewableModule is HTTP-specific.
-type RequestPreview struct {
-	// Endpoint is the resolved URL including path parameters and query params
-	Endpoint string `json:"endpoint"`
+// Implementations must be idempotent — the runtime may call Connect on a module
+// that is already connected.
+type ConnectableModule interface {
+	Module
 
-	// Method is the HTTP method (POST, PUT, PATCH)
-	Method string `json:"method"`
+	// Connect opens and validates the connection to the destination.
+	Connect(ctx context.Context) error
+}
 
-	// Headers contains all request headers (auth headers may be masked)
-	Headers map[string]string `json:"headers"`
-
-	// BodyPreview is the formatted JSON body that would be sent
-	BodyPreview string `json:"bodyPreview"`
-
-	// RecordCount is the number of records included in this request
-	RecordCount int `json:"recordCount"`
+// httpOperationPreview wraps an HTTP request description as an operation
+// preview, so the HTTP-based modules keep building previews in one line.
+func httpOperationPreview(endpoint, method string, headers map[string]string, bodyPreview string, recordCount int) connector.OperationPreview {
+	return connector.OperationPreview{
+		Kind:        connector.PreviewKindHTTP,
+		RecordCount: recordCount,
+		HTTP: &connector.HTTPPreview{
+			Endpoint:    endpoint,
+			Method:      method,
+			Headers:     headers,
+			BodyPreview: bodyPreview,
+		},
+	}
 }
 
 // PreviewOptions configures preview generation behavior.
@@ -192,7 +199,7 @@ type RequestPreview struct {
 //	opts := PreviewOptions{
 //	    ShowCredentials: false, // Default: mask credentials for security
 //	}
-//	previews, err := module.PreviewRequest(records, opts)
+//	previews, err := module.PreviewOperations(records, opts)
 type PreviewOptions struct {
 	// ShowCredentials when true displays actual credentials instead of masked values.
 	// When false (default), authentication headers are masked as [MASKED-TOKEN], [MASKED-API-KEY], etc.
@@ -216,15 +223,15 @@ type PreviewOptions struct {
 //
 // # When to Implement
 //
-// Implement PreviewableModule if your output module:
-//   - Sends HTTP requests (REST APIs, webhooks)
-//   - Makes network calls that can be previewed
-//   - Would benefit from showing users what would be sent before actual execution
+// Implement PreviewableModule if your output module writes anywhere the author
+// would want to check before the fact — an HTTP API, a database, a queue. The
+// preview type is protocol-neutral (connector.OperationPreview), so a module
+// does not have to describe itself as an HTTP request to be previewable.
 //
 // # Dry-Run Mode
 //
 // In dry-run mode, the runtime will:
-//   - Call PreviewRequest() instead of Send()
+//   - Call PreviewOperations() instead of Send()
 //   - Display the preview to the user
 //   - Skip actual data transmission
 //
@@ -240,12 +247,12 @@ type PreviewOptions struct {
 type PreviewableModule interface {
 	Module
 
-	// PreviewRequest prepares request previews without actually sending them.
+	// PreviewOperations prepares operation previews without performing them.
 	//
-	// This method should generate the same requests that Send() would make,
-	// but without performing the actual network call.
+	// This method should describe the same operations that Send() would perform,
+	// without the network call, the connection, or the write.
 	//
-	// Returns one preview per request that would be made:
+	// Returns one preview per operation that would be performed:
 	//   - Batch mode: returns 1 preview for all records
 	//   - Single record mode: returns N previews (one per record)
 	//
@@ -254,5 +261,5 @@ type PreviewableModule interface {
 	//     When false (default), authentication headers are masked for security.
 	//
 	// Implementations should respect ShowCredentials to avoid exposing sensitive data.
-	PreviewRequest(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error)
+	PreviewOperations(records []map[string]any, opts PreviewOptions) ([]connector.OperationPreview, error)
 }

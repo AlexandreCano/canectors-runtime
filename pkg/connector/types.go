@@ -141,14 +141,56 @@ type ExecutionResult struct {
 	// RetryInfo holds retry information from the last stage that performed retries (Input or Output)
 	RetryInfo *RetryInfo `json:"retryInfo,omitempty"`
 
-	// DryRunPreview contains preview of requests that would be sent (only set in dry-run mode)
-	// For output modules implementing PreviewableModule, this shows what would be sent
-	DryRunPreview []RequestPreview `json:"dryRunPreview,omitempty"`
+	// DryRunPreview contains the operations that would be performed (only set in
+	// dry-run mode). For output modules implementing PreviewableModule, this
+	// shows what would be sent or executed.
+	DryRunPreview []OperationPreview `json:"dryRunPreview,omitempty"`
+
+	// DryRunPreviewUnsupported names the output module type that cannot describe
+	// itself in dry-run mode. It exists so an empty preview is never read as
+	// "nothing would happen": the CLI says the module has no preview instead of
+	// printing nothing at all.
+	DryRunPreviewUnsupported string `json:"dryRunPreviewUnsupported,omitempty"`
+
+	// DryRunPreviewError holds the reason the output module failed to describe
+	// what it would do. Like DryRunPreviewUnsupported, it keeps an empty preview
+	// from reading as "nothing would happen" — protocol-neutrally, without
+	// dressing the failure up as a request the module never built.
+	DryRunPreviewError string `json:"dryRunPreviewError,omitempty"`
 }
 
-// RequestPreview contains the preview of an HTTP request that would be sent.
-// Used in dry-run mode to show what would be sent without actually sending.
-type RequestPreview struct {
+// Preview kinds carried by OperationPreview.Kind.
+const (
+	// PreviewKindHTTP describes a request an HTTP-based output would send.
+	PreviewKindHTTP = "http"
+
+	// PreviewKindSQL describes a statement a database output would execute.
+	PreviewKindSQL = "sql"
+)
+
+// OperationPreview describes one operation an output module would perform in
+// dry-run mode.
+//
+// The type is protocol-neutral on purpose: dry-run is the tool an author uses
+// before an irreversible write, and a database INSERT needs it at least as much
+// as an HTTP POST. Kind says which of the protocol-specific blocks is filled —
+// exactly one of them is.
+type OperationPreview struct {
+	// Kind selects the populated block: PreviewKindHTTP or PreviewKindSQL.
+	Kind string `json:"kind"`
+
+	// RecordCount is the number of records covered by this operation.
+	RecordCount int `json:"recordCount"`
+
+	// HTTP is set when Kind is PreviewKindHTTP.
+	HTTP *HTTPPreview `json:"http,omitempty"`
+
+	// SQL is set when Kind is PreviewKindSQL.
+	SQL *SQLPreview `json:"sql,omitempty"`
+}
+
+// HTTPPreview describes the HTTP request that would be sent.
+type HTTPPreview struct {
 	// Endpoint is the resolved URL including path parameters and query params
 	Endpoint string `json:"endpoint"`
 
@@ -162,9 +204,47 @@ type RequestPreview struct {
 
 	// BodyPreview is the formatted JSON body that would be sent
 	BodyPreview string `json:"bodyPreview"`
+}
 
-	// RecordCount is the number of records included in this request
-	RecordCount int `json:"recordCount"`
+// SQLPreview describes the statement a database output would execute.
+type SQLPreview struct {
+	// Driver is the resolved SQL driver (postgres, mysql, sqlite).
+	Driver string `json:"driver"`
+
+	// Target is the connection string with any credentials removed, unless
+	// ShowCredentials is enabled.
+	Target string `json:"target"`
+
+	// Operation is the leading SQL keyword (INSERT, UPDATE, DELETE, ...), or
+	// STATEMENT when it cannot be determined. It is derived from the statement
+	// text for readability and is not a parse of the SQL.
+	Operation string `json:"operation"`
+
+	// Table is the table the statement writes to when it can be read off the
+	// statement, empty otherwise.
+	Table string `json:"table,omitempty"`
+
+	// Statement is the SQL as it would be sent, with driver placeholders.
+	Statement string `json:"statement"`
+
+	// Parameters names the expression bound to each value of a Rows entry,
+	// positionally. It describes the rendered statement, not the declared
+	// parameter list: a dropped conditional clause binds fewer values, and a
+	// repeated placeholder binds the same expression twice.
+	Parameters []string `json:"parameters,omitempty"`
+
+	// Rows holds the bound values, one entry per execution, capped by the
+	// module so a large batch does not carry every row. Shortening a long value
+	// is the renderer's call, not the module's.
+	Rows [][]string `json:"rows,omitempty"`
+
+	// RowsOmitted counts the executions not listed in Rows, so a batch of 500
+	// records does not print 500 rows.
+	RowsOmitted int `json:"rowsOmitted,omitempty"`
+
+	// Transaction reports whether the executions would be wrapped in one
+	// transaction.
+	Transaction bool `json:"transaction"`
 }
 
 // ExecutionError contains details about an execution failure.

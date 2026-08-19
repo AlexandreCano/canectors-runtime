@@ -11,13 +11,14 @@ import (
 
 	"github.com/cannectors/runtime/internal/auth"
 	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // Maximum size for body preview (1MB) to prevent memory issues with very
 // large payloads.
 const maxBodyPreviewSize = 1 * 1024 * 1024
 
-// PreviewRequest prepares request previews without actually sending HTTP
+// PreviewOperations prepares request previews without actually sending HTTP
 // requests. Used in dry-run mode.
 //
 // Returns one preview per request that would be made:
@@ -32,9 +33,9 @@ const maxBodyPreviewSize = 1 * 1024 * 1024
 //
 // By default, authentication headers are masked. Set opts.ShowCredentials
 // to true to display actual credential values (debugging only).
-func (h *HTTPRequestModule) PreviewRequest(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {
+func (h *HTTPRequestModule) PreviewOperations(records []map[string]any, opts PreviewOptions) ([]connector.OperationPreview, error) {
 	if len(records) == 0 {
-		return []RequestPreview{}, nil
+		return []connector.OperationPreview{}, nil
 	}
 	if h.request.RequestMode == requestModeSingle {
 		return h.previewSingleRecordMode(records, opts)
@@ -45,9 +46,9 @@ func (h *HTTPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 // previewBatchMode builds one preview per request sendBatchMode would emit,
 // using the same chunking helper so a dry-run cannot understate the number of
 // requests.
-func (h *HTTPRequestModule) previewBatchMode(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {
+func (h *HTTPRequestModule) previewBatchMode(records []map[string]any, opts PreviewOptions) ([]connector.OperationPreview, error) {
 	batches := chunkRecords(records, h.request.BatchSize)
-	previews := make([]RequestPreview, 0, len(batches))
+	previews := make([]connector.OperationPreview, 0, len(batches))
 	for _, batch := range batches {
 		preview, err := h.previewOneBatch(batch, opts)
 		if err != nil {
@@ -58,37 +59,31 @@ func (h *HTTPRequestModule) previewBatchMode(records []map[string]any, opts Prev
 	return previews, nil
 }
 
-func (h *HTTPRequestModule) previewOneBatch(records []map[string]any, opts PreviewOptions) (RequestPreview, error) {
+func (h *HTTPRequestModule) previewOneBatch(records []map[string]any, opts PreviewOptions) (connector.OperationPreview, error) {
 	endpoint, err := h.resolveEndpointForBatch(h.endpoint, records)
 	if err != nil {
-		return RequestPreview{}, err
+		return connector.OperationPreview{}, err
 	}
 	bodyPreview, err := formatJSONPreview(records)
 	if err != nil {
-		return RequestPreview{}, fmt.Errorf("formatting body preview: %w", err)
+		return connector.OperationPreview{}, fmt.Errorf("formatting body preview: %w", err)
 	}
 	var batchHeaders map[string]string
 	if len(records) > 0 {
 		batchHeaders, err = h.extractHeadersFromRecord(records[0])
 		if err != nil {
-			return RequestPreview{}, err
+			return connector.OperationPreview{}, err
 		}
 	}
 	headers, err := h.buildPreviewHeaders(batchHeaders, opts)
 	if err != nil {
-		return RequestPreview{}, err
+		return connector.OperationPreview{}, err
 	}
-	return RequestPreview{
-		Endpoint:    endpoint,
-		Method:      h.method,
-		Headers:     headers,
-		BodyPreview: bodyPreview,
-		RecordCount: len(records),
-	}, nil
+	return httpOperationPreview(endpoint, h.method, headers, bodyPreview, len(records)), nil
 }
 
-func (h *HTTPRequestModule) previewSingleRecordMode(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {
-	previews := make([]RequestPreview, 0, len(records))
+func (h *HTTPRequestModule) previewSingleRecordMode(records []map[string]any, opts PreviewOptions) ([]connector.OperationPreview, error) {
+	previews := make([]connector.OperationPreview, 0, len(records))
 	for _, record := range records {
 		endpoint, err := h.resolveEndpointForRecord(record)
 		if err != nil {
@@ -106,13 +101,7 @@ func (h *HTTPRequestModule) previewSingleRecordMode(records []map[string]any, op
 		if err != nil {
 			return nil, err
 		}
-		previews = append(previews, RequestPreview{
-			Endpoint:    endpoint,
-			Method:      h.method,
-			Headers:     headers,
-			BodyPreview: bodyPreview,
-			RecordCount: 1,
-		})
+		previews = append(previews, httpOperationPreview(endpoint, h.method, headers, bodyPreview, 1))
 	}
 	return previews, nil
 }

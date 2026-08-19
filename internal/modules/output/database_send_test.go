@@ -3,10 +3,14 @@ package output
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/cannectors/runtime/internal/database"
 	"github.com/cannectors/runtime/internal/moduleconfig"
 	"github.com/cannectors/runtime/internal/sqltemplate"
 	"github.com/cannectors/runtime/internal/template"
@@ -54,7 +58,7 @@ func newDatabaseOutputForTest(t *testing.T, db *sql.DB, cfg DatabaseOutputConfig
 	}
 	return &DatabaseOutput{
 		db:       db,
-		driver:   "sqlite",
+		resolved: database.Resolved{Driver: "sqlite"},
 		config:   cfg,
 		sqlQuery: sqlQuery,
 		timeout:  200 * time.Millisecond,
@@ -68,6 +72,79 @@ func countOutputRows(t *testing.T, db *sql.DB) int {
 		t.Fatalf("counting output rows: %v", err)
 	}
 	return count
+}
+
+// TestDatabaseOutput_ConcurrentSendAndClose exercises the connection field from
+// several goroutines at once, the way the webhook input drives one output module
+// across concurrent deliveries. Meaningful under -race: Connect and Close write
+// d.db while Send reads it.
+func TestDatabaseOutput_ConcurrentSendAndClose(t *testing.T) {
+	dsn := "file:" + filepath.Join(t.TempDir(), "out.db") + "?_pragma=busy_timeout(5000)"
+	seed, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatalf("sql.Open sqlite: %v", err)
+	}
+	if _, err = seed.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("creating fixtures: %v", err)
+	}
+	if err = seed.Close(); err != nil {
+		t.Fatalf("closing seed connection: %v", err)
+	}
+
+	module, err := NewDatabaseOutputFromConfig(&connector.ModuleConfig{
+		Type: "database",
+		Raw: mustJSON(map[string]any{
+			"driver":           "sqlite",
+			"connectionString": dsn,
+			"query":            "INSERT INTO users (id, name) VALUES ($1, $2)",
+			"parameters":       []string{"record.id", "record.name"},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewDatabaseOutputFromConfig: %v", err)
+	}
+	defer func() { _ = module.Close() }()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// Send opens the pool on its own when the runtime has not; errors are
+			// not the point here — a concurrent Close makes some of them expected.
+			_, _ = module.Send(context.Background(), []map[string]any{
+				{"id": i + 1, "name": "user"},
+			})
+		}(i)
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = module.Close()
+	}()
+	wg.Wait()
+}
+
+// TestDatabaseOutput_SendAfterCloseFails locks Close as terminal: Send opens the
+// pool on its own when the runtime has not, and that fallback must not reopen a
+// connection the caller has just released.
+func TestDatabaseOutput_SendAfterCloseFails(t *testing.T) {
+	db := setupDatabaseOutputSQLiteDB(t)
+	module := newDatabaseOutputForTest(t, db, DatabaseOutputConfig{
+		SQLRequestBase: moduleconfig.SQLRequestBase{
+			Query:      "INSERT INTO users (id, name) VALUES ($1, $2)",
+			Parameters: []string{"record.id", "record.name"},
+		},
+	})
+
+	if err := module.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	_, err := module.Send(context.Background(), []map[string]any{{"id": 1, "name": "alice"}})
+	if !errors.Is(err, ErrDatabaseOutputClosed) {
+		t.Fatalf("Send after Close error = %v, want ErrDatabaseOutputClosed", err)
+	}
 }
 
 func TestDatabaseOutput_SendModes(t *testing.T) {

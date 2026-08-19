@@ -158,6 +158,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **La réponse d'un filtre d'appel est clonée avant d'entrer dans le record** (`cloneCallData` dans `internal/modules/filter/call_merge.go`). Avec `cache.enabled`, l'objet renvoyé par le LRU est partagé entre tous les records qui tombent sur la même clé : sans clone, un `loop` qui mute ses items en place réécrivait l'entrée de cache et les autres records. Les erreurs du contrat de fusion portent les sentinelles `ErrCallResultType` / `ErrCallMergeStrategyMismatch` (routables via `errors.Is` côté `http_call` **et** `soap_call`).
 - **`sql_call` substitue `{{record.x}}` comme paramètre positionnel** (`$1` en postgres), pas comme texte. Ne JAMAIS l'entourer de quotes dans le SQL.
 
+### Dry-run et modules output
+
+- **L'aperçu de dry-run est protocol-neutre** : `connector.OperationPreview{Kind, RecordCount, HTTP, SQL}`, exactement un bloc rempli. `output.RequestPreview` n'existe plus, et `PreviewableModule.PreviewOperations` remplace `PreviewRequest`. Un output non prévisualisable remplit `ExecutionResult.DryRunPreviewUnsupported` pour que la CLI le dise, au lieu d'afficher un aperçu vide.
+- **L'output `database` n'ouvre plus sa connexion dans le constructeur** : `database.Resolve` (sans I/O) au build, puis `output.ConnectableModule.Connect` appelé par l'executor **avant le stage input** hors dry-run. En dry-run, aucune connexion n'est ouverte — un test avec une DSN injoignable le vérifie. Si tu écris un output qui tient une ressource, implémente `ConnectableModule`, sinon ton dry-run ouvrira la destination.
+
 ### YAML pipelines
 
 - **Schema requiert toujours `filters:`** au top-level, même vide (`filters: []`). Sans, validation échoue avec `missing required property "filters"`.

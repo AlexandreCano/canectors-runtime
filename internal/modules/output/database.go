@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/cannectors/runtime/internal/database"
@@ -29,6 +30,13 @@ const (
 // Error types for database output module
 var (
 	ErrDatabaseOutputNilConfig = errors.New("database output configuration is nil")
+
+	// ErrDatabaseOutputClosed is returned when the module is used after Close.
+	ErrDatabaseOutputClosed = errors.New("database output is closed")
+
+	// ErrDatabaseOutputNotConnected is returned when a write reaches the module
+	// before its connection was opened.
+	ErrDatabaseOutputNotConnected = errors.New("database output is not connected")
 )
 
 // DatabaseOutputConfig holds configuration for the database output module.
@@ -41,9 +49,17 @@ type DatabaseOutputConfig struct {
 }
 
 // DatabaseOutput implements a database output module.
+//
+// The connection is opened by Connect, not by the constructor: a dry-run must
+// leave the target untouched, and opening a pool (and pinging it) is already an
+// observable effect on a production database the author may not even have
+// credentials to reach (Story 25.6).
 type DatabaseOutput struct {
+	mu       sync.Mutex
 	db       *sql.DB
-	driver   string
+	closed   bool
+	dbConfig database.Config
+	resolved database.Resolved
 	config   DatabaseOutputConfig
 	sqlQuery *sqltemplate.Query
 	timeout  time.Duration
@@ -100,28 +116,29 @@ func NewDatabaseOutputFromConfig(cfg *connector.ModuleConfig) (*DatabaseOutput, 
 		ConnectTimeout:      timeout,
 	}
 
-	// Open database connection
-	db, driver, err := database.Open(dbConfig)
+	// Resolve the connection string and the driver without dialing: the driver
+	// is needed to compile the statement, the connection is not needed until
+	// there is something to write.
+	resolved, err := database.Resolve(dbConfig)
 	if err != nil {
 		return nil, fmt.Errorf("creating database output connection: %w", err)
 	}
 
-	sqlQuery, err := sqltemplate.Compile(templateEngine, config.Query, config.Parameters, driver)
+	sqlQuery, err := sqltemplate.Compile(templateEngine, config.Query, config.Parameters, resolved.Driver)
 	if err != nil {
-		_ = db.Close()
 		return nil, fmt.Errorf("database output query: %w", err)
 	}
 
 	module := &DatabaseOutput{
-		db:       db,
-		driver:   driver,
+		dbConfig: dbConfig,
+		resolved: resolved,
 		config:   config,
 		sqlQuery: sqlQuery,
 		timeout:  timeout,
 	}
 
 	logger.Debug("database output module created",
-		slog.String("driver", driver),
+		slog.String("driver", resolved.Driver),
 		slog.Bool("transaction", config.Transaction),
 		slog.String("on_error", config.OnError),
 	)
@@ -129,11 +146,55 @@ func NewDatabaseOutputFromConfig(cfg *connector.ModuleConfig) (*DatabaseOutput, 
 	return module, nil
 }
 
+// Connect opens the connection pool and verifies it is reachable.
+//
+// The runtime calls it before the input stage of a real run, so an unreachable
+// database still fails before the pipeline has touched any source system. It is
+// idempotent, and never called in dry-run mode.
+func (d *DatabaseOutput) Connect(ctx context.Context) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return ErrDatabaseOutputClosed
+	}
+	if d.db != nil {
+		return nil
+	}
+	db, err := database.OpenResolved(ctx, d.dbConfig, d.resolved)
+	if err != nil {
+		return fmt.Errorf("creating database output connection: %w", err)
+	}
+	d.db = db
+	return nil
+}
+
+// conn returns the open pool. Connect and Close mutate d.db at runtime — the
+// webhook input serves deliveries concurrently on one module — so every read
+// goes through the mutex too, and a pool closed underneath a running Send is
+// reported rather than dereferenced.
+func (d *DatabaseOutput) conn() (*sql.DB, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return nil, ErrDatabaseOutputClosed
+	}
+	if d.db == nil {
+		return nil, ErrDatabaseOutputNotConnected
+	}
+	return d.db, nil
+}
+
 // Send writes records to the database.
 // Returns the number of records successfully processed and any error.
 func (d *DatabaseOutput) Send(ctx context.Context, records []map[string]any) (int, error) {
 	if len(records) == 0 {
 		return 0, nil
+	}
+
+	// Connect is normally called by the runtime before the input stage; this is
+	// the fallback for callers driving the module directly.
+	if err := d.Connect(ctx); err != nil {
+		return 0, err
 	}
 
 	startTime := time.Now()
@@ -177,7 +238,12 @@ func (d *DatabaseOutput) Send(ctx context.Context, records []map[string]any) (in
 
 // sendWithTransaction executes queries within a transaction.
 func (d *DatabaseOutput) sendWithTransaction(ctx context.Context, records []map[string]any) (int, error) {
-	tx, err := d.db.BeginTx(ctx, nil)
+	db, err := d.conn()
+	if err != nil {
+		return 0, err
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("beginning transaction: %w", err)
 	}
@@ -253,7 +319,7 @@ func (d *DatabaseOutput) handleQueryBuildError(err error, recordIndex int) (bool
 //
 //nolint:unparam // bool return is needed for interface consistency, even though it's always false for log/skip
 func (d *DatabaseOutput) handleDatabaseError(err error, query string, argCount int, recordIndex int) (bool, error) {
-	dbErr := database.ClassifyDatabaseError(err, d.driver, "exec", query, argCount)
+	dbErr := database.ClassifyDatabaseError(err, d.resolved.Driver, "exec", query, argCount)
 
 	switch d.config.OnError {
 	case "skip":
@@ -296,10 +362,15 @@ func (d *DatabaseOutput) processRecordWithoutTransaction(ctx context.Context, re
 		return d.handleQueryBuildError(err, recordIndex)
 	}
 
+	db, err := d.conn()
+	if err != nil {
+		return false, err
+	}
+
 	queryCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
-	_, err = d.db.ExecContext(queryCtx, query, args...)
+	_, err = db.ExecContext(queryCtx, query, args...)
 	if err != nil {
 		return d.handleDatabaseError(err, query, len(args), recordIndex)
 	}
@@ -307,10 +378,19 @@ func (d *DatabaseOutput) processRecordWithoutTransaction(ctx context.Context, re
 	return true, nil
 }
 
-// Close releases resources.
+// Close releases resources. A module that never connected has nothing to close,
+// which is the normal case in dry-run mode.
+//
+// Close is terminal: a later Send does not silently reopen the pool the caller
+// just released, it reports that the module is closed.
 func (d *DatabaseOutput) Close() error {
-	if d.db != nil {
-		return d.db.Close()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.closed = true
+	if d.db == nil {
+		return nil
 	}
-	return nil
+	err := d.db.Close()
+	d.db = nil
+	return err
 }

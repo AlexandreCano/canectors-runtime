@@ -299,21 +299,64 @@ func (e *Executor) executeOutput(ctx context.Context, pipelineID string, records
 	return outputResult{recordsSent: recordsSent, recordsFailed: len(records) - recordsSent, err: nil}
 }
 
-// executeDryRunPreview generates request previews for dry-run mode.
-// Returns nil if the output module doesn't implement PreviewableModule.
-func (e *Executor) executeDryRunPreview(pipelineID string, records []map[string]any, dryRunOpts *connector.DryRunOptions, traceID string) []connector.RequestPreview {
-	if !e.dryRun || e.outputModule == nil {
+// connectOutput opens the output module's connection when it holds one.
+//
+// Modules that do not implement ConnectableModule (every HTTP-based output)
+// have nothing to open and are left alone.
+func (e *Executor) connectOutput(ctx context.Context, pipeline *connector.Pipeline, traceID string) error {
+	if e.dryRun || e.outputModule == nil {
 		return nil
+	}
+	connectable, ok := e.outputModule.(output.ConnectableModule)
+	if !ok {
+		return nil
+	}
+	if err := connectable.Connect(ctx); err != nil {
+		logger.Error("output module failed to connect",
+			slog.String(logger.TraceIDField, traceID),
+			slog.String("pipeline_id", pipeline.ID),
+			slog.String("output_type", outputModuleType(pipeline)),
+			slog.String("error", err.Error()),
+		)
+		return err
+	}
+	return nil
+}
+
+// outputModuleType returns the configured output type, used to name a module
+// that cannot preview itself.
+func outputModuleType(pipeline *connector.Pipeline) string {
+	if pipeline == nil || pipeline.Output == nil {
+		return ""
+	}
+	return pipeline.Output.Type
+}
+
+// dryRunPreview is what the dry-run has to say about the output stage: the
+// operations it would perform, or why it cannot say. One of the three fields is
+// set — an empty preview with nothing to explain it reads as "nothing would
+// happen", which is the one message a dry-run must never send by accident.
+type dryRunPreview struct {
+	operations      []connector.OperationPreview
+	unsupportedType string
+	failure         string
+}
+
+// executeDryRunPreview generates operation previews for dry-run mode.
+func (e *Executor) executeDryRunPreview(pipelineID, outputType string, records []map[string]any, dryRunOpts *connector.DryRunOptions, traceID string) dryRunPreview {
+	if !e.dryRun || e.outputModule == nil {
+		return dryRunPreview{}
 	}
 
 	// Check if output module implements PreviewableModule
 	previewable, ok := e.outputModule.(output.PreviewableModule)
 	if !ok {
-		logger.Debug("output module does not implement PreviewableModule, skipping preview",
+		logger.Warn("output module cannot preview itself in dry-run mode",
 			slog.String(logger.TraceIDField, traceID),
 			slog.String("pipeline_id", pipelineID),
+			slog.String("output_type", outputType),
 		)
-		return nil
+		return dryRunPreview{unsupportedType: outputType}
 	}
 
 	// Build preview options from pipeline config
@@ -330,7 +373,7 @@ func (e *Executor) executeDryRunPreview(pipelineID string, records []map[string]
 	)
 
 	// Generate previews
-	outputPreviews, err := previewable.PreviewRequest(records, previewOpts)
+	previews, err := previewable.PreviewOperations(records, previewOpts)
 	if err != nil {
 		logger.Error("failed to generate dry-run preview",
 			slog.String(logger.TraceIDField, traceID),
@@ -340,29 +383,10 @@ func (e *Executor) executeDryRunPreview(pipelineID string, records []map[string]
 			slog.String("error", err.Error()),
 			slog.String("error_context", fmt.Sprintf("preview generation failed for %d records", len(records))),
 		)
-		// Return error preview to inform user that preview generation failed
-		// This ensures dry-run mode still provides useful feedback even when preview fails
-		return []connector.RequestPreview{
-			{
-				Endpoint:    "[PREVIEW GENERATION FAILED]",
-				Method:      "[UNKNOWN]",
-				Headers:     map[string]string{"Error": err.Error()},
-				BodyPreview: fmt.Sprintf("Failed to generate preview: %v", err),
-				RecordCount: len(records),
-			},
-		}
-	}
-
-	// Convert output.RequestPreview to connector.RequestPreview
-	previews := make([]connector.RequestPreview, len(outputPreviews))
-	for i, p := range outputPreviews {
-		previews[i] = connector.RequestPreview{
-			Endpoint:    p.Endpoint,
-			Method:      p.Method,
-			Headers:     p.Headers,
-			BodyPreview: p.BodyPreview,
-			RecordCount: p.RecordCount,
-		}
+		// Report the failure as a failure. Fabricating a preview here — an
+		// HTTP request the module never built, least of all a SQL one — would
+		// print an endpoint for a database output and bury the actual reason.
+		return dryRunPreview{failure: err.Error()}
 	}
 
 	logger.Debug("dry-run preview generated",
@@ -371,7 +395,7 @@ func (e *Executor) executeDryRunPreview(pipelineID string, records []map[string]
 		slog.Int("preview_count", len(previews)),
 	)
 
-	return previews
+	return dryRunPreview{operations: previews}
 }
 
 // stageTimings holds timing measurements for each execution stage
@@ -542,6 +566,15 @@ func (e *Executor) executePipelineStages(
 	var timings stageTimings
 	var lastID *string
 
+	// Open the output connection before the input runs, so an unreachable
+	// destination fails before the pipeline has fetched a single record or
+	// called a single enrichment API. Skipped in dry-run mode, where the point
+	// is to touch nothing.
+	if err := e.connectOutput(ctx, pipeline, traceID); err != nil {
+		e.handleExecutionFailure(execCtx, startedAt, 0)
+		return timings, nil, err
+	}
+
 	// Execute Input module (returns duration measured inside)
 	rawRecords, inputDuration, err := e.executeInput(ctx, pipeline, result, traceID)
 	timings.inputDuration = inputDuration
@@ -560,7 +593,7 @@ func (e *Executor) executePipelineStages(
 	}
 
 	if err != nil {
-		e.handleExecutionFailure(execCtx, startedAt, StatusError, 0)
+		e.handleExecutionFailure(execCtx, startedAt, 0)
 		return timings, nil, err
 	}
 
@@ -601,7 +634,7 @@ func (e *Executor) executePipelineStages(
 	timings.filterDuration = filterDuration
 	// rawRecords can now be garbage collected after filters start processing
 	if err != nil {
-		e.handleExecutionFailure(execCtx, startedAt, StatusError, len(rawRecords))
+		e.handleExecutionFailure(execCtx, startedAt, len(rawRecords))
 		return timings, nil, err
 	}
 
@@ -616,14 +649,18 @@ func (e *Executor) executePipelineStages(
 
 	// Generate dry-run preview if applicable
 	if e.dryRun {
-		result.DryRunPreview = e.executeDryRunPreview(pipeline.ID, filteredRecords, pipeline.DryRunOptions, traceID)
+		preview := e.executeDryRunPreview(
+			pipeline.ID, outputModuleType(pipeline), filteredRecords, pipeline.DryRunOptions, traceID)
+		result.DryRunPreview = preview.operations
+		result.DryRunPreviewUnsupported = preview.unsupportedType
+		result.DryRunPreviewError = preview.failure
 	}
 
 	// Execute Output module (returns duration measured inside)
 	outputDuration, err := e.executeOutputWithResult(ctx, pipeline, filteredRecords, result, traceID)
 	timings.outputDuration = outputDuration
 	if err != nil {
-		e.handleExecutionFailure(execCtx, startedAt, StatusError, result.RecordsProcessed)
+		e.handleExecutionFailure(execCtx, startedAt, result.RecordsProcessed)
 		return timings, nil, err
 	}
 
@@ -631,9 +668,9 @@ func (e *Executor) executePipelineStages(
 }
 
 // handleExecutionFailure logs execution end on failure.
-func (e *Executor) handleExecutionFailure(execCtx logger.ExecutionContext, startedAt time.Time, status string, recordsProcessed int) {
+func (e *Executor) handleExecutionFailure(execCtx logger.ExecutionContext, startedAt time.Time, recordsProcessed int) {
 	totalDuration := time.Since(startedAt)
-	logger.LogExecutionEnd(execCtx, status, recordsProcessed, totalDuration)
+	logger.LogExecutionEnd(execCtx, StatusError, recordsProcessed, totalDuration)
 }
 
 // newErrorResult creates a new ExecutionResult initialized with error status.
