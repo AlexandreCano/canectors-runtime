@@ -8,6 +8,7 @@ import (
 
 	"github.com/cannectors/runtime/internal/httpclient"
 	"github.com/cannectors/runtime/internal/logger"
+	"github.com/cannectors/runtime/pkg/connector"
 )
 
 // StubModule is a placeholder output module for testing the pipeline flow.
@@ -43,25 +44,20 @@ func (m *StubModule) Close() error {
 	return nil
 }
 
-// PreviewRequest generates a preview of what would be sent (for dry-run mode).
-func (m *StubModule) PreviewRequest(records []map[string]any, _ PreviewOptions) ([]RequestPreview, error) {
+// PreviewOperations generates a preview of what would be sent (for dry-run mode).
+func (m *StubModule) PreviewOperations(records []map[string]any, _ PreviewOptions) ([]connector.OperationPreview, error) {
 	if len(records) == 0 {
 		return nil, nil
 	}
 
+	headers := map[string]string{
+		"Content-Type": "application/json",
+		"User-Agent":   "Cannectors-Runtime/1.0 (stub)",
+	}
 	bodyPreview := fmt.Sprintf("[%d records would be sent]", len(records))
 
-	return []RequestPreview{
-		{
-			Endpoint: m.Endpoint,
-			Method:   m.Method,
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-				"User-Agent":   "Cannectors-Runtime/1.0 (stub)",
-			},
-			BodyPreview: bodyPreview,
-			RecordCount: len(records),
-		},
+	return []connector.OperationPreview{
+		httpOperationPreview(m.Endpoint, m.Method, headers, bodyPreview, len(records)),
 	}, nil
 }
 

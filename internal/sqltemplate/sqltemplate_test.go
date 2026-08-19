@@ -101,6 +101,81 @@ func TestBuild_ConditionalClause(t *testing.T) {
 	}
 }
 
+func TestBuildDescribed_SourcesFollowBoundArguments(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		params      []string
+		driver      string
+		record      map[string]any
+		wantSQL     string
+		wantArgs    []any
+		wantSources []string
+	}{
+		{
+			// Postgres renumbers by first appearance: a dropped clause shifts the
+			// remaining bindings, so the declared order would mislabel them.
+			name:        "postgres dropped clause",
+			query:       `update t set a = $1{% if record.withB %}, b = $2{% endif %} where id = $3`,
+			params:      []string{"record.a", "record.b", "record.id"},
+			driver:      "postgres",
+			record:      map[string]any{"a": "A", "b": "B", "id": 7, "withB": false},
+			wantSQL:     `update t set a = $1 where id = $2`,
+			wantArgs:    []any{"A", 7},
+			wantSources: []string{"record.a", "record.id"},
+		},
+		{
+			// Postgres reuses one argument for a repeated reference, and honors
+			// the order of first appearance rather than the declared order.
+			name:        "postgres reordered and repeated",
+			query:       `select * from t where a = $2 or b = $1 or c = $2`,
+			params:      []string{"record.a", "record.b"},
+			driver:      "postgres",
+			record:      map[string]any{"a": 1, "b": 2},
+			wantSQL:     `select * from t where a = $1 or b = $2 or c = $1`,
+			wantArgs:    []any{2, 1},
+			wantSources: []string{"record.b", "record.a"},
+		},
+		{
+			// MySQL binds one argument per occurrence, so a repeated placeholder
+			// is named as many times as it binds.
+			name:        "mysql repeated placeholder",
+			query:       `insert into t (a) values ($1) on duplicate key update a = $1`,
+			params:      []string{"record.a"},
+			driver:      "mysql",
+			record:      map[string]any{"a": 1},
+			wantSQL:     `insert into t (a) values (?) on duplicate key update a = ?`,
+			wantArgs:    []any{1, 1},
+			wantSources: []string{"record.a", "record.a"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := Compile(engine, tc.query, tc.params, tc.driver)
+			if err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+			sql, args, sources, err := q.BuildDescribed(ctxWithRecord(tc.record))
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			if sql != tc.wantSQL {
+				t.Errorf("sql = %q, want %q", sql, tc.wantSQL)
+			}
+			if !reflect.DeepEqual(args, tc.wantArgs) {
+				t.Errorf("args = %#v, want %#v", args, tc.wantArgs)
+			}
+			if !reflect.DeepEqual(sources, tc.wantSources) {
+				t.Errorf("sources = %#v, want %#v", sources, tc.wantSources)
+			}
+			if len(sources) != len(args) {
+				t.Errorf("%d sources for %d args", len(sources), len(args))
+			}
+		})
+	}
+}
+
 func TestBuild_NilBindsAsNull(t *testing.T) {
 	q, err := Compile(engine, `update t set v = $1 where id = $2`,
 		[]string{"record.missing", "record.id"}, "postgres")

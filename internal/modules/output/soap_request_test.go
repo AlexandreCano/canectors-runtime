@@ -80,21 +80,21 @@ func TestSOAPRequest_PreviewBatch(t *testing.T) {
 	}
 	defer func() { _ = module.Close() }()
 
-	previews, err := module.PreviewRequest([]map[string]any{{"name": "Alice"}}, PreviewOptions{})
+	previews, err := module.PreviewOperations([]map[string]any{{"name": "Alice"}}, PreviewOptions{})
 	if err != nil {
-		t.Fatalf("PreviewRequest: %v", err)
+		t.Fatalf("PreviewOperations: %v", err)
 	}
 	if len(previews) != 1 {
 		t.Fatalf("expected one preview, got %d", len(previews))
 	}
-	if previews[0].Method != "POST" || previews[0].RecordCount != 1 {
+	if previews[0].HTTP.Method != "POST" || previews[0].RecordCount != 1 {
 		t.Fatalf("unexpected preview metadata: %#v", previews[0])
 	}
-	if got := previews[0].Headers["Content-Type"]; got != `text/xml; charset=utf-8` {
+	if got := previews[0].HTTP.Headers["Content-Type"]; got != `text/xml; charset=utf-8` {
 		t.Fatalf("Content-Type = %q", got)
 	}
-	if !strings.Contains(previews[0].BodyPreview, `<First>Alice</First>`) {
-		t.Fatalf("unexpected body preview:\n%s", previews[0].BodyPreview)
+	if !strings.Contains(previews[0].HTTP.BodyPreview, `<First>Alice</First>`) {
+		t.Fatalf("unexpected body preview:\n%s", previews[0].HTTP.BodyPreview)
 	}
 }
 
@@ -285,16 +285,16 @@ func TestSOAPRequest_RetryInfoAndPreviewSOAP12Headers(t *testing.T) {
 	if info := module.GetRetryInfo(); info == nil || info.TotalAttempts != 2 || info.RetryCount != 1 {
 		t.Fatalf("retry info = %#v", info)
 	}
-	previews, err := module.PreviewRequest([]map[string]any{{"id": "1"}}, PreviewOptions{})
+	previews, err := module.PreviewOperations([]map[string]any{{"id": "1"}}, PreviewOptions{})
 	if err != nil {
-		t.Fatalf("PreviewRequest: %v", err)
+		t.Fatalf("PreviewOperations: %v", err)
 	}
-	contentType := previews[0].Headers["Content-Type"]
+	contentType := previews[0].HTTP.Headers["Content-Type"]
 	if !strings.HasPrefix(contentType, "application/soap+xml") || !strings.Contains(contentType, `action="urn:Submit"`) {
 		t.Fatalf("SOAP 1.2 Content-Type = %q", contentType)
 	}
-	if _, ok := previews[0].Headers["SOAPAction"]; ok {
-		t.Fatalf("SOAPAction should be absent for SOAP 1.2 preview: %#v", previews[0].Headers)
+	if _, ok := previews[0].HTTP.Headers["SOAPAction"]; ok {
+		t.Fatalf("SOAPAction should be absent for SOAP 1.2 preview: %#v", previews[0].HTTP.Headers)
 	}
 }
 
@@ -531,9 +531,9 @@ func TestSOAPRequest_BatchSizePreviewMatchesRequests(t *testing.T) {
 	module := newSOAPRequestTestModule(t, soapBatchSizeConfig("https://example.com/soap", map[string]any{"batchSize": 50}))
 	defer func() { _ = module.Close() }()
 
-	previews, err := module.PreviewRequest(recordsOfSize(120), PreviewOptions{})
+	previews, err := module.PreviewOperations(recordsOfSize(120), PreviewOptions{})
 	if err != nil {
-		t.Fatalf("PreviewRequest: %v", err)
+		t.Fatalf("PreviewOperations: %v", err)
 	}
 	if len(previews) != 3 {
 		t.Fatalf("previews = %d, want 3", len(previews))
@@ -544,8 +544,8 @@ func TestSOAPRequest_BatchSizePreviewMatchesRequests(t *testing.T) {
 			t.Errorf("preview %d RecordCount = %d, want %d", i, preview.RecordCount, wantCounts[i])
 		}
 		want := fmt.Sprintf("<Count>%d</Count>", wantCounts[i])
-		if !strings.Contains(preview.BodyPreview, want) {
-			t.Errorf("preview %d body missing %s:\n%s", i, want, preview.BodyPreview)
+		if !strings.Contains(preview.HTTP.BodyPreview, want) {
+			t.Errorf("preview %d body missing %s:\n%s", i, want, preview.HTTP.BodyPreview)
 		}
 	}
 }

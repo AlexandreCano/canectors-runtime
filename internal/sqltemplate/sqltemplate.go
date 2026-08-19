@@ -158,16 +158,29 @@ func ReferencesPagination(srcs []string) bool {
 // with its bound arguments. Only parameters whose placeholder survives
 // rendering (e.g. inside a taken {% if %} branch) are evaluated and bound.
 func (q *Query) Build(rc template.RenderContext) (string, []any, error) {
+	sql, args, _, err := q.BuildDescribed(rc)
+	return sql, args, err
+}
+
+// BuildDescribed renders the query like Build and also returns, for each bound
+// argument, the parameter expression it came from.
+//
+// The sources cannot be read off the declared parameter list: a dropped {% if %}
+// branch removes bindings, postgres renumbers by first appearance and reuses one
+// argument for repeated references, and mysql/sqlite bind one argument per
+// occurrence. Dry-run previews need the per-argument mapping to label the values
+// they display, and a positional guess would label them wrong.
+func (q *Query) BuildDescribed(rc template.RenderContext) (string, []any, []string, error) {
 	rendered, err := q.tmpl.Render(rc)
 	if err != nil {
-		return "", nil, fmt.Errorf("rendering query template: %w", err)
+		return "", nil, nil, fmt.Errorf("rendering query template: %w", err)
 	}
 
 	// HasOutputTag is enforced at Compile, so no {{ }} can reach here. A residual
 	// delimiter would mean a bug in the tokenizer — fail closed rather than emit
 	// a possibly-injectable query.
 	if strings.Contains(rendered, "{{") || strings.Contains(rendered, "}}") {
-		return "", nil, fmt.Errorf("template delimiters remain in rendered query")
+		return "", nil, nil, fmt.Errorf("template delimiters remain in rendered query")
 	}
 
 	env := rc.Vars()
@@ -196,11 +209,12 @@ func (q *Query) Build(rc template.RenderContext) (string, []any, error) {
 	var out strings.Builder
 	out.Grow(len(rendered))
 	var args []any
+	var sources []string
 	last := 0
 
 	for _, ref := range refs {
 		if ref.n < 1 || ref.n > len(q.params) {
-			return "", nil, fmt.Errorf("rendered query references $%d but only %d parameter(s) are declared", ref.n, len(q.params))
+			return "", nil, nil, fmt.Errorf("rendered query references $%d but only %d parameter(s) are declared", ref.n, len(q.params))
 		}
 		out.WriteString(rendered[last:ref.start])
 		last = ref.end
@@ -211,9 +225,10 @@ func (q *Query) Build(rc template.RenderContext) (string, []any, error) {
 			if !seen {
 				v, evalErr := evalParam(ref.n)
 				if evalErr != nil {
-					return "", nil, evalErr
+					return "", nil, nil, evalErr
 				}
 				args = append(args, v)
+				sources = append(sources, q.paramSrcs[ref.n-1])
 				idx = len(args)
 				newIndex[ref.n] = idx
 			}
@@ -223,15 +238,16 @@ func (q *Query) Build(rc template.RenderContext) (string, []any, error) {
 			// MySQL/SQLite: one ? and one argument per occurrence.
 			v, evalErr := evalParam(ref.n)
 			if evalErr != nil {
-				return "", nil, evalErr
+				return "", nil, nil, evalErr
 			}
 			args = append(args, v)
+			sources = append(sources, q.paramSrcs[ref.n-1])
 			out.WriteString("?")
 		}
 	}
 	out.WriteString(rendered[last:])
 	translated := out.String()
-	return translated, args, nil
+	return translated, args, sources, nil
 }
 
 // referencesPagination reports whether an expr expression reads the `pagination`

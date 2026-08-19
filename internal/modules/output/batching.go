@@ -29,7 +29,7 @@ func normalizeBatchSize(batchSize int, requestMode, moduleType string) (int, err
 // order. A size of zero or less yields one batch holding every record, so
 // callers never need to branch on "chunking enabled": the un-chunked path is
 // simply the chunked path with a single batch. That is what keeps Send and
-// PreviewRequest from drifting apart.
+// PreviewOperations from drifting apart.
 //
 // An empty input yields no batch at all, so callers loop zero times.
 func chunkRecords(records []map[string]any, size int) [][]map[string]any {

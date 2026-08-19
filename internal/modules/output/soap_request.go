@@ -263,13 +263,13 @@ func (s *SOAPRequestModule) Close() error {
 	return nil
 }
 
-// PreviewRequest builds SOAP request previews without network I/O.
-func (s *SOAPRequestModule) PreviewRequest(records []map[string]any, opts PreviewOptions) ([]RequestPreview, error) {
+// PreviewOperations builds SOAP request previews without network I/O.
+func (s *SOAPRequestModule) PreviewOperations(records []map[string]any, opts PreviewOptions) ([]connector.OperationPreview, error) {
 	if len(records) == 0 {
-		return []RequestPreview{}, nil
+		return []connector.OperationPreview{}, nil
 	}
 	if s.requestMode == requestModeSingle {
-		previews := make([]RequestPreview, 0, len(records))
+		previews := make([]connector.OperationPreview, 0, len(records))
 		for _, record := range records {
 			preview, err := s.previewRecord(record, 1, opts)
 			if err != nil {
@@ -282,7 +282,7 @@ func (s *SOAPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 	// Same chunking as sendBatch, from the same helper: a dry-run must show one
 	// preview per request that Send would actually emit.
 	batches := chunkRecords(records, s.batchSize)
-	previews := make([]RequestPreview, 0, len(batches))
+	previews := make([]connector.OperationPreview, 0, len(batches))
 	for _, batch := range batches {
 		preview, err := s.previewRecord(batchRecord(batch), len(batch), opts)
 		if err != nil {
@@ -293,7 +293,7 @@ func (s *SOAPRequestModule) PreviewRequest(records []map[string]any, opts Previe
 	return previews, nil
 }
 
-func (s *SOAPRequestModule) previewRecord(record map[string]any, recordCount int, opts PreviewOptions) (RequestPreview, error) {
+func (s *SOAPRequestModule) previewRecord(record map[string]any, recordCount int, opts PreviewOptions) (connector.OperationPreview, error) {
 	op, err := soaputil.BuildOperation(soaputil.OperationOptions{
 		Base:        s.base,
 		Record:      record,
@@ -301,7 +301,7 @@ func (s *SOAPRequestModule) previewRecord(record map[string]any, recordCount int
 		Retry:       &s.retry,
 	})
 	if err != nil {
-		return RequestPreview{}, err
+		return connector.OperationPreview{}, err
 	}
 	envelope, err := soapclient.BuildEnvelope(soapclient.EnvelopeOptions{
 		Version:    op.Version,
@@ -311,19 +311,13 @@ func (s *SOAPRequestModule) previewRecord(record map[string]any, recordCount int
 		WSSecurity: op.WSSecurity,
 	})
 	if err != nil {
-		return RequestPreview{}, err
+		return connector.OperationPreview{}, err
 	}
 	headers, err := s.previewHeaders(op, opts)
 	if err != nil {
-		return RequestPreview{}, err
+		return connector.OperationPreview{}, err
 	}
-	return RequestPreview{
-		Endpoint:    op.Endpoint,
-		Method:      "POST",
-		Headers:     headers,
-		BodyPreview: string(envelope),
-		RecordCount: recordCount,
-	}, nil
+	return httpOperationPreview(op.Endpoint, "POST", headers, string(envelope), recordCount), nil
 }
 
 func (s *SOAPRequestModule) previewHeaders(op soapclient.SOAPOperation, opts PreviewOptions) (map[string]string, error) {

@@ -222,9 +222,9 @@ func TestHTTPRequest_BatchSizePreviewMatchesRequests(t *testing.T) {
 		t.Fatalf("NewHTTPRequestFromConfig: %v", err)
 	}
 
-	previews, err := module.PreviewRequest(recordsOfSize(120), PreviewOptions{})
+	previews, err := module.PreviewOperations(recordsOfSize(120), PreviewOptions{})
 	if err != nil {
-		t.Fatalf("PreviewRequest: %v", err)
+		t.Fatalf("PreviewOperations: %v", err)
 	}
 	want := []int{50, 50, 20}
 	if len(previews) != len(want) {

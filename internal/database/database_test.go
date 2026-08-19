@@ -1,10 +1,12 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResolveEnvRef(t *testing.T) {
@@ -150,6 +152,91 @@ func TestIsDriverSupported(t *testing.T) {
 				t.Errorf("IsDriverSupported(%q) = %v, want %v", tt.driver, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSanitizeConnectionStringSecrets covers the DSN forms whose secret is not
+// a URL userinfo — a libpq key=value pair, a query parameter, a sqlite pragma
+// key — plus the passwordless URL the masking must not invent a password for.
+// These strings reach the user's terminal through the dry-run preview, not just
+// the debug log.
+func TestSanitizeConnectionStringSecrets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		connString string
+		want       string
+	}{
+		{
+			name:       "libpq key=value DSN",
+			connString: "host=db.internal port=5432 user=app password=s3cr3t dbname=warehouse",
+			want:       "host=db.internal port=5432 user=app password=[REDACTED] dbname=warehouse",
+		},
+		{
+			name:       "libpq DSN with quoted password",
+			connString: "host=db.internal user=app password='s3c r3t' dbname=warehouse",
+			want:       "host=db.internal user=app password=[REDACTED] dbname=warehouse",
+		},
+		{
+			name:       "password as a query parameter",
+			connString: "postgres://app@db.internal:5432/warehouse?password=s3cr3t&sslmode=require",
+			want:       "postgres://app@db.internal:5432/warehouse?password=[REDACTED]&sslmode=require",
+		},
+		{
+			name:       "sqlite encryption key",
+			connString: "file:./warehouse.db?_pragma_key=s3cr3t&_pragma=busy_timeout(5000)",
+			want:       "file:./warehouse.db?_pragma_key=[REDACTED]&_pragma=busy_timeout(5000)",
+		},
+		{
+			name:       "URL with both userinfo and query password",
+			connString: "postgres://app:urlpass@db.internal/warehouse?passwd=querypass",
+			want:       "postgres://app:[REDACTED]@db.internal/warehouse?passwd=[REDACTED]",
+		},
+		{
+			name:       "URL without a password is left alone",
+			connString: "postgres://app@db.internal:5432/warehouse?sslmode=verify-full",
+			want:       "postgres://app@db.internal:5432/warehouse?sslmode=verify-full",
+		},
+		{
+			name:       "sqlite path carries no secret",
+			connString: "file:./warehouse.db",
+			want:       "file:./warehouse.db",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := SanitizeConnectionString(tt.connString); got != tt.want {
+				t.Errorf("SanitizeConnectionString(%q) = %q, want %q", tt.connString, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestOpenResolvedHonoursContext locks the cancellation path: the connect
+// timeout bounds the caller's context instead of replacing it, so a canceled
+// run stops waiting instead of sitting out DefaultConnectTimeout.
+func TestOpenResolvedHonoursContext(t *testing.T) {
+	t.Parallel()
+
+	resolved, err := Resolve(Config{ConnectionString: "postgres://app:pass@192.0.2.1:5432/warehouse"})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	db, err := OpenResolved(ctx, Config{}, resolved)
+	if err == nil {
+		_ = db.Close()
+		t.Fatal("OpenResolved succeeded with a canceled context")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("OpenResolved waited %s on a canceled context, want an immediate return", elapsed)
 	}
 }
 

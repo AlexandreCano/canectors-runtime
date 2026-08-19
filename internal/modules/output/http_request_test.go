@@ -2714,7 +2714,7 @@ func TestHTTPRequest_NoRandomBehavior(t *testing.T) {
 // Story 4.2: Dry-Run Mode - Task 1: Request Preview Functionality Tests
 // =============================================================================
 
-func TestHTTPRequest_PreviewRequest_BatchMode(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_BatchMode(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint": "https://api.example.com/data",
 		"method":   "POST",
@@ -2733,7 +2733,7 @@ func TestHTTPRequest_PreviewRequest_BatchMode(t *testing.T) {
 		{"id": 2, "name": "second"},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2746,23 +2746,23 @@ func TestHTTPRequest_PreviewRequest_BatchMode(t *testing.T) {
 	preview := previews[0]
 
 	// Verify endpoint URL
-	if preview.Endpoint != "https://api.example.com/data" {
-		t.Errorf("expected endpoint https://api.example.com/data, got %s", preview.Endpoint)
+	if preview.HTTP.Endpoint != "https://api.example.com/data" {
+		t.Errorf("expected endpoint https://api.example.com/data, got %s", preview.HTTP.Endpoint)
 	}
 
 	// Verify HTTP method
-	if preview.Method != "POST" {
-		t.Errorf("expected method POST, got %s", preview.Method)
+	if preview.HTTP.Method != "POST" {
+		t.Errorf("expected method POST, got %s", preview.HTTP.Method)
 	}
 
 	// Verify headers include custom header
-	if preview.Headers["X-Custom-Header"] != "custom-value" {
-		t.Errorf("expected X-Custom-Header: custom-value, got %s", preview.Headers["X-Custom-Header"])
+	if preview.HTTP.Headers["X-Custom-Header"] != "custom-value" {
+		t.Errorf("expected X-Custom-Header: custom-value, got %s", preview.HTTP.Headers["X-Custom-Header"])
 	}
 
 	// Verify Content-Type is set
-	if preview.Headers["Content-Type"] != "application/json" {
-		t.Errorf("expected Content-Type: application/json, got %s", preview.Headers["Content-Type"])
+	if preview.HTTP.Headers["Content-Type"] != "application/json" {
+		t.Errorf("expected Content-Type: application/json, got %s", preview.HTTP.Headers["Content-Type"])
 	}
 
 	// Verify record count
@@ -2772,7 +2772,7 @@ func TestHTTPRequest_PreviewRequest_BatchMode(t *testing.T) {
 
 	// Verify body preview is valid JSON array
 	var body []map[string]any
-	if err := json.Unmarshal([]byte(preview.BodyPreview), &body); err != nil {
+	if err := json.Unmarshal([]byte(preview.HTTP.BodyPreview), &body); err != nil {
 		t.Fatalf("body preview should be valid JSON: %v", err)
 	}
 	if len(body) != 2 {
@@ -2780,7 +2780,7 @@ func TestHTTPRequest_PreviewRequest_BatchMode(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_SingleRecordMode(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_SingleRecordMode(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint":    "https://api.example.com/data",
 		"method":      "POST",
@@ -2798,7 +2798,7 @@ func TestHTTPRequest_PreviewRequest_SingleRecordMode(t *testing.T) {
 		{"id": 3, "name": "third"},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2811,8 +2811,8 @@ func TestHTTPRequest_PreviewRequest_SingleRecordMode(t *testing.T) {
 	// Verify each preview
 	for i, preview := range previews {
 		// Verify method
-		if preview.Method != "POST" {
-			t.Errorf("preview %d: expected method POST, got %s", i, preview.Method)
+		if preview.HTTP.Method != "POST" {
+			t.Errorf("preview %d: expected method POST, got %s", i, preview.HTTP.Method)
 		}
 
 		// Verify record count is 1 per request
@@ -2822,7 +2822,7 @@ func TestHTTPRequest_PreviewRequest_SingleRecordMode(t *testing.T) {
 
 		// Verify body is a single object (not array)
 		var body map[string]any
-		if err := json.Unmarshal([]byte(preview.BodyPreview), &body); err != nil {
+		if err := json.Unmarshal([]byte(preview.HTTP.BodyPreview), &body); err != nil {
 			t.Errorf("preview %d: body preview should be valid JSON object: %v", i, err)
 		}
 
@@ -2833,7 +2833,7 @@ func TestHTTPRequest_PreviewRequest_SingleRecordMode(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_PathParameters(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_PathParameters(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint":    "https://api.example.com/users/{userId}/orders/{orderId}",
 		"method":      "PUT",
@@ -2857,7 +2857,7 @@ func TestHTTPRequest_PreviewRequest_PathParameters(t *testing.T) {
 		},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2868,12 +2868,12 @@ func TestHTTPRequest_PreviewRequest_PathParameters(t *testing.T) {
 
 	// Path should have substituted values
 	expectedEndpoint := "https://api.example.com/users/user123/orders/order456"
-	if previews[0].Endpoint != expectedEndpoint {
-		t.Errorf("expected endpoint %s, got %s", expectedEndpoint, previews[0].Endpoint)
+	if previews[0].HTTP.Endpoint != expectedEndpoint {
+		t.Errorf("expected endpoint %s, got %s", expectedEndpoint, previews[0].HTTP.Endpoint)
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_QueryParameters(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_QueryParameters(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint": "https://api.example.com/data",
 		"method":   "POST",
@@ -2890,7 +2890,7 @@ func TestHTTPRequest_PreviewRequest_QueryParameters(t *testing.T) {
 
 	records := []map[string]any{{"test": "data"}}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2900,7 +2900,7 @@ func TestHTTPRequest_PreviewRequest_QueryParameters(t *testing.T) {
 	}
 
 	// Endpoint should include query parameters
-	endpoint := previews[0].Endpoint
+	endpoint := previews[0].HTTP.Endpoint
 	if !strings.Contains(endpoint, "status=active") {
 		t.Errorf("expected status=active in endpoint, got %s", endpoint)
 	}
@@ -2909,7 +2909,7 @@ func TestHTTPRequest_PreviewRequest_QueryParameters(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_QueryParametersFromRecord(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_QueryParametersFromRecord(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint":    "https://api.example.com/data",
 		"method":      "POST",
@@ -2929,7 +2929,7 @@ func TestHTTPRequest_PreviewRequest_QueryParametersFromRecord(t *testing.T) {
 		{"status": "pending", "type": "admin", "name": "John"},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2939,7 +2939,7 @@ func TestHTTPRequest_PreviewRequest_QueryParametersFromRecord(t *testing.T) {
 	}
 
 	// Endpoint should include query parameters from record
-	endpoint := previews[0].Endpoint
+	endpoint := previews[0].HTTP.Endpoint
 	if !strings.Contains(endpoint, "filter_status=pending") {
 		t.Errorf("expected filter_status=pending in endpoint, got %s", endpoint)
 	}
@@ -2948,7 +2948,7 @@ func TestHTTPRequest_PreviewRequest_QueryParametersFromRecord(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_APIKey(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_AuthHeadersMasked_APIKey(t *testing.T) {
 	config := newModuleConfigWithAuth(
 		map[string]any{
 			"endpoint": "https://api.example.com/data",
@@ -2969,7 +2969,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_APIKey(t *testing.T) {
 
 	records := []map[string]any{{"test": "data"}}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -2980,12 +2980,12 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_APIKey(t *testing.T) {
 
 	// API key should be masked in preview
 	// Note: Go normalizes header names, so "X-API-Key" becomes "X-Api-Key"
-	apiKeyHeader := findHeaderCaseInsensitive(previews[0].Headers, "X-API-Key")
+	apiKeyHeader := findHeaderCaseInsensitive(previews[0].HTTP.Headers, "X-API-Key")
 	if apiKeyHeader == "super-secret-api-key-12345" {
 		t.Error("API key should be masked in preview, but was shown in plain text")
 	}
 	if apiKeyHeader == "" {
-		t.Errorf("API key header should be present (masked), but was empty. Headers: %v", previews[0].Headers)
+		t.Errorf("API key header should be present (masked), but was empty. Headers: %v", previews[0].HTTP.Headers)
 	}
 	// Should contain mask indicator (format: [MASKED-*] or ***)
 	if !strings.Contains(apiKeyHeader, "***") && !strings.Contains(apiKeyHeader, "MASKED") {
@@ -3008,7 +3008,7 @@ func findHeaderCaseInsensitive(headers map[string]string, key string) string {
 	return ""
 }
 
-func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Bearer(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_AuthHeadersMasked_Bearer(t *testing.T) {
 	config := newModuleConfigWithAuth(
 		map[string]any{
 			"endpoint": "https://api.example.com/data",
@@ -3027,7 +3027,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Bearer(t *testing.T) {
 
 	records := []map[string]any{{"test": "data"}}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3037,7 +3037,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Bearer(t *testing.T) {
 	}
 
 	// Authorization header should be masked
-	authHeader := previews[0].Headers["Authorization"]
+	authHeader := previews[0].HTTP.Headers["Authorization"]
 	if strings.Contains(authHeader, "super-secret-payload") {
 		t.Error("Bearer token payload should be masked in preview")
 	}
@@ -3050,7 +3050,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Bearer(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Basic(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_AuthHeadersMasked_Basic(t *testing.T) {
 	config := newModuleConfigWithAuth(
 		map[string]any{
 			"endpoint": "https://api.example.com/data",
@@ -3070,7 +3070,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Basic(t *testing.T) {
 
 	records := []map[string]any{{"test": "data"}}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3080,7 +3080,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Basic(t *testing.T) {
 	}
 
 	// Authorization header should be masked
-	authHeader := previews[0].Headers["Authorization"]
+	authHeader := previews[0].HTTP.Headers["Authorization"]
 	if authHeader == "" {
 		t.Error("Authorization header should be present (masked), but was empty")
 	}
@@ -3094,7 +3094,7 @@ func TestHTTPRequest_PreviewRequest_AuthHeadersMasked_Basic(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_ShowCredentials_Bearer(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_ShowCredentials_Bearer(t *testing.T) {
 	// Test that credentials are shown when ShowCredentials is true
 	config := newModuleConfigWithAuth(
 		map[string]any{
@@ -3115,7 +3115,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_Bearer(t *testing.T) {
 	records := []map[string]any{{"test": "data"}}
 
 	// With ShowCredentials = true
-	previews, err := module.PreviewRequest(records, PreviewOptions{ShowCredentials: true})
+	previews, err := module.PreviewOperations(records, PreviewOptions{ShowCredentials: true})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3125,7 +3125,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_Bearer(t *testing.T) {
 	}
 
 	// Authorization header should contain the actual token
-	authHeader := previews[0].Headers["Authorization"]
+	authHeader := previews[0].HTTP.Headers["Authorization"]
 	if authHeader == "" {
 		t.Error("Authorization header should be present")
 	}
@@ -3139,7 +3139,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_Bearer(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_ShowCredentials_APIKey(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_ShowCredentials_APIKey(t *testing.T) {
 	// Test that API key is shown when ShowCredentials is true
 	config := newModuleConfigWithAuth(
 		map[string]any{
@@ -3162,7 +3162,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_APIKey(t *testing.T) {
 	records := []map[string]any{{"test": "data"}}
 
 	// With ShowCredentials = true
-	previews, err := module.PreviewRequest(records, PreviewOptions{ShowCredentials: true})
+	previews, err := module.PreviewOperations(records, PreviewOptions{ShowCredentials: true})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3174,7 +3174,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_APIKey(t *testing.T) {
 	// Check for API key in headers (http package canonicalizes header names)
 	// X-Api-Key becomes X-Api-Key in canonical form
 	var apiKeyHeader string
-	for key, value := range previews[0].Headers {
+	for key, value := range previews[0].HTTP.Headers {
 		if strings.EqualFold(key, "X-Api-Key") {
 			apiKeyHeader = value
 			break
@@ -3182,7 +3182,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_APIKey(t *testing.T) {
 	}
 
 	if apiKeyHeader == "" {
-		t.Logf("Headers received: %v", previews[0].Headers)
+		t.Logf("Headers received: %v", previews[0].HTTP.Headers)
 		t.Error("API key header should be present")
 		return
 	}
@@ -3193,7 +3193,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_APIKey(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_NoNetworkWhenNoCachedToken(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_ShowCredentials_OAuth2_NoNetworkWhenNoCachedToken(t *testing.T) {
 	// Previews must never trigger a real token fetch, even with ShowCredentials=true.
 	// When no token is cached we fall back to masked headers rather than hitting
 	// tokenUrl (which could leak to a real server, have rate-limit cost, etc.).
@@ -3225,7 +3225,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_NoNetworkWhenNoCached
 
 	records := []map[string]any{{"test": "data"}}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{ShowCredentials: true})
+	previews, err := module.PreviewOperations(records, PreviewOptions{ShowCredentials: true})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3236,7 +3236,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_NoNetworkWhenNoCached
 		t.Fatalf("expected 1 preview, got %d", len(previews))
 	}
 
-	authHeader := previews[0].Headers["Authorization"]
+	authHeader := previews[0].HTTP.Headers["Authorization"]
 	if authHeader == "" {
 		t.Fatal("Authorization header should be present (masked fallback)")
 	}
@@ -3248,7 +3248,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_NoNetworkWhenNoCached
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_UsesCachedToken(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_ShowCredentials_OAuth2_UsesCachedToken(t *testing.T) {
 	// After a real Send() has primed the OAuth2 handler's token cache, previews
 	// can show the cached token without triggering network I/O.
 	tokenRequestCount := 0
@@ -3289,7 +3289,7 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_UsesCachedToken(t *te
 	}
 
 	// Preview must now use the cached token without re-fetching.
-	previews, err := module.PreviewRequest([]map[string]any{{"test": "data"}}, PreviewOptions{ShowCredentials: true})
+	previews, err := module.PreviewOperations([]map[string]any{{"test": "data"}}, PreviewOptions{ShowCredentials: true})
 	if err != nil {
 		t.Fatalf("preview failed: %v", err)
 	}
@@ -3299,12 +3299,12 @@ func TestHTTPRequest_PreviewRequest_ShowCredentials_OAuth2_UsesCachedToken(t *te
 	if len(previews) != 1 {
 		t.Fatalf("expected 1 preview, got %d", len(previews))
 	}
-	if got := previews[0].Headers["Authorization"]; got != "Bearer cached-oauth2-token" {
+	if got := previews[0].HTTP.Headers["Authorization"]; got != "Bearer cached-oauth2-token" {
 		t.Errorf("expected cached token in preview, got: %s", got)
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_EmptyRecords(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_EmptyRecords(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint": "https://api.example.com/data",
 		"method":   "POST",
@@ -3316,7 +3316,7 @@ func TestHTTPRequest_PreviewRequest_EmptyRecords(t *testing.T) {
 	}
 
 	// Empty records
-	previews, err := module.PreviewRequest([]map[string]any{}, PreviewOptions{})
+	previews, err := module.PreviewOperations([]map[string]any{}, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error for empty records, got %v", err)
 	}
@@ -3325,7 +3325,7 @@ func TestHTTPRequest_PreviewRequest_EmptyRecords(t *testing.T) {
 	}
 
 	// Nil records
-	previews, err = module.PreviewRequest(nil, PreviewOptions{})
+	previews, err = module.PreviewOperations(nil, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error for nil records, got %v", err)
 	}
@@ -3334,7 +3334,7 @@ func TestHTTPRequest_PreviewRequest_EmptyRecords(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_BodyPreviewFormatted(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_BodyPreviewFormatted(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint": "https://api.example.com/data",
 		"method":   "POST",
@@ -3354,7 +3354,7 @@ func TestHTTPRequest_PreviewRequest_BodyPreviewFormatted(t *testing.T) {
 		},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3364,7 +3364,7 @@ func TestHTTPRequest_PreviewRequest_BodyPreviewFormatted(t *testing.T) {
 	}
 
 	// Body preview should be formatted (indented) JSON for readability
-	bodyPreview := previews[0].BodyPreview
+	bodyPreview := previews[0].HTTP.BodyPreview
 	if !strings.Contains(bodyPreview, "\n") {
 		t.Error("body preview should be formatted with newlines for readability")
 	}
@@ -3373,7 +3373,7 @@ func TestHTTPRequest_PreviewRequest_BodyPreviewFormatted(t *testing.T) {
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_HeadersFromRecord(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_HeadersFromRecord(t *testing.T) {
 	config := newModuleConfig(map[string]any{
 		"endpoint":    "https://api.example.com/data",
 		"method":      "POST",
@@ -3397,7 +3397,7 @@ func TestHTTPRequest_PreviewRequest_HeadersFromRecord(t *testing.T) {
 		},
 	}
 
-	previews, err := module.PreviewRequest(records, PreviewOptions{})
+	previews, err := module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -3407,15 +3407,15 @@ func TestHTTPRequest_PreviewRequest_HeadersFromRecord(t *testing.T) {
 	}
 
 	// Headers from record should be in preview
-	if previews[0].Headers["X-Correlation-ID"] != "corr-12345" {
-		t.Errorf("expected X-Correlation-ID: corr-12345, got %s", previews[0].Headers["X-Correlation-ID"])
+	if previews[0].HTTP.Headers["X-Correlation-ID"] != "corr-12345" {
+		t.Errorf("expected X-Correlation-ID: corr-12345, got %s", previews[0].HTTP.Headers["X-Correlation-ID"])
 	}
-	if previews[0].Headers["X-Request-Source"] != "batch-processor" {
-		t.Errorf("expected X-Request-Source: batch-processor, got %s", previews[0].Headers["X-Request-Source"])
+	if previews[0].HTTP.Headers["X-Request-Source"] != "batch-processor" {
+		t.Errorf("expected X-Request-Source: batch-processor, got %s", previews[0].HTTP.Headers["X-Request-Source"])
 	}
 }
 
-func TestHTTPRequest_PreviewRequest_NoSideEffects(t *testing.T) {
+func TestHTTPRequest_PreviewOperations_NoSideEffects(t *testing.T) {
 	// Create a real test server to verify NO requests are made during preview
 	requestCount := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3437,7 +3437,7 @@ func TestHTTPRequest_PreviewRequest_NoSideEffects(t *testing.T) {
 	records := []map[string]any{{"test": "data"}}
 
 	// Call preview
-	_, err = module.PreviewRequest(records, PreviewOptions{})
+	_, err = module.PreviewOperations(records, PreviewOptions{})
 	if err != nil {
 		t.Fatalf("preview failed: %v", err)
 	}
